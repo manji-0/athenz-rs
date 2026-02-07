@@ -1,4 +1,4 @@
-# athenz-provider-tenant
+# athenz-rs
 
 Rust client for Athenz **token issuance** (tenant side) and **token validation** (provider side).
 RoleToken is intentionally not included (deprecated).

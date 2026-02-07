@@ -686,6 +686,96 @@ pub struct UserDomain {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TemplateMetaData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_version: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_version: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keywords_to_replace: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_update: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Template {
+    pub roles: Vec<Role>,
+    pub policies: Vec<Policy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub groups: Option<Vec<Group>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub services: Option<Vec<ServiceIdentity>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<TemplateMetaData>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateList {
+    pub template_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateParam {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainTemplate {
+    pub template_names: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<Vec<TemplateParam>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainTemplateList {
+    pub template_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerTemplateList {
+    pub template_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainTemplateDetailsList {
+    pub meta_data: Vec<TemplateMetaData>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainMetaStoreValidValuesList {
+    pub valid_values: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Entity {
+    pub name: String,
+    pub value: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityList {
+    pub names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RoleAuditLog {
     pub member: String,
     pub admin: String,
@@ -791,6 +881,13 @@ pub struct RoleMeta {
     pub notify_details: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RoleSystemMeta {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_enabled: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Role {
@@ -847,6 +944,58 @@ pub struct Membership {
     pub system_disabled: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_state: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberRole {
+    pub role_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expiration: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_reminder: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_principal: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_time: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_disabled: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trust_role_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notify_roles: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notify_details: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainRoleMember {
+    pub member_name: String,
+    pub member_roles: Vec<MemberRole>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainRoleMembers {
+    pub domain_name: String,
+    pub members: Vec<DomainRoleMember>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainRoleMembership {
+    pub domain_role_members_list: Vec<DomainRoleMembers>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1052,6 +1201,19 @@ pub struct ServiceIdentityList {
     pub next: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceIdentitySystemMeta {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x509_cert_signer_key_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_cert_signer_key_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupAuditLog {
@@ -1174,6 +1336,13 @@ pub struct GroupMeta {
     pub notify_details: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupSystemMeta {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_enabled: Option<bool>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Group {
@@ -1192,4 +1361,46 @@ pub struct Group {
 #[serde(rename_all = "camelCase")]
 pub struct Groups {
     pub list: Vec<Group>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainGroupMember {
+    pub member_name: String,
+    pub member_groups: Vec<GroupMember>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainGroupMembers {
+    pub domain_name: String,
+    pub members: Vec<DomainGroupMember>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainGroupMembership {
+    pub domain_group_members_list: Vec<DomainGroupMembers>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewObject {
+    pub domain_name: String,
+    pub name: String,
+    pub member_expiry_days: i32,
+    pub member_review_days: i32,
+    pub service_expiry_days: i32,
+    pub service_review_days: i32,
+    pub group_expiry_days: i32,
+    pub group_review_days: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_reviewed_date: Option<String>,
+    pub created: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewObjects {
+    pub list: Vec<ReviewObject>,
 }

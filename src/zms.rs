@@ -1,8 +1,13 @@
 use crate::error::{Error, ResourceError};
 use crate::models::{
-    Assertion, Domain, DomainList, DomainMeta, Group, GroupMembership, Groups, Membership, Policy,
-    PolicyList, Policies, PublicKeyEntry, Role, RoleList, Roles, ServiceIdentities,
-    ServiceIdentity, ServiceIdentityList, SubDomain, TopLevelDomain, UserDomain,
+    Assertion, Domain, DomainGroupMembership, DomainList, DomainMeta, DomainMetaStoreValidValuesList,
+    DomainRoleMembership, DomainTemplate, DomainTemplateDetailsList, DomainTemplateList, Entity,
+    EntityList, Group, GroupMembership, GroupMeta, GroupSystemMeta, Groups, Membership, Policy,
+    PolicyList, Policies, PublicKeyEntry, ResourceDomainOwnership, ResourceGroupOwnership,
+    ResourcePolicyOwnership,
+    ResourceRoleOwnership, ResourceServiceIdentityOwnership, ReviewObjects, Role, RoleList, RoleMeta,
+    RoleSystemMeta, Roles, ServerTemplateList, ServiceIdentities, ServiceIdentity,
+    ServiceIdentityList, ServiceIdentitySystemMeta, SubDomain, Template, TopLevelDomain, UserDomain,
 };
 use crate::ntoken::NTokenSigner;
 use reqwest::blocking::{Client as HttpClient, RequestBuilder, Response};
@@ -544,6 +549,198 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
+    pub fn put_domain_system_meta(
+        &self,
+        name: &str,
+        attribute: &str,
+        meta: &DomainMeta,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", name, "meta", "system", attribute])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn put_domain_template(
+        &self,
+        name: &str,
+        template: &DomainTemplate,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", name, "template"])?;
+        let mut req = self.http.put(url).json(template);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn put_domain_template_ext(
+        &self,
+        name: &str,
+        template_name: &str,
+        template: &DomainTemplate,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", name, "template", template_name])?;
+        let mut req = self.http.put(url).json(template);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn get_domain_template_list(&self, name: &str) -> Result<DomainTemplateList, Error> {
+        let url = self.build_url(&["domain", name, "template"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn delete_domain_template(
+        &self,
+        name: &str,
+        template_name: &str,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", name, "template", template_name])?;
+        let mut req = self.http.delete(url);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn get_domain_template_details(
+        &self,
+        name: &str,
+    ) -> Result<DomainTemplateDetailsList, Error> {
+        let url = self.build_url(&["domain", name, "templatedetails"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_template_details(&self) -> Result<DomainTemplateDetailsList, Error> {
+        let url = self.build_url(&["templatedetails"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_server_template_list(&self) -> Result<ServerTemplateList, Error> {
+        let url = self.build_url(&["template"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_template(&self, name: &str) -> Result<Template, Error> {
+        let url = self.build_url(&["template", name])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_domain_meta_store_valid_values(
+        &self,
+        attribute: Option<&str>,
+        user: Option<&str>,
+    ) -> Result<DomainMetaStoreValidValuesList, Error> {
+        let url = self.build_url(&["domain", "metastore"])?;
+        let mut req = self.http.get(url);
+        if let Some(attribute) = attribute {
+            req = req.query(&[("attribute", attribute)]);
+        }
+        if let Some(user) = user {
+            req = req.query(&[("user", user)]);
+        }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn put_domain_ownership(
+        &self,
+        name: &str,
+        ownership: &ResourceDomainOwnership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", name, "ownership"])?;
+        let mut req = self.http.put(url).json(ownership);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn put_entity(
+        &self,
+        domain: &str,
+        entity_name: &str,
+        entity: &Entity,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "entity", entity_name])?;
+        let mut req = self.http.put(url).json(entity);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn get_entity(&self, domain: &str, entity_name: &str) -> Result<Entity, Error> {
+        let url = self.build_url(&["domain", domain, "entity", entity_name])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn delete_entity(
+        &self,
+        domain: &str,
+        entity_name: &str,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "entity", entity_name])?;
+        let mut req = self.http.delete(url);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn get_entity_list(&self, domain: &str) -> Result<EntityList, Error> {
+        let url = self.build_url(&["domain", domain, "entity"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
     pub fn get_role_list(&self, domain: &str, options: &RoleListOptions) -> Result<RoleList, Error> {
         let url = self.build_url(&["domain", domain, "role"])?;
         let mut req = self.http.get(url);
@@ -625,6 +822,87 @@ impl ZmsClient {
         }
         if let Some(resource_owner) = resource_owner {
             req = req.header("Athenz-Resource-Owner", resource_owner);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn put_role_meta(
+        &self,
+        domain: &str,
+        role: &str,
+        meta: &RoleMeta,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "meta"])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        if let Some(resource_owner) = resource_owner {
+            req = req.header("Athenz-Resource-Owner", resource_owner);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn put_role_system_meta(
+        &self,
+        domain: &str,
+        role: &str,
+        attribute: &str,
+        meta: &RoleSystemMeta,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "meta", "system", attribute])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn put_role_review(
+        &self,
+        domain: &str,
+        role: &str,
+        role_obj: &Role,
+        audit_ref: Option<&str>,
+        return_obj: Option<bool>,
+        resource_owner: Option<&str>,
+    ) -> Result<Option<Role>, Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "review"])?;
+        let mut req = self.http.put(url).json(role_obj);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        if let Some(return_obj) = return_obj {
+            req = req.header("Athenz-Return-Object", return_obj.to_string());
+        }
+        if let Some(resource_owner) = resource_owner {
+            req = req.header("Athenz-Resource-Owner", resource_owner);
+        }
+        let resp = req.send()?;
+        self.expect_no_content_or_json(resp)
+    }
+
+    pub fn put_role_ownership(
+        &self,
+        domain: &str,
+        role: &str,
+        ownership: &ResourceRoleOwnership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "ownership"])?;
+        let mut req = self.http.put(url).json(ownership);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
         }
         let resp = req.send()?;
         self.expect_no_content(resp)
@@ -779,6 +1057,23 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
+    pub fn put_policy_ownership(
+        &self,
+        domain: &str,
+        policy: &str,
+        ownership: &ResourcePolicyOwnership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "policy", policy, "ownership"])?;
+        let mut req = self.http.put(url).json(ownership);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
     pub fn get_assertion(
         &self,
         domain: &str,
@@ -888,6 +1183,41 @@ impl ZmsClient {
         }
         if let Some(resource_owner) = resource_owner {
             req = req.header("Athenz-Resource-Owner", resource_owner);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn put_service_identity_system_meta(
+        &self,
+        domain: &str,
+        service: &str,
+        attribute: &str,
+        meta: &ServiceIdentitySystemMeta,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "service", service, "meta", "system", attribute])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn put_service_ownership(
+        &self,
+        domain: &str,
+        service: &str,
+        ownership: &ResourceServiceIdentityOwnership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "service", service, "ownership"])?;
+        let mut req = self.http.put(url).json(ownership);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
         }
         let resp = req.send()?;
         self.expect_no_content(resp)
@@ -1055,6 +1385,87 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
+    pub fn put_group_meta(
+        &self,
+        domain: &str,
+        group: &str,
+        meta: &GroupMeta,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "group", group, "meta"])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        if let Some(resource_owner) = resource_owner {
+            req = req.header("Athenz-Resource-Owner", resource_owner);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn put_group_system_meta(
+        &self,
+        domain: &str,
+        group: &str,
+        attribute: &str,
+        meta: &GroupSystemMeta,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "group", group, "meta", "system", attribute])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    pub fn put_group_review(
+        &self,
+        domain: &str,
+        group: &str,
+        group_obj: &Group,
+        audit_ref: Option<&str>,
+        return_obj: Option<bool>,
+        resource_owner: Option<&str>,
+    ) -> Result<Option<Group>, Error> {
+        let url = self.build_url(&["domain", domain, "group", group, "review"])?;
+        let mut req = self.http.put(url).json(group_obj);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        if let Some(return_obj) = return_obj {
+            req = req.header("Athenz-Return-Object", return_obj.to_string());
+        }
+        if let Some(resource_owner) = resource_owner {
+            req = req.header("Athenz-Resource-Owner", resource_owner);
+        }
+        let resp = req.send()?;
+        self.expect_no_content_or_json(resp)
+    }
+
+    pub fn put_group_ownership(
+        &self,
+        domain: &str,
+        group: &str,
+        ownership: &ResourceGroupOwnership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "group", group, "ownership"])?;
+        let mut req = self.http.put(url).json(ownership);
+        req = self.apply_auth(req)?;
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
     pub fn get_group_membership(
         &self,
         domain: &str,
@@ -1117,6 +1528,64 @@ impl ZmsClient {
         }
         let resp = req.send()?;
         self.expect_no_content(resp)
+    }
+
+    pub fn get_pending_role_membership(
+        &self,
+        principal: Option<&str>,
+        domain: Option<&str>,
+    ) -> Result<DomainRoleMembership, Error> {
+        let url = self.build_url(&["pending_members"])?;
+        let mut req = self.http.get(url);
+        if let Some(principal) = principal {
+            req = req.query(&[("principal", principal)]);
+        }
+        if let Some(domain) = domain {
+            req = req.query(&[("domain", domain)]);
+        }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_pending_group_membership(
+        &self,
+        principal: Option<&str>,
+        domain: Option<&str>,
+    ) -> Result<DomainGroupMembership, Error> {
+        let url = self.build_url(&["pending_group_members"])?;
+        let mut req = self.http.get(url);
+        if let Some(principal) = principal {
+            req = req.query(&[("principal", principal)]);
+        }
+        if let Some(domain) = domain {
+            req = req.query(&[("domain", domain)]);
+        }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_roles_for_review(&self, principal: Option<&str>) -> Result<ReviewObjects, Error> {
+        let url = self.build_url(&["review", "role"])?;
+        let mut req = self.http.get(url);
+        if let Some(principal) = principal {
+            req = req.query(&[("principal", principal)]);
+        }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_groups_for_review(&self, principal: Option<&str>) -> Result<ReviewObjects, Error> {
+        let url = self.build_url(&["review", "group"])?;
+        let mut req = self.http.get(url);
+        if let Some(principal) = principal {
+            req = req.query(&[("principal", principal)]);
+        }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
     }
 
     fn build_url(&self, segments: &[&str]) -> Result<Url, Error> {
@@ -1198,7 +1667,11 @@ impl ZmsClient {
 
 #[cfg(test)]
 mod tests {
-    use super::{DomainListOptions, ZmsClient};
+    use super::{
+        DomainListOptions, DomainTemplate, GroupSystemMeta, Role, RoleMeta,
+        ServiceIdentitySystemMeta, ZmsClient,
+    };
+    use crate::models::{Entity, ResourcePolicyOwnership};
     use std::collections::HashMap;
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
@@ -1240,11 +1713,276 @@ mod tests {
         handle.join().expect("server");
     }
 
+    #[test]
+    fn put_domain_template_sets_path_and_audit() {
+        let response = no_content_response();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let template = DomainTemplate {
+            template_names: vec!["t1".to_string()],
+            params: None,
+        };
+
+        client
+            .put_domain_template("sports", &template, Some("audit-1"))
+            .expect("request");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/template");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("audit-1")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn get_domain_meta_store_valid_values_sets_query() {
+        let response = ok_json_response(r#"{"validValues":["a"]}"#);
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let list = client
+            .get_domain_meta_store_valid_values(Some("account"), Some("user.jane"))
+            .expect("request");
+        assert_eq!(list.valid_values, vec!["a".to_string()]);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.path, "/zms/v1/domain/metastore");
+        assert_eq!(req.query.get("attribute").map(String::as_str), Some("account"));
+        assert_eq!(req.query.get("user").map(String::as_str), Some("user.jane"));
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn put_entity_sets_path_and_header() {
+        let response = no_content_response();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let entity = Entity {
+            name: "sports.entity".to_string(),
+            value: serde_json::json!({"k":"v"}),
+        };
+
+        client
+            .put_entity("sports", "entity1", &entity, Some("audit-2"))
+            .expect("request");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/entity/entity1");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("audit-2")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn put_role_review_sets_headers() {
+        let response = no_content_response();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let role = Role {
+            name: "role1".to_string(),
+            modified: None,
+            members: None,
+            role_members: None,
+            trust: None,
+            audit_log: None,
+            meta: RoleMeta::default(),
+        };
+
+        client
+            .put_role_review("sports", "role1", &role, Some("audit-3"), Some(true), None)
+            .expect("request");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/role/role1/review");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("audit-3")
+        );
+        assert_eq!(
+            req.headers.get("athenz-return-object").map(String::as_str),
+            Some("true")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn put_group_system_meta_sets_path() {
+        let response = no_content_response();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let meta = GroupSystemMeta {
+            audit_enabled: Some(true),
+        };
+
+        client
+            .put_group_system_meta("sports", "group1", "auditEnabled", &meta, Some("audit-4"))
+            .expect("request");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports/group/group1/meta/system/auditEnabled"
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn put_service_identity_system_meta_sets_path() {
+        let response = no_content_response();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let meta = ServiceIdentitySystemMeta {
+            audit_enabled: Some(true),
+            x509_cert_signer_key_id: None,
+            ssh_cert_signer_key_id: None,
+            client_id: None,
+        };
+
+        client
+            .put_service_identity_system_meta(
+                "sports",
+                "api",
+                "auditEnabled",
+                &meta,
+                Some("audit-5"),
+            )
+            .expect("request");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports/service/api/meta/system/auditEnabled"
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn put_policy_ownership_sets_path() {
+        let response = no_content_response();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let ownership = ResourcePolicyOwnership::default();
+
+        client
+            .put_policy_ownership("sports", "policy1", &ownership, Some("audit-6"))
+            .expect("request");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/policy/policy1/ownership");
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn get_pending_role_membership_sets_query() {
+        let response = ok_json_response(
+            r#"{"domainRoleMembersList":[{"domainName":"sports","members":[{"memberName":"user.jane","memberRoles":[{"roleName":"role1"}]}]}]}"#,
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_pending_role_membership(Some("user.jane"), Some("sports"))
+            .expect("request");
+        assert_eq!(result.domain_role_members_list.len(), 1);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.path, "/zms/v1/pending_members");
+        assert_eq!(req.query.get("principal").map(String::as_str), Some("user.jane"));
+        assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn get_roles_for_review_sets_query() {
+        let response = ok_json_response(
+            r#"{"list":[{"domainName":"sports","name":"role1","memberExpiryDays":1,"memberReviewDays":2,"serviceExpiryDays":3,"serviceReviewDays":4,"groupExpiryDays":5,"groupReviewDays":6,"lastReviewedDate":"2020-01-01","created":"2020-01-02"}]}"#,
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_roles_for_review(Some("user.jane"))
+            .expect("request");
+        assert_eq!(result.list.len(), 1);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.path, "/zms/v1/review/role");
+        assert_eq!(req.query.get("principal").map(String::as_str), Some("user.jane"));
+
+        handle.join().expect("server");
+    }
+
     struct CapturedRequest {
         method: String,
         path: String,
         headers: HashMap<String, String>,
         query: HashMap<String, String>,
+    }
+
+    fn ok_json_response(body: &str) -> String {
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        )
+    }
+
+    fn no_content_response() -> String {
+        "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string()
     }
 
     fn serve_once(response: String) -> (String, mpsc::Receiver<CapturedRequest>, thread::JoinHandle<()>) {

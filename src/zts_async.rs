@@ -486,8 +486,9 @@ impl ZtsAsyncClient {
                 }
                 AuthProvider::NToken { header, signer } => {
                     let token = signer.token()?;
-                    let value = HeaderValue::from_str(&token)
-                        .map_err(|e| Error::Crypto(format!("invalid header value: {}", e)))?;
+                    let value = HeaderValue::from_str(&token).map_err(|e| {
+                        Error::InvalidHeader(format!("invalid header value: {}", e))
+                    })?;
                     req = req.header(header.clone(), value);
                 }
             }

@@ -6,9 +6,9 @@ mod models;
 mod ntoken;
 mod policy;
 mod zms;
-mod zts;
 #[cfg(feature = "async-client")]
 mod zms_async;
+mod zts;
 
 pub use error::{Error, ResourceError};
 

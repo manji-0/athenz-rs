@@ -1,14 +1,14 @@
 use crate::error::{Error, ResourceError};
 use crate::models::{
-    Assertion, Domain, DomainList, DomainMeta, Group, GroupMembership, Groups, Membership, Policy,
-    PolicyList, Policies, PublicKeyEntry, Role, RoleList, Roles, ServiceIdentities,
+    Assertion, Domain, DomainList, DomainMeta, Group, GroupMembership, Groups, Membership,
+    Policies, Policy, PolicyList, PublicKeyEntry, Role, RoleList, Roles, ServiceIdentities,
     ServiceIdentity, ServiceIdentityList, SubDomain, TopLevelDomain, UserDomain,
 };
 use crate::ntoken::NTokenSigner;
 use crate::zms::{
-    DomainListOptions, GroupGetOptions, GroupsQueryOptions, PoliciesQueryOptions, PolicyListOptions,
-    RoleGetOptions, RoleListOptions, RolesQueryOptions, ServiceIdentitiesQueryOptions,
-    ServiceListOptions,
+    DomainListOptions, GroupGetOptions, GroupsQueryOptions, PoliciesQueryOptions,
+    PolicyListOptions, RoleGetOptions, RoleListOptions, RolesQueryOptions,
+    ServiceIdentitiesQueryOptions, ServiceListOptions,
 };
 use reqwest::{Certificate, Client as HttpClient, Identity, RequestBuilder, Response, StatusCode};
 use std::time::Duration;
@@ -50,7 +50,11 @@ impl ZmsAsyncClientBuilder {
         Ok(self)
     }
 
-    pub fn mtls_identity_from_parts(mut self, cert_pem: &[u8], key_pem: &[u8]) -> Result<Self, Error> {
+    pub fn mtls_identity_from_parts(
+        mut self,
+        cert_pem: &[u8],
+        key_pem: &[u8],
+    ) -> Result<Self, Error> {
         let mut combined = Vec::new();
         combined.extend_from_slice(cert_pem);
         if !combined.ends_with(b"\n") {
@@ -77,7 +81,7 @@ impl ZmsAsyncClientBuilder {
     pub fn ntoken_signer(mut self, header: impl Into<String>, signer: NTokenSigner) -> Self {
         self.auth = Some(AuthProvider::NToken {
             header: header.into(),
-            signer,
+            signer: Box::new(signer),
         });
         self
     }
@@ -106,8 +110,14 @@ impl ZmsAsyncClientBuilder {
 }
 
 enum AuthProvider {
-    StaticHeader { header: String, value: String },
-    NToken { header: String, signer: NTokenSigner },
+    StaticHeader {
+        header: String,
+        value: String,
+    },
+    NToken {
+        header: String,
+        signer: Box<NTokenSigner>,
+    },
 }
 
 pub struct ZmsAsyncClient {
@@ -304,7 +314,11 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
-    pub async fn get_roles(&self, domain: &str, options: &RolesQueryOptions) -> Result<Roles, Error> {
+    pub async fn get_roles(
+        &self,
+        domain: &str,
+        options: &RolesQueryOptions,
+    ) -> Result<Roles, Error> {
         let url = self.build_url(&["domain", domain, "roles"])?;
         let mut req = self.http.get(url);
         let params = options.to_query_pairs();
@@ -395,6 +409,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn put_role_membership(
         &self,
         domain: &str,
@@ -729,7 +744,11 @@ impl ZmsAsyncClient {
         self.expect_no_content(resp).await
     }
 
-    pub async fn get_groups(&self, domain: &str, options: &GroupsQueryOptions) -> Result<Groups, Error> {
+    pub async fn get_groups(
+        &self,
+        domain: &str,
+        options: &GroupsQueryOptions,
+    ) -> Result<Groups, Error> {
         let url = self.build_url(&["domain", domain, "groups"])?;
         let mut req = self.http.get(url);
         let params = options.to_query_pairs();
@@ -820,6 +839,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn put_group_membership(
         &self,
         domain: &str,
@@ -931,15 +951,14 @@ impl ZmsAsyncClient {
     async fn parse_error<T>(&self, resp: Response) -> Result<T, Error> {
         let status = resp.status();
         let body = resp.bytes().await?;
-        let mut err = serde_json::from_slice::<ResourceError>(&body).unwrap_or_else(|_| {
-            ResourceError {
+        let mut err =
+            serde_json::from_slice::<ResourceError>(&body).unwrap_or_else(|_| ResourceError {
                 code: status.as_u16() as i32,
                 message: String::from_utf8_lossy(&body).to_string(),
                 description: None,
                 error: None,
                 request_id: None,
-            }
-        });
+            });
         if err.code == 0 {
             err.code = status.as_u16() as i32;
         }

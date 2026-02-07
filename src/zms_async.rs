@@ -819,7 +819,7 @@ impl ZmsAsyncClient {
     fn apply_query_params(
         &self,
         mut req: RequestBuilder,
-        params: Vec<(String, String)>,
+        params: Vec<(&'static str, String)>,
     ) -> RequestBuilder {
         if !params.is_empty() {
             req = req.query(&params);

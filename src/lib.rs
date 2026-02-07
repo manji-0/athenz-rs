@@ -16,14 +16,14 @@ pub use jwt::{
 };
 
 pub use models::{
-    AccessTokenResponse, AthenzJwkConfig, CertificateAuthorityBundle, InstanceIdentity,
-    InstanceRefreshInformation, InstanceRegisterInformation, InstanceRegisterResponse,
-    InstanceRegisterToken, IntrospectResponse, Jwk, JwkList, OidcResponse, OAuthConfig,
-    OpenIdConfig, PublicKeyEntry, RoleAccess, RoleCertificate, RoleCertificateRequest,
-    SSHCertRequest, SSHCertRequestData, SSHCertRequestMeta, SSHCertificate, SSHCertificates,
-    TransportDirection, TransportRule, TransportRules, Workload, Workloads,
-    ExternalCredentialsRequest, ExternalCredentialsResponse, DomainMetric, DomainMetricType,
-    DomainMetrics, Status, Info, RdlSchema,
+    Access, AccessTokenResponse, AthenzJwkConfig, AWSTemporaryCredentials, CertificateAuthorityBundle,
+    DomainMetric, DomainMetricType, DomainMetrics, ExternalCredentialsRequest, ExternalCredentialsResponse,
+    Identity, Info, InstanceIdentity, InstanceRefreshInformation, InstanceRefreshRequest,
+    InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken, IntrospectResponse,
+    Jwk, JwkList, OAuthConfig, OidcResponse, OpenIdConfig, PublicKeyEntry, RdlSchema, ResourceAccess,
+    RoleAccess, RoleCertificate, RoleCertificateRequest, RoleToken, SSHCertRequest, SSHCertRequestData,
+    SSHCertRequestMeta, SSHCertificate, SSHCertificates, Status, TenantDomains, TransportDirection,
+    TransportRule, TransportRules, Workload, Workloads,
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
     AssertionConditions, AssertionEffect, Domain, DomainList, DomainMeta, Group, GroupAuditLog,
     GroupMember, GroupMembership, GroupMeta, Groups, Membership, Policies, Policy, PolicyList,

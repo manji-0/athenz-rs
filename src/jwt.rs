@@ -173,7 +173,10 @@ impl JwksProviderAsync {
         self.cache_ttl = ttl;
         let cache = self.cache.into_inner();
         self.cache = AsyncRwLock::new(cache.map(|mut cached| {
-            cached.expires_at = Instant::now() + self.cache_ttl;
+            let new_expiry = Instant::now() + self.cache_ttl;
+            if new_expiry < cached.expires_at {
+                cached.expires_at = new_expiry;
+            }
             cached
         }));
         self
@@ -253,7 +256,10 @@ impl JwksProvider {
     pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
         self.cache_ttl = ttl;
         if let Some(cached) = self.cache.write().unwrap().as_mut() {
-            cached.expires_at = Instant::now() + self.cache_ttl;
+            let new_expiry = Instant::now() + self.cache_ttl;
+            if new_expiry < cached.expires_at {
+                cached.expires_at = new_expiry;
+            }
         }
         self
     }

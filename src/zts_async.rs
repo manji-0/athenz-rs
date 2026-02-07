@@ -13,6 +13,8 @@ use reqwest::{Certificate, Client as HttpClient, Identity, RequestBuilder, Respo
 use std::time::Duration;
 use url::Url;
 
+const MAX_ERROR_BODY_BYTES: usize = 64 * 1024;
+
 pub struct ZtsAsyncClientBuilder {
     base_url: Url,
     timeout: Option<Duration>,
@@ -519,9 +521,18 @@ impl ZtsAsyncClient {
         }
     }
 
-    async fn parse_error<T>(&self, resp: Response) -> Result<T, Error> {
+    async fn parse_error<T>(&self, mut resp: Response) -> Result<T, Error> {
         let status = resp.status();
-        let body = resp.bytes().await?;
+        let mut body = Vec::new();
+        let mut remaining = MAX_ERROR_BODY_BYTES;
+        while let Some(chunk) = resp.chunk().await? {
+            if remaining == 0 {
+                break;
+            }
+            let take = remaining.min(chunk.len());
+            body.extend_from_slice(&chunk[..take]);
+            remaining -= take;
+        }
         let mut err =
             serde_json::from_slice::<ResourceError>(&body).unwrap_or_else(|_| ResourceError {
                 code: status.as_u16() as i32,

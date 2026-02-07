@@ -615,18 +615,7 @@ fn parse_ec_public_pkcs8(der: &[u8]) -> Result<PublicKey, Error> {
     Err(Error::Crypto("unsupported ec public key".to_string()))
 }
 
-fn get_cached_verifier(
-    cache: &RwLock<HashMap<KeySource, CachedKey>>,
-    http: &HttpClient,
-    config: &NTokenValidatorConfig,
-    src: &KeySource,
-) -> Result<NTokenVerifier, Error> {
-    if let Some(entry) = cache.read().unwrap().get(src) {
-        if entry.expires_at > Instant::now() {
-            return Ok(entry.verifier.clone());
-        }
-    }
-
+fn build_zts_public_key_url(config: &NTokenValidatorConfig, src: &KeySource) -> Result<Url, Error> {
     let mut url = Url::parse(&config.zts_base_url)?;
     url.set_query(None);
     url.set_fragment(None);
@@ -642,6 +631,22 @@ fn get_cached_verifier(
         segments.push("publickey");
         segments.push(&src.key_version);
     }
+    Ok(url)
+}
+
+fn get_cached_verifier(
+    cache: &RwLock<HashMap<KeySource, CachedKey>>,
+    http: &HttpClient,
+    config: &NTokenValidatorConfig,
+    src: &KeySource,
+) -> Result<NTokenVerifier, Error> {
+    if let Some(entry) = cache.read().unwrap().get(src) {
+        if entry.expires_at > Instant::now() {
+            return Ok(entry.verifier.clone());
+        }
+    }
+
+    let url = build_zts_public_key_url(config, src)?;
     let resp = http.get(url).send()?;
     if !resp.status().is_success() {
         return Err(Error::Crypto(format!(
@@ -696,21 +701,7 @@ async fn get_cached_verifier_async(
             }
         }
 
-        let mut url = Url::parse(&config.zts_base_url)?;
-        url.set_query(None);
-        url.set_fragment(None);
-        {
-            let mut segments = url
-                .path_segments_mut()
-                .map_err(|_| Error::InvalidBaseUrl(config.zts_base_url.clone()))?;
-            segments.pop_if_empty();
-            segments.push("domain");
-            segments.push(&src.domain);
-            segments.push("service");
-            segments.push(&src.name);
-            segments.push("publickey");
-            segments.push(&src.key_version);
-        }
+        let url = build_zts_public_key_url(config, src)?;
         let resp = http.get(url).send().await?;
         if !resp.status().is_success() {
             return Err(Error::Crypto(format!(

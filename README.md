@@ -1,7 +1,7 @@
 # athenz-rs
 
 Rust client for Athenz token issuance (tenant side) and token validation (provider side).
-Crate name: `athenz-provider-tenant`.
+Crate name: `athenz-rs`.
 
 RoleToken is intentionally not included (deprecated).
 
@@ -23,7 +23,7 @@ RoleToken is intentionally not included (deprecated).
 
 ```toml
 [dependencies]
-athenz-provider-tenant = "0.1"
+athenz-rs = "0.1"
 ```
 
 ## Quickstart
@@ -31,7 +31,7 @@ athenz-provider-tenant = "0.1"
 ### Issue AccessToken with mTLS
 
 ```rust
-use athenz_provider_tenant::{AccessTokenRequest, ZtsClient};
+use athenz_rs::{AccessTokenRequest, ZtsClient};
 
 # fn example(cert: &[u8], key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
 let client = ZtsClient::builder("https://zts.example.com/zts/v1")?
@@ -50,7 +50,7 @@ println!("{}", token.access_token);
 ### Validate Access/ID Token (JWKS)
 
 ```rust
-use athenz_provider_tenant::{JwksProvider, JwtValidator};
+use athenz_rs::{JwksProvider, JwtValidator};
 
 # fn example(token: &str) -> Result<(), Box<dyn std::error::Error>> {
 let jwks = JwksProvider::new("https://zts.example.com/zts/v1/oauth2/keys")?;

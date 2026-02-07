@@ -9,6 +9,8 @@ use p521::ecdsa::{Signature as P521Signature, VerifyingKey as P521VerifyingKey};
 use reqwest::blocking::Client as HttpClient;
 #[cfg(feature = "async-validate")]
 use reqwest::Client as AsyncHttpClient;
+#[cfg(feature = "async-validate")]
+use tokio::sync::RwLock as AsyncRwLock;
 use serde_json::Value;
 use signature::Verifier as _;
 use std::collections::HashSet;
@@ -145,7 +147,7 @@ pub struct JwksProviderAsync {
     jwks_uri: Url,
     http: AsyncHttpClient,
     cache_ttl: Duration,
-    cache: RwLock<Option<CachedJwks>>,
+    cache: AsyncRwLock<Option<CachedJwks>>,
 }
 
 #[cfg(feature = "async-validate")]
@@ -156,7 +158,7 @@ impl JwksProviderAsync {
             jwks_uri,
             http: AsyncHttpClient::new(),
             cache_ttl: Duration::from_secs(300),
-            cache: RwLock::new(None),
+            cache: AsyncRwLock::new(None),
         })
     }
 
@@ -170,24 +172,37 @@ impl JwksProviderAsync {
             jwks,
             expires_at: Instant::now() + self.cache_ttl,
         };
-        *self.cache.write().unwrap() = Some(cached);
-        self
+        let mut this = self;
+        this.cache = AsyncRwLock::new(Some(cached));
+        this
     }
 
     pub async fn fetch(&self) -> Result<JwkSet, Error> {
-        if let Some(cached) = self.cache.read().unwrap().as_ref() {
-            if cached.expires_at > Instant::now() {
-                return Ok(cached.jwks.clone());
+        {
+            let cache = self.cache.read().await;
+            if let Some(cached) = cache.as_ref() {
+                if cached.expires_at > Instant::now() {
+                    return Ok(cached.jwks.clone());
+                }
             }
         }
 
-        let body = self.http.get(self.jwks_uri.clone()).send().await?.bytes().await?;
+        let resp = self.http.get(self.jwks_uri.clone()).send().await?;
+        let status = resp.status();
+        let body = resp.bytes().await?;
+        if !status.is_success() {
+            return Err(Error::Crypto(format!(
+                "jwks fetch failed: status {} body {}",
+                status,
+                String::from_utf8_lossy(&body)
+            )));
+        }
         let jwks = jwks_from_slice(&body)?;
         let cached = CachedJwks {
             jwks: jwks.clone(),
             expires_at: Instant::now() + self.cache_ttl,
         };
-        *self.cache.write().unwrap() = Some(cached);
+        *self.cache.write().await = Some(cached);
         Ok(jwks)
     }
 }
@@ -364,6 +379,7 @@ impl JwtValidator {
         let claims_bytes = base64_url_decode(parts.payload)?;
         let claims: Value = serde_json::from_slice(&claims_bytes).map_err(jwt_json_error)?;
 
+        // jsonwebtoken::Algorithm does not include ES512; Validation is used only for claims.
         let mut validation = Validation::new(Algorithm::RS256);
         validation.leeway = self.options.leeway;
         validation.validate_exp = self.options.validate_exp;
@@ -476,6 +492,7 @@ impl JwtValidatorAsync {
         let claims: Value = serde_json::from_slice(&claims_bytes)
             .map_err(jwt_json_error)?;
 
+        // jsonwebtoken::Algorithm does not include ES512; Validation is used only for claims.
         let mut validation = Validation::new(Algorithm::RS256);
         validation.leeway = self.options.leeway;
         validation.validate_exp = self.options.validate_exp;
@@ -509,7 +526,7 @@ fn resolve_allowed_algs(options: &JwtValidationOptions) -> Result<&[Algorithm], 
 }
 
 fn allows_es512(options: &JwtValidationOptions) -> bool {
-    ATHENZ_ALLOWED_ALGS
+    ATHENZ_EC_ALGS
         .iter()
         .all(|alg| options.allowed_algs.contains(alg))
 }

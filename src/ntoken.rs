@@ -25,6 +25,8 @@ use sha2::Sha256;
 use signature::{SignatureEncoding, Signer as SignatureSigner, Verifier as SignatureVerifier};
 #[cfg(feature = "async-validate")]
 use reqwest::Client as AsyncHttpClient;
+#[cfg(feature = "async-validate")]
+use tokio::sync::RwLock as AsyncRwLock;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -438,7 +440,7 @@ pub enum NTokenValidatorAsync {
     Static(NTokenVerifier),
     Zts {
         config: NTokenValidatorConfig,
-        cache: RwLock<HashMap<KeySource, CachedKey>>,
+        cache: AsyncRwLock<HashMap<KeySource, CachedKey>>,
         http: AsyncHttpClient,
     },
 }
@@ -457,7 +459,7 @@ impl NTokenValidatorAsync {
             .build()?;
         Ok(NTokenValidatorAsync::Zts {
             config,
-            cache: RwLock::new(HashMap::new()),
+            cache: AsyncRwLock::new(HashMap::new()),
             http,
         })
     }
@@ -644,14 +646,17 @@ fn get_cached_verifier(
 
 #[cfg(feature = "async-validate")]
 async fn get_cached_verifier_async(
-    cache: &RwLock<HashMap<KeySource, CachedKey>>,
+    cache: &AsyncRwLock<HashMap<KeySource, CachedKey>>,
     http: &AsyncHttpClient,
     config: &NTokenValidatorConfig,
     src: &KeySource,
 ) -> Result<NTokenVerifier, Error> {
-    if let Some(entry) = cache.read().unwrap().get(src) {
-        if entry.expires_at > Instant::now() {
-            return Ok(entry.verifier.clone());
+    {
+        let cache = cache.read().await;
+        if let Some(entry) = cache.get(src) {
+            if entry.expires_at > Instant::now() {
+                return Ok(entry.verifier.clone());
+            }
         }
     }
 
@@ -677,7 +682,8 @@ async fn get_cached_verifier_async(
         verifier: verifier.clone(),
         expires_at: Instant::now() + config.cache_ttl,
     };
-    cache.write().unwrap().insert(src.clone(), cached);
+    let mut cache = cache.write().await;
+    cache.insert(src.clone(), cached);
     Ok(verifier)
 }
 

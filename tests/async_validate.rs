@@ -25,6 +25,45 @@ async fn jwks_provider_fetches_keys() {
     assert_eq!(req.path, "/zts/v1/oauth2/keys");
 }
 
+#[tokio::test]
+async fn jwks_provider_uses_cache() {
+    let body = r#"{"keys":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx) = serve_once(response).await;
+
+    let provider = JwksProviderAsync::new(format!("{}/zts/v1/oauth2/keys", base_url))
+        .expect("provider");
+    let first = provider.fetch().await.expect("first fetch");
+    assert!(first.keys.is_empty());
+    let req = rx.await.expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zts/v1/oauth2/keys");
+
+    let second = provider.fetch().await.expect("second fetch");
+    assert!(second.keys.is_empty());
+}
+
+#[tokio::test]
+async fn jwks_provider_reports_non_success() {
+    let body = "boom";
+    let response = format!(
+        "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, _rx) = serve_once(response).await;
+
+    let provider = JwksProviderAsync::new(format!("{}/zts/v1/oauth2/keys", base_url))
+        .expect("provider");
+    let err = provider.fetch().await.expect_err("should error");
+    let message = format!("{}", err);
+    assert!(message.contains("status 500"));
+}
+
 struct CapturedRequest {
     method: String,
     path: String,
@@ -50,7 +89,10 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 1024];
     loop {
-        let read = stream.read(&mut chunk).await.unwrap_or(0);
+        let read = stream
+            .read(&mut chunk)
+            .await
+            .expect("failed to read from stream");
         if read == 0 {
             break;
         }

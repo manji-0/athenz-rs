@@ -118,6 +118,7 @@ impl ZtsAsyncClientBuilder {
             base_url: self.base_url,
             http,
             auth: self.auth,
+            disable_redirect: self.disable_redirect,
         })
     }
 }
@@ -137,6 +138,7 @@ pub struct ZtsAsyncClient {
     base_url: Url,
     http: HttpClient,
     auth: Option<AuthProvider>,
+    disable_redirect: bool,
 }
 
 impl ZtsAsyncClient {
@@ -161,6 +163,12 @@ impl ZtsAsyncClient {
     }
 
     pub async fn issue_id_token(&self, request: &IdTokenRequest) -> Result<IdTokenResponse, Error> {
+        if !self.disable_redirect {
+            return Err(Error::Crypto(
+                "issue_id_token requires disable_redirect(true) to observe Location header"
+                    .to_string(),
+            ));
+        }
         let mut url = self.build_url(&["oauth2", "auth"])?;
         let query = request.to_query();
         url.set_query(Some(&query));

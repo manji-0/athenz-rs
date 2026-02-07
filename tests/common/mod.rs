@@ -23,20 +23,40 @@ impl CapturedRequest {
     }
 }
 
-pub async fn serve_once(response: String) -> (String, oneshot::Receiver<CapturedRequest>) {
+pub async fn serve_once(
+    response: impl AsRef<[u8]>,
+) -> (String, oneshot::Receiver<CapturedRequest>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let addr = listener.local_addr().expect("addr");
     let (tx, rx) = oneshot::channel();
+    let response = response.as_ref().to_vec();
 
     tokio::spawn(async move {
         if let Ok((mut stream, _)) = listener.accept().await {
             let req = read_request(&mut stream).await;
             let _ = tx.send(req);
-            let _ = stream.write_all(response.as_bytes()).await;
+            let _ = stream.write_all(&response).await;
         }
     });
 
     (format!("http://{}", addr), rx)
+}
+
+pub fn response_with_body(status: &str, headers: &[(&str, &str)], body: &str) -> String {
+    let mut response = format!("HTTP/1.1 {status}\r\n");
+    for (name, value) in headers {
+        response.push_str(&format!("{name}: {value}\r\n"));
+    }
+    response.push_str(&format!("Content-Length: {}\r\n\r\n{}", body.len(), body));
+    response
+}
+
+pub fn json_response(status: &str, body: &str) -> String {
+    response_with_body(status, &[("Content-Type", "application/json")], body)
+}
+
+pub fn empty_response(status: &str) -> String {
+    format!("HTTP/1.1 {status}\r\n\r\n")
 }
 
 async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {

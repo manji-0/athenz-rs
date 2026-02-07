@@ -10,6 +10,7 @@ use crate::zms::{
     PolicyListOptions, RoleGetOptions, RoleListOptions, RolesQueryOptions,
     ServiceIdentitiesQueryOptions, ServiceListOptions,
 };
+use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::{Certificate, Client as HttpClient, Identity, RequestBuilder, Response, StatusCode};
 use std::time::Duration;
 use url::Url;
@@ -78,20 +79,28 @@ impl ZmsAsyncClientBuilder {
         Ok(self)
     }
 
-    pub fn ntoken_auth(mut self, header: impl Into<String>, token: impl Into<String>) -> Self {
-        self.auth = Some(AuthProvider::StaticHeader {
-            header: header.into(),
-            value: token.into(),
-        });
-        self
+    pub fn ntoken_auth(
+        mut self,
+        header: impl AsRef<str>,
+        token: impl AsRef<str>,
+    ) -> Result<Self, Error> {
+        let header = HeaderName::from_bytes(header.as_ref().as_bytes())
+            .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
+        let value = HeaderValue::from_str(token.as_ref())
+            .map_err(|e| Error::Crypto(format!("invalid header value: {}", e)))?;
+        self.auth = Some(AuthProvider::StaticHeader { header, value });
+        Ok(self)
     }
 
-    pub fn ntoken_signer(mut self, header: impl Into<String>, signer: NTokenSigner) -> Self {
-        self.auth = Some(AuthProvider::NToken {
-            header: header.into(),
-            signer,
-        });
-        self
+    pub fn ntoken_signer(
+        mut self,
+        header: impl AsRef<str>,
+        signer: NTokenSigner,
+    ) -> Result<Self, Error> {
+        let header = HeaderName::from_bytes(header.as_ref().as_bytes())
+            .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
+        self.auth = Some(AuthProvider::NToken { header, signer });
+        Ok(self)
     }
 
     pub fn build(self) -> Result<ZmsAsyncClient, Error> {
@@ -120,11 +129,11 @@ impl ZmsAsyncClientBuilder {
 #[allow(clippy::large_enum_variant)]
 enum AuthProvider {
     StaticHeader {
-        header: String,
-        value: String,
+        header: HeaderName,
+        value: HeaderValue,
     },
     NToken {
-        header: String,
+        header: HeaderName,
         signer: NTokenSigner,
     },
 }
@@ -790,11 +799,13 @@ impl ZmsAsyncClient {
         if let Some(ref auth) = self.auth {
             match auth {
                 AuthProvider::StaticHeader { header, value } => {
-                    req = req.header(header, value);
+                    req = req.header(header.clone(), value.clone());
                 }
                 AuthProvider::NToken { header, signer } => {
                     let token = signer.token()?;
-                    req = req.header(header, token);
+                    let value = HeaderValue::from_str(&token)
+                        .map_err(|e| Error::Crypto(format!("invalid header value: {}", e)))?;
+                    req = req.header(header.clone(), value);
                 }
             }
         }

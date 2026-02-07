@@ -88,9 +88,9 @@ impl NTokenBuilder {
         key_version: impl Into<String>,
     ) -> Self {
         Self {
-            domain: domain.into(),
-            name: name.into(),
-            key_version: key_version.into(),
+            domain: domain.into().to_lowercase(),
+            name: name.into().to_lowercase(),
+            key_version: key_version.into().to_lowercase(),
             version: DEFAULT_VERSION.to_string(),
             key_service: None,
             hostname: None,
@@ -736,5 +736,18 @@ awIDAQAB
         let claims = validator.validate(&token).expect("validate");
         assert_eq!(claims.domain, "sports");
         assert_eq!(claims.name, "api");
+    }
+
+    #[test]
+    fn ntoken_builder_lowercases_fields() {
+        let signer =
+            NTokenSigner::new("Sports", "API", "V1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+        let token = signer.sign_once().expect("token");
+        let validator =
+            NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+        let claims = validator.validate(&token).expect("validate");
+        assert_eq!(claims.domain, "sports");
+        assert_eq!(claims.name, "api");
+        assert_eq!(claims.key_version, "v1");
     }
 }

@@ -16,6 +16,8 @@ use pem::parse_many;
 use pkcs8::{DecodePrivateKey, DecodePublicKey};
 use rand::RngCore;
 use reqwest::blocking::Client as HttpClient;
+#[cfg(feature = "async-validate")]
+use reqwest::Client as AsyncHttpClient;
 use rsa::pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey};
 use rsa::pkcs1v15::{
     Signature as RsaSignature, SigningKey as RsaSigningKey, VerifyingKey as RsaVerifyingKey,
@@ -23,15 +25,13 @@ use rsa::pkcs1v15::{
 use rsa::{RsaPrivateKey, RsaPublicKey};
 use sha2::Sha256;
 use signature::{SignatureEncoding, Signer as SignatureSigner, Verifier as SignatureVerifier};
-#[cfg(feature = "async-validate")]
-use reqwest::Client as AsyncHttpClient;
-#[cfg(feature = "async-validate")]
-use tokio::sync::RwLock as AsyncRwLock;
-#[cfg(feature = "async-validate")]
-use tokio::sync::Mutex as AsyncMutex;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+#[cfg(feature = "async-validate")]
+use tokio::sync::Mutex as AsyncMutex;
+#[cfg(feature = "async-validate")]
+use tokio::sync::RwLock as AsyncRwLock;
 
 const DEFAULT_VERSION: &str = "S1";
 const DEFAULT_EXPIRATION: Duration = Duration::from_secs(60 * 60);
@@ -451,9 +451,9 @@ pub enum NTokenValidatorAsync {
 #[cfg(feature = "async-validate")]
 impl NTokenValidatorAsync {
     pub fn new_with_public_key(public_key_pem: &[u8]) -> Result<Self, Error> {
-        Ok(NTokenValidatorAsync::Static(NTokenVerifier::from_public_key_pem(
-            public_key_pem,
-        )?))
+        Ok(NTokenValidatorAsync::Static(
+            NTokenVerifier::from_public_key_pem(public_key_pem)?,
+        ))
     }
 
     pub fn new_with_zts(config: NTokenValidatorConfig) -> Result<Self, Error> {

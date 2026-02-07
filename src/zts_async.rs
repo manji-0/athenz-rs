@@ -1,11 +1,11 @@
 use crate::error::{Error, ResourceError};
 use crate::models::{
-    AccessTokenResponse, CertificateAuthorityBundle, DomainSignedPolicyData, ExternalCredentialsRequest,
-    ExternalCredentialsResponse, Info, InstanceIdentity, InstanceRefreshInformation,
-    InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken, IntrospectResponse,
-    JwkList, JWSPolicyData, OAuthConfig, OidcResponse, OpenIdConfig, PublicKeyEntry, RdlSchema,
-    RoleAccess, RoleCertificate, RoleCertificateRequest, SignedPolicyRequest, SSHCertRequest,
-    SSHCertificates, Status, TransportRules, Workloads,
+    AccessTokenResponse, CertificateAuthorityBundle, DomainSignedPolicyData,
+    ExternalCredentialsRequest, ExternalCredentialsResponse, Info, InstanceIdentity,
+    InstanceRefreshInformation, InstanceRegisterInformation, InstanceRegisterResponse,
+    InstanceRegisterToken, IntrospectResponse, JWSPolicyData, JwkList, OAuthConfig, OidcResponse,
+    OpenIdConfig, PublicKeyEntry, RdlSchema, RoleAccess, RoleCertificate, RoleCertificateRequest,
+    SSHCertRequest, SSHCertificates, SignedPolicyRequest, Status, TransportRules, Workloads,
 };
 use crate::ntoken::NTokenSigner;
 use crate::zts::{AccessTokenRequest, ConditionalResponse, IdTokenRequest, IdTokenResponse};
@@ -49,7 +49,11 @@ impl ZtsAsyncClientBuilder {
         Ok(self)
     }
 
-    pub fn mtls_identity_from_parts(mut self, cert_pem: &[u8], key_pem: &[u8]) -> Result<Self, Error> {
+    pub fn mtls_identity_from_parts(
+        mut self,
+        cert_pem: &[u8],
+        key_pem: &[u8],
+    ) -> Result<Self, Error> {
         let mut combined = Vec::new();
         combined.extend_from_slice(cert_pem);
         if !combined.ends_with(b"\n") {
@@ -76,7 +80,7 @@ impl ZtsAsyncClientBuilder {
     pub fn ntoken_signer(mut self, header: impl Into<String>, signer: NTokenSigner) -> Self {
         self.auth = Some(AuthProvider::NToken {
             header: header.into(),
-            signer,
+            signer: Box::new(signer),
         });
         self
     }
@@ -105,8 +109,14 @@ impl ZtsAsyncClientBuilder {
 }
 
 enum AuthProvider {
-    StaticHeader { header: String, value: String },
-    NToken { header: String, signer: NTokenSigner },
+    StaticHeader {
+        header: String,
+        value: String,
+    },
+    NToken {
+        header: String,
+        signer: Box<NTokenSigner>,
+    },
 }
 
 pub struct ZtsAsyncClient {
@@ -288,7 +298,10 @@ impl ZtsAsyncClient {
         self.expect_no_content(resp).await
     }
 
-    pub async fn get_ca_cert_bundle(&self, name: &str) -> Result<CertificateAuthorityBundle, Error> {
+    pub async fn get_ca_cert_bundle(
+        &self,
+        name: &str,
+    ) -> Result<CertificateAuthorityBundle, Error> {
         let url = self.build_url(&["cacerts", name])?;
         let mut req = self.http.get(url);
         req = self.apply_auth(req)?;
@@ -505,15 +518,14 @@ impl ZtsAsyncClient {
     async fn parse_error<T>(&self, resp: Response) -> Result<T, Error> {
         let status = resp.status();
         let body = resp.bytes().await?;
-        let mut err = serde_json::from_slice::<ResourceError>(&body).unwrap_or_else(|_| {
-            ResourceError {
+        let mut err =
+            serde_json::from_slice::<ResourceError>(&body).unwrap_or_else(|_| ResourceError {
                 code: status.as_u16() as i32,
                 message: String::from_utf8_lossy(&body).to_string(),
                 description: None,
                 error: None,
                 request_id: None,
-            }
-        });
+            });
         if err.code == 0 {
             err.code = status.as_u16() as i32;
         }

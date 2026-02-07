@@ -9,10 +9,6 @@ use p521::ecdsa::{Signature as P521Signature, VerifyingKey as P521VerifyingKey};
 use reqwest::blocking::Client as HttpClient;
 #[cfg(feature = "async-validate")]
 use reqwest::Client as AsyncHttpClient;
-#[cfg(feature = "async-validate")]
-use tokio::sync::RwLock as AsyncRwLock;
-#[cfg(feature = "async-validate")]
-use tokio::sync::Mutex as AsyncMutex;
 use serde_json::Value;
 use signature::Verifier as _;
 use std::collections::HashSet;
@@ -20,6 +16,10 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 use std::{fmt, str::FromStr};
+#[cfg(feature = "async-validate")]
+use tokio::sync::Mutex as AsyncMutex;
+#[cfg(feature = "async-validate")]
+use tokio::sync::RwLock as AsyncRwLock;
 use url::Url;
 
 /// Fixed allowlist for Athenz JWT validation (jsonwebtoken-supported subset).
@@ -207,7 +207,11 @@ impl JwksProviderAsync {
         if !status.is_success() {
             let body_preview = sanitize_error_body(&body);
             return Err(Error::Crypto(if body_preview.is_empty() {
-                format!("jwks fetch failed: status {} body_len {}", status, body.len())
+                format!(
+                    "jwks fetch failed: status {} body_len {}",
+                    status,
+                    body.len()
+                )
             } else {
                 format!(
                     "jwks fetch failed: status {} body_len {} body_preview {}",
@@ -451,8 +455,8 @@ impl JwtValidatorAsync {
             return self.validate_es512(&parts, &header).await;
         }
 
-        let alg = Algorithm::from_str(alg)
-            .map_err(|_| Error::UnsupportedAlg(header.alg.clone()))?;
+        let alg =
+            Algorithm::from_str(alg).map_err(|_| Error::UnsupportedAlg(header.alg.clone()))?;
         let allowed_algs = resolve_allowed_algs(&self.options)?;
         if !allowed_algs.contains(&alg) {
             return Err(Error::UnsupportedAlg(format!("{:?}", alg)));
@@ -509,8 +513,7 @@ impl JwtValidatorAsync {
             .map_err(|_| jwt_error(ErrorKind::InvalidSignature))?;
 
         let claims_bytes = base64_url_decode(parts.payload)?;
-        let claims: Value = serde_json::from_slice(&claims_bytes)
-            .map_err(jwt_json_error)?;
+        let claims: Value = serde_json::from_slice(&claims_bytes).map_err(jwt_json_error)?;
 
         // jsonwebtoken::Algorithm does not include ES512; Validation is used only for claims.
         let mut validation = Validation::new(Algorithm::RS256);

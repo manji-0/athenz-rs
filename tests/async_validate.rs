@@ -4,7 +4,9 @@ use athenz_provider_tenant::{JwksProviderAsync, JwtValidationOptions, JwtValidat
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use jsonwebtoken::jwk::JwkSet;
-use p521::ecdsa::{Signature as P521Signature, SigningKey as P521SigningKey, VerifyingKey as P521VerifyingKey};
+use p521::ecdsa::{
+    Signature as P521Signature, SigningKey as P521SigningKey, VerifyingKey as P521VerifyingKey,
+};
 use rand::thread_rng;
 use serde_json::json;
 use signature::Signer;
@@ -22,8 +24,8 @@ async fn jwks_provider_fetches_keys() {
     );
     let (base_url, rx) = serve_once(response).await;
 
-    let provider = JwksProviderAsync::new(format!("{}/zts/v1/oauth2/keys", base_url))
-        .expect("provider");
+    let provider =
+        JwksProviderAsync::new(format!("{}/zts/v1/oauth2/keys", base_url)).expect("provider");
     let jwks = provider.fetch().await.expect("fetch");
     assert!(jwks.keys.is_empty());
 
@@ -42,8 +44,8 @@ async fn jwks_provider_uses_cache() {
     );
     let (base_url, rx) = serve_once(response).await;
 
-    let provider = JwksProviderAsync::new(format!("{}/zts/v1/oauth2/keys", base_url))
-        .expect("provider");
+    let provider =
+        JwksProviderAsync::new(format!("{}/zts/v1/oauth2/keys", base_url)).expect("provider");
     let first = provider.fetch().await.expect("first fetch");
     assert!(first.keys.is_empty());
     let req = rx.await.expect("request");
@@ -64,8 +66,8 @@ async fn jwks_provider_reports_non_success() {
     );
     let (base_url, _rx) = serve_once(response).await;
 
-    let provider = JwksProviderAsync::new(format!("{}/zts/v1/oauth2/keys", base_url))
-        .expect("provider");
+    let provider =
+        JwksProviderAsync::new(format!("{}/zts/v1/oauth2/keys", base_url)).expect("provider");
     let err = provider.fetch().await.expect_err("should error");
     let message = format!("{}", err);
     assert!(message.contains("status 500"));

@@ -39,11 +39,11 @@ pub use models::{
     TransportRules, UserDomain, Workload, Workloads,
 };
 
+#[cfg(feature = "async-validate")]
+pub use ntoken::NTokenValidatorAsync;
 pub use ntoken::{
     NToken, NTokenBuilder, NTokenClaims, NTokenSigner, NTokenValidator, NTokenValidatorConfig,
 };
-#[cfg(feature = "async-validate")]
-pub use ntoken::NTokenValidatorAsync;
 
 pub use zts::{
     AccessTokenRequest, AccessTokenRequestBuilder, ConditionalResponse, IdTokenRequest,
@@ -52,12 +52,12 @@ pub use zts::{
 #[cfg(feature = "async-client")]
 pub use zts_async::{ZtsAsyncClient, ZtsAsyncClientBuilder};
 
+#[cfg(feature = "async-validate")]
+pub use policy::PolicyClientAsync;
 pub use policy::{
     PolicyClient, PolicyDecision, PolicyFetchResponse, PolicyMatch, PolicyStore,
     PolicyValidatorConfig,
 };
-#[cfg(feature = "async-validate")]
-pub use policy::PolicyClientAsync;
 
 pub use zms::{
     DomainListOptions, GroupGetOptions, GroupsQueryOptions, PoliciesQueryOptions,

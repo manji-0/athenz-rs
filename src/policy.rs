@@ -159,7 +159,10 @@ impl PolicyClientAsync {
         validate_signed_policy_data_async(data, &self.zts, &self.config).await
     }
 
-    pub async fn validate_jws_policy_data(&self, data: &JWSPolicyData) -> Result<PolicyData, Error> {
+    pub async fn validate_jws_policy_data(
+        &self,
+        data: &JWSPolicyData,
+    ) -> Result<PolicyData, Error> {
         validate_jws_policy_data_async(data, &self.zts, &self.config).await
     }
 }
@@ -617,9 +620,13 @@ async fn validate_signed_policy_data_async(
 
     ensure_not_expired(&signed_policy.expires, config)?;
 
-    let zts_key_pem =
-        get_public_key_pem_async(zts, &config.sys_auth_domain, &config.zts_service, &data.key_id)
-            .await?;
+    let zts_key_pem = get_public_key_pem_async(
+        zts,
+        &config.sys_auth_domain,
+        &config.zts_service,
+        &data.key_id,
+    )
+    .await?;
     let signed_json = canonical_json(&serde_json::to_value(signed_policy)?);
     verify_ybase64_signature_sha256(&signed_json, &data.signature, &zts_key_pem)?;
 
@@ -629,9 +636,13 @@ async fn validate_signed_policy_data_async(
         if zms_signature.is_empty() || zms_key_id.is_empty() {
             return Err(Error::Crypto("missing zms signature or key id".to_string()));
         }
-        let zms_key_pem =
-            get_public_key_pem_async(zts, &config.sys_auth_domain, &config.zms_service, zms_key_id)
-                .await?;
+        let zms_key_pem = get_public_key_pem_async(
+            zts,
+            &config.sys_auth_domain,
+            &config.zms_service,
+            zms_key_id,
+        )
+        .await?;
         let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
         verify_ybase64_signature_sha256(&policy_json, zms_signature, &zms_key_pem)?;
     }
@@ -646,9 +657,13 @@ async fn validate_jws_policy_data_async(
     config: &PolicyValidatorConfig,
 ) -> Result<PolicyData, Error> {
     let header = parse_jws_protected_header(&data.protected_header)?;
-    let zts_key_pem =
-        get_public_key_pem_async(zts, &config.sys_auth_domain, &config.zts_service, &header.kid)
-            .await?;
+    let zts_key_pem = get_public_key_pem_async(
+        zts,
+        &config.sys_auth_domain,
+        &config.zts_service,
+        &header.kid,
+    )
+    .await?;
 
     verify_jws_signature(
         &header.alg,
@@ -671,9 +686,13 @@ async fn validate_jws_policy_data_async(
         if zms_signature.is_empty() || zms_key_id.is_empty() {
             return Err(Error::Crypto("missing zms signature or key id".to_string()));
         }
-        let zms_key_pem =
-            get_public_key_pem_async(zts, &config.sys_auth_domain, &config.zms_service, zms_key_id)
-                .await?;
+        let zms_key_pem = get_public_key_pem_async(
+            zts,
+            &config.sys_auth_domain,
+            &config.zms_service,
+            zms_key_id,
+        )
+        .await?;
         let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
         verify_ybase64_signature_sha256(&policy_json, zms_signature, &zms_key_pem)?;
     }

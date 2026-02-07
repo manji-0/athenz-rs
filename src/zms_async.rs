@@ -875,6 +875,7 @@ impl ZmsAsyncClient {
             let mut path_segments = url
                 .path_segments_mut()
                 .map_err(|_| Error::InvalidBaseUrl(self.base_url.to_string()))?;
+            path_segments.pop_if_empty();
             for segment in segments {
                 path_segments.push(segment);
             }
@@ -943,7 +944,11 @@ impl ZmsAsyncClient {
             err.code = status.as_u16() as i32;
         }
         if err.message.is_empty() {
-            err.message = String::from_utf8_lossy(&body).to_string();
+            if body.is_empty() {
+                err.message = status.to_string();
+            } else {
+                err.message = String::from_utf8_lossy(&body).to_string();
+            }
         }
         Err(Error::Api(err))
     }

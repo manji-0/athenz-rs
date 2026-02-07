@@ -246,6 +246,7 @@ impl ZtsAsyncClient {
         if let Some(service) = service {
             req = req.query(&[("service", service)]);
         }
+        req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
     }

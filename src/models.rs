@@ -123,6 +123,74 @@ pub struct RoleAccess {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Access {
+    pub granted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceAccess {
+    pub granted: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RoleToken {
+    pub token: String,
+    pub expiry_time: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TenantDomains {
+    pub tenant_domain_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AWSTemporaryCredentials {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: String,
+    pub expiration: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceRefreshRequest {
+    pub csr: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expiry_time: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub namespace: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cloud: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x509_cert_signer_key_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Identity {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub certificate: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ca_cert_bundle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_certificate: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_certificate_signer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SSHCertRequestData {
     pub principals: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

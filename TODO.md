@@ -14,7 +14,7 @@
 - [x] AccessTokenRequest の scope 生成を ID Token 要求（openid + service）に対応
 
 ## 機能追加 (P2)
-- [ ] AccessTokenRequest に raw scope/ID token service を指定できる builder を追加
-- [ ] ZTS 未実装エンドポイント追加: /access*, /domain/*/token, /providerdomain, /domain/*/creds, /instance/*/refresh など
+- [x] AccessTokenRequest に raw scope/ID token service を指定できる builder を追加
+- [x] ZTS 未実装エンドポイント追加: /access*, /domain/*/token, /providerdomain, /domain/*/creds, /instance/*/refresh など
 - [ ] ZMS 未実装エンドポイント追加: template/meta/system-meta/ownership/entity/review/pending 等
 - [ ] async クライアント（reqwest async）追加検討

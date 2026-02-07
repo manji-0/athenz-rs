@@ -1,15 +1,16 @@
 use crate::error::{Error, ResourceError};
 use crate::models::{
-    AccessTokenResponse, CertificateAuthorityBundle, InstanceIdentity, InstanceRefreshInformation,
-    InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken, IntrospectResponse,
-    OidcResponse, OAuthConfig, OpenIdConfig, PublicKeyEntry, RoleAccess, RoleCertificate, RoleCertificateRequest,
-    SSHCertRequest, SSHCertificates, Workloads, TransportRules, ExternalCredentialsRequest,
-    ExternalCredentialsResponse, Status, Info, RdlSchema, JwkList, DomainSignedPolicyData,
-    JWSPolicyData, SignedPolicyRequest,
+    Access, AccessTokenResponse, AWSTemporaryCredentials, CertificateAuthorityBundle,
+    DomainSignedPolicyData, ExternalCredentialsRequest, ExternalCredentialsResponse, Identity as ZtsIdentity,
+    Info, InstanceIdentity, InstanceRefreshInformation, InstanceRefreshRequest, InstanceRegisterInformation,
+    InstanceRegisterResponse, InstanceRegisterToken, IntrospectResponse, JwkList, JWSPolicyData,
+    OAuthConfig, OidcResponse, OpenIdConfig, PublicKeyEntry, RdlSchema, ResourceAccess, RoleAccess,
+    RoleCertificate, RoleCertificateRequest, RoleToken, SignedPolicyRequest, SSHCertRequest,
+    SSHCertificates, Status, TenantDomains, TransportRules, Workloads,
 };
 use crate::ntoken::NTokenSigner;
 use reqwest::blocking::{Client as HttpClient, RequestBuilder, Response};
-use reqwest::{Certificate, Identity, StatusCode};
+use reqwest::{Certificate, Identity as TlsIdentity, StatusCode};
 use std::time::Duration;
 use url::Url;
 
@@ -335,7 +336,7 @@ pub struct ZtsClientBuilder {
     base_url: Url,
     timeout: Option<Duration>,
     disable_redirect: bool,
-    identity: Option<Identity>,
+    identity: Option<TlsIdentity>,
     ca_certs: Vec<Certificate>,
     auth: Option<AuthProvider>,
 }
@@ -363,7 +364,7 @@ impl ZtsClientBuilder {
     }
 
     pub fn mtls_identity_from_pem(mut self, identity_pem: &[u8]) -> Result<Self, Error> {
-        self.identity = Some(Identity::from_pem(identity_pem)?);
+        self.identity = Some(TlsIdentity::from_pem(identity_pem)?);
         Ok(self)
     }
 
@@ -374,7 +375,7 @@ impl ZtsClientBuilder {
             combined.push(b'\n');
         }
         combined.extend_from_slice(key_pem);
-        self.identity = Some(Identity::from_pem(&combined)?);
+        self.identity = Some(TlsIdentity::from_pem(&combined)?);
         Ok(self)
     }
 
@@ -536,6 +537,163 @@ impl ZtsClient {
         if let Some(service) = service {
             req = req.query(&[("service", service)]);
         }
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_resource_access(
+        &self,
+        action: &str,
+        resource: &str,
+        domain: Option<&str>,
+        principal: Option<&str>,
+    ) -> Result<ResourceAccess, Error> {
+        let url = self.build_url(&["access", action, resource])?;
+        let mut req = self.http.get(url);
+        if let Some(domain) = domain {
+            req = req.query(&[("domain", domain)]);
+        }
+        if let Some(principal) = principal {
+            req = req.query(&[("principal", principal)]);
+        }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_resource_access_ext(
+        &self,
+        action: &str,
+        resource: Option<&str>,
+        domain: Option<&str>,
+        principal: Option<&str>,
+    ) -> Result<ResourceAccess, Error> {
+        let url = self.build_url(&["access", action])?;
+        let mut req = self.http.get(url);
+        if let Some(resource) = resource {
+            req = req.query(&[("resource", resource)]);
+        }
+        if let Some(domain) = domain {
+            req = req.query(&[("domain", domain)]);
+        }
+        if let Some(principal) = principal {
+            req = req.query(&[("principal", principal)]);
+        }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_role_token(
+        &self,
+        domain: &str,
+        role: Option<&str>,
+        min_expiry_time: Option<i32>,
+        max_expiry_time: Option<i32>,
+        proxy_for_principal: Option<&str>,
+    ) -> Result<RoleToken, Error> {
+        let url = self.build_url(&["domain", domain, "token"])?;
+        let mut req = self.http.get(url);
+        if let Some(role) = role {
+            req = req.query(&[("role", role)]);
+        }
+        if let Some(min_expiry_time) = min_expiry_time {
+            req = req.query(&[("minExpiryTime", min_expiry_time.to_string())]);
+        }
+        if let Some(max_expiry_time) = max_expiry_time {
+            req = req.query(&[("maxExpiryTime", max_expiry_time.to_string())]);
+        }
+        if let Some(proxy_for_principal) = proxy_for_principal {
+            req = req.query(&[("proxyForPrincipal", proxy_for_principal)]);
+        }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn post_role_certificate_request(
+        &self,
+        domain: &str,
+        role: &str,
+        request: &RoleCertificateRequest,
+    ) -> Result<RoleToken, Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "token"])?;
+        let mut req = self.http.post(url).json(request);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_access(
+        &self,
+        domain: &str,
+        role: &str,
+        principal: &str,
+    ) -> Result<Access, Error> {
+        let url = self.build_url(&["access", "domain", domain, "role", role, "principal", principal])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_role_access(&self, domain: &str, principal: &str) -> Result<RoleAccess, Error> {
+        let url = self.build_url(&["access", "domain", domain, "principal", principal])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_tenant_domains(
+        &self,
+        provider_domain: &str,
+        user: &str,
+        role_name: Option<&str>,
+        service_name: Option<&str>,
+    ) -> Result<TenantDomains, Error> {
+        let url = self.build_url(&["providerdomain", provider_domain, "user", user])?;
+        let mut req = self.http.get(url);
+        if let Some(role_name) = role_name {
+            req = req.query(&[("roleName", role_name)]);
+        }
+        if let Some(service_name) = service_name {
+            req = req.query(&[("serviceName", service_name)]);
+        }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn post_instance_refresh_request(
+        &self,
+        domain: &str,
+        service: &str,
+        request: &InstanceRefreshRequest,
+    ) -> Result<ZtsIdentity, Error> {
+        let url = self.build_url(&["instance", domain, service, "refresh"])?;
+        let mut req = self.http.post(url).json(request);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    pub fn get_aws_temporary_credentials(
+        &self,
+        domain: &str,
+        role: &str,
+        duration_seconds: Option<i32>,
+        external_id: Option<&str>,
+    ) -> Result<AWSTemporaryCredentials, Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "creds"])?;
+        let mut req = self.http.get(url);
+        if let Some(duration_seconds) = duration_seconds {
+            req = req.query(&[("durationSeconds", duration_seconds.to_string())]);
+        }
+        if let Some(external_id) = external_id {
+            req = req.query(&[("externalId", external_id)]);
+        }
+        req = self.apply_auth(req)?;
         let resp = req.send()?;
         self.expect_ok_json(resp)
     }
@@ -941,7 +1099,7 @@ mod tests {
 
     #[test]
     fn get_domain_signed_policy_data_sets_if_none_match() {
-        let response = "HTTP/1.1 304 Not Modified\r\nETag: tag-1\r\nContent-Length: 0\r\n\r\n";
+        let response = "HTTP/1.1 304 Not Modified\r\nETag: tag-1\r\nContent-Length: 0\r\n\r\n".to_string();
         let (base_url, rx, handle) = serve_once(response);
         let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
             .expect("builder")
@@ -962,13 +1120,260 @@ mod tests {
         handle.join().expect("server");
     }
 
+    #[test]
+    fn get_resource_access_sets_query() {
+        let response = ok_json_response("{\"granted\":true}");
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_resource_access("update", "resource1", Some("core"), Some("user.jane"))
+            .expect("request");
+        assert!(result.granted);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/access/update/resource1?domain=core&principal=user.jane"
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn get_resource_access_ext_sets_query() {
+        let response = ok_json_response("{\"granted\":false}");
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_resource_access_ext(
+                "update",
+                Some("resource1"),
+                Some("core"),
+                Some("user.jane"),
+            )
+            .expect("request");
+        assert!(!result.granted);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/access/update?resource=resource1&domain=core&principal=user.jane"
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn get_role_token_sets_query() {
+        let response = ok_json_response("{\"token\":\"t\",\"expiryTime\":123}");
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_role_token(
+                "sports",
+                Some("admin"),
+                Some(300),
+                Some(600),
+                Some("user.jane"),
+            )
+            .expect("request");
+        assert_eq!(result.token, "t");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/domain/sports/token?role=admin&minExpiryTime=300&maxExpiryTime=600&proxyForPrincipal=user.jane"
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn post_role_certificate_request_uses_path() {
+        let response = ok_json_response("{\"token\":\"t\",\"expiryTime\":123}");
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let request = crate::models::RoleCertificateRequest {
+            csr: "csr".to_string(),
+            proxy_for_principal: None,
+            expiry_time: 0,
+            prev_cert_not_before: None,
+            prev_cert_not_after: None,
+            x509_cert_signer_key_id: None,
+        };
+
+        let result = client
+            .post_role_certificate_request("sports", "reader", &request)
+            .expect("request");
+        assert_eq!(result.token, "t");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.path, "/zts/v1/domain/sports/role/reader/token");
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn get_access_and_role_access_paths() {
+        let response = ok_json_response("{\"granted\":true}");
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_access("sports", "reader", "user.jane")
+            .expect("request");
+        assert!(result.granted);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/access/domain/sports/role/reader/principal/user.jane"
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn get_role_access_path() {
+        let response = ok_json_response("{\"roles\":[\"a\",\"b\"]}");
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_role_access("sports", "user.jane")
+            .expect("request");
+        assert_eq!(result.roles, vec!["a".to_string(), "b".to_string()]);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.path, "/zts/v1/access/domain/sports/principal/user.jane");
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn get_tenant_domains_sets_query() {
+        let response = ok_json_response("{\"tenantDomainNames\":[\"a\",\"b\"]}");
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_tenant_domains("athenz.provider", "alice", Some("tenant"), Some("svc"))
+            .expect("request");
+        assert_eq!(
+            result.tenant_domain_names,
+            vec!["a".to_string(), "b".to_string()]
+        );
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/providerdomain/athenz.provider/user/alice?roleName=tenant&serviceName=svc"
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn post_instance_refresh_request_uses_path() {
+        let response = ok_json_response("{\"name\":\"svc\"}");
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let request = crate::models::InstanceRefreshRequest {
+            csr: "csr".to_string(),
+            expiry_time: None,
+            key_id: None,
+            namespace: None,
+            cloud: None,
+            x509_cert_signer_key_id: None,
+        };
+
+        let result = client
+            .post_instance_refresh_request("sports", "api", &request)
+            .expect("request");
+        assert_eq!(result.name, "svc");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.path, "/zts/v1/instance/sports/api/refresh");
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn get_aws_temporary_credentials_sets_query() {
+        let response = ok_json_response("{\"accessKeyId\":\"a\",\"secretAccessKey\":\"b\",\"sessionToken\":\"c\",\"expiration\":\"d\"}");
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_aws_temporary_credentials("sports", "admin", Some(900), Some("ext"))
+            .expect("request");
+        assert_eq!(result.access_key_id, "a");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/domain/sports/role/admin/creds?durationSeconds=900&externalId=ext"
+        );
+
+        handle.join().expect("server");
+    }
+
     struct CapturedRequest {
         method: String,
         path: String,
         headers: HashMap<String, String>,
     }
 
-    fn serve_once(response: &'static str) -> (String, mpsc::Receiver<CapturedRequest>, thread::JoinHandle<()>) {
+    fn ok_json_response(body: &str) -> String {
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        )
+    }
+
+    fn serve_once(response: String) -> (String, mpsc::Receiver<CapturedRequest>, thread::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().expect("addr");
         let (tx, rx) = mpsc::channel();

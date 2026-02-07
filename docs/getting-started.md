@@ -20,7 +20,7 @@ ZTS base URL should include the `/zts/v1` path, for example:
 Below is the smallest working flow using mTLS.
 
 ```rust
-use athenz_provider_tenant::{AccessTokenRequest, ZtsClient};
+use athenz_rs::{AccessTokenRequest, ZtsClient};
 
 # fn example(cert: &[u8], key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
 let client = ZtsClient::builder("https://zts.example.com/zts/v1")?

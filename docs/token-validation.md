@@ -5,7 +5,7 @@ This guide focuses on validating Access/ID Tokens (JWT) using JWKS.
 ## Basic validation (fetch JWKS)
 
 ```rust
-use athenz_provider_tenant::{JwksProvider, JwtValidator};
+use athenz_rs::{JwksProvider, JwtValidator};
 
 # fn example(token: &str) -> Result<(), Box<dyn std::error::Error>> {
 let jwks = JwksProvider::new("https://zts.example.com/zts/v1/oauth2/keys")?;
@@ -23,7 +23,7 @@ println!("claims: {}", data.claims);
 You can customize issuer, audience, leeway, and allowed algorithms.
 
 ```rust
-use athenz_provider_tenant::{JwksProvider, JwtValidator, JwtValidationOptions};
+use athenz_rs::{JwksProvider, JwtValidator, JwtValidationOptions};
 
 # fn example(token: &str) -> Result<(), Box<dyn std::error::Error>> {
 let jwks = JwksProvider::new("https://zts.example.com/zts/v1/oauth2/keys")?;
@@ -48,7 +48,7 @@ ES512 (P-521) is verified internally (not via jsonwebtoken).
 If you want to remove unsupported `alg` values and inspect what was removed:
 
 ```rust
-use athenz_provider_tenant::{jwks_from_slice_with_report, JwksProvider, JwtValidator};
+use athenz_rs::{jwks_from_slice_with_report, JwksProvider, JwtValidator};
 
 # fn example(token: &str, jwks_body: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
 let report = jwks_from_slice_with_report(jwks_body)?;

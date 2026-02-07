@@ -1,4 +1,4 @@
-use athenz_provider_tenant::{PolicyClient, PolicyDecision, PolicyStore, ZtsClient};
+use athenz_rs::{PolicyClient, PolicyDecision, PolicyStore, ZtsClient};
 use std::env;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

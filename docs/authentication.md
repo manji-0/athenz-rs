@@ -10,7 +10,7 @@
 Provide a client certificate and private key in PEM format.
 
 ```rust
-use athenz_provider_tenant::ZtsClient;
+use athenz_rs::ZtsClient;
 
 # fn example(cert_pem: &[u8], key_pem: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
 let client = ZtsClient::builder("https://zts.example.com/zts/v1")?
@@ -32,7 +32,7 @@ There are two options:
 - Use `NTokenSigner` to sign and refresh automatically (`ntoken_signer`)
 
 ```rust
-use athenz_provider_tenant::{NTokenSigner, ZtsClient};
+use athenz_rs::{NTokenSigner, ZtsClient};
 
 # fn example(private_key_pem: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
 let signer = NTokenSigner::new("sports", "api", "v1", private_key_pem)?;

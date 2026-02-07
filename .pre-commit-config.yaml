@@ -6,3 +6,10 @@ repos:
         args: ["--", "--check"]
       - id: clippy
         args: ["--", "-D", "warnings"]
+  - repo: local
+    hooks:
+      - id: cargo-test
+        name: cargo test
+        entry: cargo test
+        language: system
+        pass_filenames: false

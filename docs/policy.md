@@ -7,7 +7,7 @@ This guide covers fetching signed policy data and evaluating access locally.
 Use `PolicyClient` to fetch signed policy data and validate signatures.
 
 ```rust
-use athenz_provider_tenant::{PolicyClient, SignedPolicyRequest, ZtsClient};
+use athenz_rs::{PolicyClient, SignedPolicyRequest, ZtsClient};
 
 # fn example() -> Result<(), Box<dyn std::error::Error>> {
 let zts = ZtsClient::builder("https://zts.example.com/zts/v1")?
@@ -28,7 +28,7 @@ JWS policy data can be fetched with `fetch_jws_policy_data` + `validate_jws_poli
 ## Evaluate access with PolicyStore
 
 ```rust
-use athenz_provider_tenant::{PolicyClient, PolicyDecision, PolicyStore, ZtsClient};
+use athenz_rs::{PolicyClient, PolicyDecision, PolicyStore, ZtsClient};
 
 # fn example() -> Result<(), Box<dyn std::error::Error>> {
 let zts = ZtsClient::builder("https://zts.example.com/zts/v1")?

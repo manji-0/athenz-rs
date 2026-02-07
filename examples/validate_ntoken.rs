@@ -1,4 +1,4 @@
-use athenz_provider_tenant::NTokenValidator;
+use athenz_rs::NTokenValidator;
 use std::env;
 use std::fs;
 

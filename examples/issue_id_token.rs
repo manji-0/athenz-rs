@@ -1,4 +1,4 @@
-use athenz_provider_tenant::{IdTokenRequest, NTokenSigner, ZtsClient};
+use athenz_rs::{IdTokenRequest, NTokenSigner, ZtsClient};
 use std::env;
 use std::fs;
 

@@ -344,7 +344,7 @@ impl ZmsClientBuilder {
     pub fn ntoken_signer(mut self, header: impl Into<String>, signer: NTokenSigner) -> Self {
         self.auth = Some(AuthProvider::NToken {
             header: header.into(),
-            signer: Box::new(signer),
+            signer,
         });
         self
     }
@@ -372,6 +372,7 @@ impl ZmsClientBuilder {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum AuthProvider {
     StaticHeader {
         header: String,
@@ -379,7 +380,7 @@ enum AuthProvider {
     },
     NToken {
         header: String,
-        signer: Box<NTokenSigner>,
+        signer: NTokenSigner,
     },
 }
 

@@ -13,11 +13,15 @@ use reqwest::{Certificate, Identity, StatusCode};
 use std::time::Duration;
 use url::Url;
 
+/// Request parameters for AccessToken issuance.
+/// Use `new()`/`builder()` for forward-compatible construction.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct AccessTokenRequest {
     pub domain: String,
     pub roles: Vec<String>,
     pub id_token_service: Option<String>,
+    /// If set, this value is used as-is and overrides role/id_token_service scope composition.
     pub raw_scope: Option<String>,
     pub expires_in: Option<i32>,
     pub proxy_principal_spiffe_uris: Option<String>,
@@ -156,8 +160,12 @@ impl AccessTokenRequestBuilder {
         }
     }
 
-    pub fn roles(mut self, roles: Vec<String>) -> Self {
-        self.request.roles = roles;
+    pub fn roles<I, S>(mut self, roles: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.request.roles = roles.into_iter().map(Into::into).collect();
         self
     }
 
@@ -166,6 +174,7 @@ impl AccessTokenRequestBuilder {
         self
     }
 
+    /// Overrides composed scopes from roles/id_token_service.
     pub fn raw_scope(mut self, scope: impl Into<String>) -> Self {
         self.request.raw_scope = Some(scope.into());
         self

@@ -6,6 +6,7 @@ use crate::models::{
 use crate::zts::ZtsClient;
 use base64::engine::general_purpose::{STANDARD as BASE64_STD, URL_SAFE_NO_PAD};
 use base64::Engine as _;
+use log::warn;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use pem::parse_many;
 use pkcs8::DecodePublicKey;
@@ -307,7 +308,7 @@ struct WildcardRoleAssertions {
 
 impl WildcardRoleAssertions {
     fn new(entry: AssertionEntry) -> Self {
-        let role_match = Match::from_pattern(&entry.role);
+        let role_match = Match::from_pattern(&entry.role, "role", &entry._policy_name);
         Self {
             role_match,
             assertions: vec![entry],
@@ -331,10 +332,10 @@ impl AssertionEntry {
             role = stripped.to_string();
         }
         let role_has_wildcard = contains_match_char(&role);
-        let action = Match::from_pattern(&assertion.action.to_lowercase());
+        let action = Match::from_pattern(&assertion.action.to_lowercase(), "action", policy_name);
         let resource_value =
             strip_domain_prefix_if_matches(&assertion.resource.to_lowercase(), domain);
-        let resource = Match::from_pattern(&resource_value);
+        let resource = Match::from_pattern(&resource_value, "resource", policy_name);
         Self {
             role,
             role_has_wildcard,
@@ -351,10 +352,11 @@ enum Match {
     Equals(String),
     StartsWith(String),
     Regex(Regex),
+    Invalid,
 }
 
 impl Match {
-    fn from_pattern(pattern: &str) -> Self {
+    fn from_pattern(pattern: &str, context: &str, policy_name: &str) -> Self {
         if pattern == "*" {
             return Match::All;
         }
@@ -366,9 +368,16 @@ impl Match {
                 Match::StartsWith(pattern[..pattern.len() - 1].to_string())
             }
             _ => {
-                let regex = Regex::new(&pattern_from_glob(pattern))
-                    .unwrap_or_else(|_| Regex::new("^$").unwrap());
-                Match::Regex(regex)
+                let regex_pattern = pattern_from_glob(pattern);
+                match Regex::new(&regex_pattern) {
+                    Ok(regex) => Match::Regex(regex),
+                    Err(err) => {
+                        warn!(
+                            "invalid wildcard pattern in policy {policy_name} for {context}: pattern='{pattern}' regex='{regex_pattern}' error={err}"
+                        );
+                        Match::Invalid
+                    }
+                }
             }
         }
     }
@@ -379,6 +388,7 @@ impl Match {
             Match::Equals(expected) => expected == value,
             Match::StartsWith(prefix) => value.starts_with(prefix),
             Match::Regex(regex) => regex.is_match(value),
+            Match::Invalid => false,
         }
     }
 }
@@ -448,7 +458,7 @@ fn pattern_from_glob(glob: &str) -> String {
 fn is_regex_meta(c: char) -> bool {
     matches!(
         c,
-        '^' | '$' | '.' | '|' | '[' | '+' | '\\' | '(' | ')' | '{'
+        '^' | '$' | '.' | '|' | '[' | ']' | '+' | '\\' | '(' | ')' | '{' | '}'
     )
 }
 

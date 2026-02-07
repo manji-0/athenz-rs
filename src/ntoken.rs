@@ -34,6 +34,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex as AsyncMutex;
 #[cfg(feature = "async-validate")]
 use tokio::sync::RwLock as AsyncRwLock;
+use url::Url;
 
 const DEFAULT_VERSION: &str = "S1";
 const DEFAULT_EXPIRATION: Duration = Duration::from_secs(60 * 60);
@@ -626,13 +627,21 @@ fn get_cached_verifier(
         }
     }
 
-    let url = format!(
-        "{}/domain/{}/service/{}/publickey/{}",
-        config.zts_base_url.trim_end_matches('/'),
-        src.domain,
-        src.name,
-        src.key_version
-    );
+    let mut url = Url::parse(&config.zts_base_url)?;
+    url.set_query(None);
+    url.set_fragment(None);
+    {
+        let mut segments = url
+            .path_segments_mut()
+            .map_err(|_| Error::InvalidBaseUrl(config.zts_base_url.clone()))?;
+        segments.pop_if_empty();
+        segments.push("domain");
+        segments.push(&src.domain);
+        segments.push("service");
+        segments.push(&src.name);
+        segments.push("publickey");
+        segments.push(&src.key_version);
+    }
     let resp = http.get(url).send()?;
     if !resp.status().is_success() {
         return Err(Error::Crypto(format!(
@@ -687,13 +696,21 @@ async fn get_cached_verifier_async(
             }
         }
 
-        let url = format!(
-            "{}/domain/{}/service/{}/publickey/{}",
-            config.zts_base_url.trim_end_matches('/'),
-            src.domain,
-            src.name,
-            src.key_version
-        );
+        let mut url = Url::parse(&config.zts_base_url)?;
+        url.set_query(None);
+        url.set_fragment(None);
+        {
+            let mut segments = url
+                .path_segments_mut()
+                .map_err(|_| Error::InvalidBaseUrl(config.zts_base_url.clone()))?;
+            segments.pop_if_empty();
+            segments.push("domain");
+            segments.push(&src.domain);
+            segments.push("service");
+            segments.push(&src.name);
+            segments.push("publickey");
+            segments.push(&src.key_version);
+        }
         let resp = http.get(url).send().await?;
         if !resp.status().is_success() {
             return Err(Error::Crypto(format!(

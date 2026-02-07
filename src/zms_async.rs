@@ -129,7 +129,10 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
-    pub async fn get_domain_list(&self, options: &DomainListOptions) -> Result<DomainList, Error> {
+    pub async fn get_domain_list(
+        &self,
+        options: &DomainListOptions,
+    ) -> Result<Option<DomainList>, Error> {
         let url = self.build_url(&["domain"])?;
         let mut req = self.http.get(url);
         let params = options.to_query_pairs();
@@ -141,7 +144,11 @@ impl ZmsAsyncClient {
         }
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
-        self.expect_ok_json(resp).await
+        match resp.status() {
+            StatusCode::OK => Ok(Some(resp.json::<DomainList>().await.map_err(Error::from)?)),
+            StatusCode::NOT_MODIFIED => Ok(None),
+            _ => self.parse_error(resp).await,
+        }
     }
 
     pub async fn post_top_level_domain(
@@ -862,6 +869,8 @@ impl ZmsAsyncClient {
 
     fn build_url(&self, segments: &[&str]) -> Result<Url, Error> {
         let mut url = self.base_url.clone();
+        url.set_query(None);
+        url.set_fragment(None);
         {
             let mut path_segments = url
                 .path_segments_mut()

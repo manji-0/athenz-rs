@@ -26,7 +26,11 @@ async fn get_domain_list_sets_query_and_modified_since() {
     options.prefix = Some("core".to_string());
     options.modified_since = Some("Wed, 21 Oct 2015 07:28:00 GMT".to_string());
 
-    let list = client.get_domain_list(&options).await.expect("request");
+    let list = client
+        .get_domain_list(&options)
+        .await
+        .expect("request")
+        .expect("list");
     assert_eq!(list.names, vec!["a".to_string(), "b".to_string()]);
 
     let req = rx.await.expect("request");
@@ -67,7 +71,10 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 1024];
     loop {
-        let read = stream.read(&mut chunk).await.unwrap_or(0);
+        let read = stream
+            .read(&mut chunk)
+            .await
+            .expect("failed to read from stream");
         if read == 0 {
             break;
         }
@@ -110,4 +117,19 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
         headers,
         query,
     }
+}
+
+#[tokio::test]
+async fn get_domain_list_returns_none_on_not_modified() {
+    let response = "HTTP/1.1 304 Not Modified\r\n\r\n".to_string();
+    let (base_url, _rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = DomainListOptions::default();
+    let list = client.get_domain_list(&options).await.expect("request");
+    assert!(list.is_none());
 }

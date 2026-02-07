@@ -34,7 +34,6 @@ Examples:
 ## Issue implementation guide
 
 - Keep the repo's current branch on `main`.
-- For minor changes like typo fixes, work directly on `main`, then commit and push.
 - For changes that may alter test results or involve documentation updates, pull
   remote `main` first, then create a worktree and do the work there.
 

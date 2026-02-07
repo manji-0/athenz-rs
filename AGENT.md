@@ -33,9 +33,13 @@ Examples:
 
 ## Issue implementation guide
 
-- Keep the repo's current branch on `main`.
-- For changes that may alter test results or involve documentation updates, pull
-  remote `main` first, then create a worktree and do the work there.
+- Keep your primary checkout (the working copy in this repo directory) on the
+  `main` branch.
+- Before starting work on an issue, update `main` in the primary checkout:
+  `git fetch origin && git switch main && git pull --ff-only`.
+- For each issue, create a separate worktree based on the up-to-date `main`
+  and do all changes there, for example:
+  `git worktree add ../ISSUE-123 -b codex/ISSUE-123-update-docs origin/main`.
 
 ## Branch names
 

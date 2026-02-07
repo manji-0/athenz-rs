@@ -677,40 +677,51 @@ async fn get_cached_verifier_async(
             .clone()
     };
     let _guard = fetch_lock.lock().await;
-    {
-        let cache = cache.read().await;
-        if let Some(entry) = cache.get(src) {
-            if entry.expires_at > Instant::now() {
-                return Ok(entry.verifier.clone());
+    let result = async {
+        {
+            let cache = cache.read().await;
+            if let Some(entry) = cache.get(src) {
+                if entry.expires_at > Instant::now() {
+                    return Ok(entry.verifier.clone());
+                }
             }
         }
-    }
 
-    let url = format!(
-        "{}/domain/{}/service/{}/publickey/{}",
-        config.zts_base_url.trim_end_matches('/'),
-        src.domain,
-        src.name,
-        src.key_version
-    );
-    let resp = http.get(url).send().await?;
-    if !resp.status().is_success() {
-        return Err(Error::Crypto(format!(
-            "unable to fetch public key: status {}",
-            resp.status()
-        )));
-    }
-    let entry: PublicKeyEntry = resp.json().await?;
-    let pem_bytes = ybase64_decode(&entry.key)?;
-    let verifier = NTokenVerifier::from_public_key_pem(&pem_bytes)?;
+        let url = format!(
+            "{}/domain/{}/service/{}/publickey/{}",
+            config.zts_base_url.trim_end_matches('/'),
+            src.domain,
+            src.name,
+            src.key_version
+        );
+        let resp = http.get(url).send().await?;
+        if !resp.status().is_success() {
+            return Err(Error::Crypto(format!(
+                "unable to fetch public key: status {}",
+                resp.status()
+            )));
+        }
+        let entry: PublicKeyEntry = resp.json().await?;
+        let pem_bytes = ybase64_decode(&entry.key)?;
+        let verifier = NTokenVerifier::from_public_key_pem(&pem_bytes)?;
 
-    let cached = CachedKey {
-        verifier: verifier.clone(),
-        expires_at: Instant::now() + config.cache_ttl,
-    };
-    let mut cache = cache.write().await;
-    cache.insert(src.clone(), cached);
-    Ok(verifier)
+        let cached = CachedKey {
+            verifier: verifier.clone(),
+            expires_at: Instant::now() + config.cache_ttl,
+        };
+        let mut cache = cache.write().await;
+        cache.insert(src.clone(), cached);
+        Ok(verifier)
+    }
+    .await;
+
+    let mut locks = fetch_locks.lock().await;
+    if let Some(existing) = locks.get(src) {
+        if Arc::ptr_eq(existing, &fetch_lock) {
+            locks.remove(src);
+        }
+    }
+    result
 }
 
 fn key_source_from_claims(claims: &NToken, config: &NTokenValidatorConfig) -> KeySource {

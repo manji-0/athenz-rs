@@ -447,10 +447,13 @@ impl ZtsAsyncClient {
 
     fn build_url(&self, segments: &[&str]) -> Result<Url, Error> {
         let mut url = self.base_url.clone();
+        url.set_query(None);
+        url.set_fragment(None);
         {
             let mut path_segments = url
                 .path_segments_mut()
                 .map_err(|_| Error::InvalidBaseUrl(self.base_url.to_string()))?;
+            path_segments.pop_if_empty();
             for segment in segments {
                 path_segments.push(segment);
             }

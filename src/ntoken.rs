@@ -26,6 +26,8 @@ use rsa::{RsaPrivateKey, RsaPublicKey};
 use sha2::Sha256;
 use signature::{SignatureEncoding, Signer as SignatureSigner, Verifier as SignatureVerifier};
 use std::collections::HashMap;
+#[cfg(feature = "async-validate")]
+use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 #[cfg(feature = "async-validate")]
@@ -368,6 +370,7 @@ impl Default for NTokenValidatorConfig {
     }
 }
 
+#[allow(private_interfaces)]
 pub enum NTokenValidator {
     Static(NTokenVerifier),
     Zts {
@@ -377,17 +380,15 @@ pub enum NTokenValidator {
     },
 }
 
-#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct KeySource {
+struct KeySource {
     domain: String,
     name: String,
     key_version: String,
 }
 
-#[doc(hidden)]
 #[derive(Clone)]
-pub struct CachedKey {
+struct CachedKey {
     verifier: NTokenVerifier,
     expires_at: Instant,
 }
@@ -438,13 +439,14 @@ impl NTokenValidator {
 }
 
 #[cfg(feature = "async-validate")]
+#[allow(private_interfaces)]
 pub enum NTokenValidatorAsync {
     Static(NTokenVerifier),
     Zts {
         config: NTokenValidatorConfig,
         cache: AsyncRwLock<HashMap<KeySource, CachedKey>>,
         http: AsyncHttpClient,
-        fetch_lock: AsyncMutex<()>,
+        fetch_locks: AsyncMutex<HashMap<KeySource, Arc<AsyncMutex<()>>>>,
     },
 }
 
@@ -464,7 +466,7 @@ impl NTokenValidatorAsync {
             config,
             cache: AsyncRwLock::new(HashMap::new()),
             http,
-            fetch_lock: AsyncMutex::new(()),
+            fetch_locks: AsyncMutex::new(HashMap::new()),
         })
     }
 
@@ -482,11 +484,11 @@ impl NTokenValidatorAsync {
                 config,
                 cache,
                 http,
-                fetch_lock,
+                fetch_locks,
             } => {
                 let src = key_source_from_claims(&claims, config);
                 let verifier =
-                    get_cached_verifier_async(cache, fetch_lock, http, config, &src).await?;
+                    get_cached_verifier_async(cache, fetch_locks, http, config, &src).await?;
                 verifier.verify(&unsigned, &signature)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
@@ -653,7 +655,7 @@ fn get_cached_verifier(
 #[cfg(feature = "async-validate")]
 async fn get_cached_verifier_async(
     cache: &AsyncRwLock<HashMap<KeySource, CachedKey>>,
-    fetch_lock: &AsyncMutex<()>,
+    fetch_locks: &AsyncMutex<HashMap<KeySource, Arc<AsyncMutex<()>>>>,
     http: &AsyncHttpClient,
     config: &NTokenValidatorConfig,
     src: &KeySource,
@@ -667,6 +669,13 @@ async fn get_cached_verifier_async(
         }
     }
 
+    let fetch_lock = {
+        let mut locks = fetch_locks.lock().await;
+        locks
+            .entry(src.clone())
+            .or_insert_with(|| Arc::new(AsyncMutex::new(())))
+            .clone()
+    };
     let _guard = fetch_lock.lock().await;
     {
         let cache = cache.read().await;

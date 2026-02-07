@@ -544,20 +544,14 @@ fn validate_signed_policy_data(
     let signed_json = canonical_json(&serde_json::to_value(signed_policy)?);
     verify_ybase64_signature_sha256(&signed_json, &data.signature, &zts_key_pem)?;
 
-    if config.check_zms_signature {
-        let zms_signature = signed_policy.zms_signature.as_deref().unwrap_or("");
-        let zms_key_id = signed_policy.zms_key_id.as_deref().unwrap_or("");
-        if zms_signature.is_empty() || zms_key_id.is_empty() {
-            return Err(Error::Crypto("missing zms signature or key id".to_string()));
-        }
+    if let Some(inputs) = zms_signature_inputs(signed_policy, config)? {
         let zms_key_pem = get_public_key_pem(
             zts,
             &config.sys_auth_domain,
             &config.zms_service,
-            zms_key_id,
+            &inputs.key_id,
         )?;
-        let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
-        verify_ybase64_signature_sha256(&policy_json, zms_signature, &zms_key_pem)?;
+        verify_ybase64_signature_sha256(&inputs.policy_json, &inputs.signature, &zms_key_pem)?;
     }
 
     Ok(signed_policy.policy_data.clone())
@@ -584,27 +578,17 @@ fn validate_jws_policy_data(
         &zts_key_pem,
     )?;
 
-    let payload = URL_SAFE_NO_PAD
-        .decode(data.payload.as_bytes())
-        .map_err(|e| Error::Crypto(format!("jws payload decode error: {e}")))?;
-    let signed_policy: SignedPolicyData = serde_json::from_slice(&payload)?;
-
+    let signed_policy = decode_jws_payload(&data.payload)?;
     ensure_not_expired(&signed_policy.expires, config)?;
 
-    if config.check_zms_signature {
-        let zms_signature = signed_policy.zms_signature.as_deref().unwrap_or("");
-        let zms_key_id = signed_policy.zms_key_id.as_deref().unwrap_or("");
-        if zms_signature.is_empty() || zms_key_id.is_empty() {
-            return Err(Error::Crypto("missing zms signature or key id".to_string()));
-        }
+    if let Some(inputs) = zms_signature_inputs(&signed_policy, config)? {
         let zms_key_pem = get_public_key_pem(
             zts,
             &config.sys_auth_domain,
             &config.zms_service,
-            zms_key_id,
+            &inputs.key_id,
         )?;
-        let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
-        verify_ybase64_signature_sha256(&policy_json, zms_signature, &zms_key_pem)?;
+        verify_ybase64_signature_sha256(&inputs.policy_json, &inputs.signature, &zms_key_pem)?;
     }
 
     Ok(signed_policy.policy_data)
@@ -630,21 +614,15 @@ async fn validate_signed_policy_data_async(
     let signed_json = canonical_json(&serde_json::to_value(signed_policy)?);
     verify_ybase64_signature_sha256(&signed_json, &data.signature, &zts_key_pem)?;
 
-    if config.check_zms_signature {
-        let zms_signature = signed_policy.zms_signature.as_deref().unwrap_or("");
-        let zms_key_id = signed_policy.zms_key_id.as_deref().unwrap_or("");
-        if zms_signature.is_empty() || zms_key_id.is_empty() {
-            return Err(Error::Crypto("missing zms signature or key id".to_string()));
-        }
+    if let Some(inputs) = zms_signature_inputs(signed_policy, config)? {
         let zms_key_pem = get_public_key_pem_async(
             zts,
             &config.sys_auth_domain,
             &config.zms_service,
-            zms_key_id,
+            &inputs.key_id,
         )
         .await?;
-        let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
-        verify_ybase64_signature_sha256(&policy_json, zms_signature, &zms_key_pem)?;
+        verify_ybase64_signature_sha256(&inputs.policy_json, &inputs.signature, &zms_key_pem)?;
     }
 
     Ok(signed_policy.policy_data.clone())
@@ -673,31 +651,55 @@ async fn validate_jws_policy_data_async(
         &zts_key_pem,
     )?;
 
-    let payload = URL_SAFE_NO_PAD
-        .decode(data.payload.as_bytes())
-        .map_err(|e| Error::Crypto(format!("jws payload decode error: {}", e)))?;
-    let signed_policy: SignedPolicyData = serde_json::from_slice(&payload)?;
-
+    let signed_policy = decode_jws_payload(&data.payload)?;
     ensure_not_expired(&signed_policy.expires, config)?;
 
-    if config.check_zms_signature {
-        let zms_signature = signed_policy.zms_signature.as_deref().unwrap_or("");
-        let zms_key_id = signed_policy.zms_key_id.as_deref().unwrap_or("");
-        if zms_signature.is_empty() || zms_key_id.is_empty() {
-            return Err(Error::Crypto("missing zms signature or key id".to_string()));
-        }
+    if let Some(inputs) = zms_signature_inputs(&signed_policy, config)? {
         let zms_key_pem = get_public_key_pem_async(
             zts,
             &config.sys_auth_domain,
             &config.zms_service,
-            zms_key_id,
+            &inputs.key_id,
         )
         .await?;
-        let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
-        verify_ybase64_signature_sha256(&policy_json, zms_signature, &zms_key_pem)?;
+        verify_ybase64_signature_sha256(&inputs.policy_json, &inputs.signature, &zms_key_pem)?;
     }
 
     Ok(signed_policy.policy_data)
+}
+
+fn decode_jws_payload(payload: &str) -> Result<SignedPolicyData, Error> {
+    let payload = URL_SAFE_NO_PAD
+        .decode(payload.as_bytes())
+        .map_err(|e| Error::Crypto(format!("jws payload decode error: {e}")))?;
+    let signed_policy: SignedPolicyData = serde_json::from_slice(&payload)?;
+    Ok(signed_policy)
+}
+
+struct ZmsSignatureInputs {
+    key_id: String,
+    signature: String,
+    policy_json: String,
+}
+
+fn zms_signature_inputs(
+    signed_policy: &SignedPolicyData,
+    config: &PolicyValidatorConfig,
+) -> Result<Option<ZmsSignatureInputs>, Error> {
+    if !config.check_zms_signature {
+        return Ok(None);
+    }
+    let zms_signature = signed_policy.zms_signature.as_deref().unwrap_or("");
+    let zms_key_id = signed_policy.zms_key_id.as_deref().unwrap_or("");
+    if zms_signature.is_empty() || zms_key_id.is_empty() {
+        return Err(Error::Crypto("missing zms signature or key id".to_string()));
+    }
+    let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
+    Ok(Some(ZmsSignatureInputs {
+        key_id: zms_key_id.to_string(),
+        signature: zms_signature.to_string(),
+        policy_json,
+    }))
 }
 
 fn ensure_not_expired(expires: &str, config: &PolicyValidatorConfig) -> Result<(), Error> {

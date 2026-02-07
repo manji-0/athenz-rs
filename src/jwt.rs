@@ -459,7 +459,7 @@ impl JwtValidatorAsync {
             Algorithm::from_str(alg).map_err(|_| Error::UnsupportedAlg(header.alg.clone()))?;
         let allowed_algs = resolve_allowed_algs(&self.options)?;
         if !allowed_algs.contains(&alg) {
-            return Err(Error::UnsupportedAlg(format!("{:?}", alg)));
+            return Err(Error::UnsupportedAlg(header.alg.clone()));
         }
 
         let jwks = self.jwks.fetch().await?;

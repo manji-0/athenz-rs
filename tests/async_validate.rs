@@ -1,9 +1,9 @@
 #![cfg(feature = "async-validate")]
 
 use athenz_rs::{
-    JWSPolicyData, JwksProviderAsync, JwtValidationOptions, JwtValidatorAsync, NTokenSigner,
-    NTokenValidatorAsync, NTokenValidatorConfig, PolicyClientAsync, PolicyData, SignedPolicyData,
-    ZtsAsyncClient,
+    DomainSignedPolicyData, JWSPolicyData, JwksProviderAsync, JwtValidationOptions,
+    JwtValidatorAsync, NTokenSigner, NTokenValidatorAsync, NTokenValidatorConfig,
+    PolicyClientAsync, PolicyData, SignedPolicyData, ZtsAsyncClient,
 };
 use base64::engine::general_purpose::{STANDARD as BASE64_STD, URL_SAFE_NO_PAD};
 use base64::Engine as _;
@@ -214,6 +214,131 @@ async fn policy_client_async_validates_jws_policy_data() {
     assert!(req.query_value("missing").is_none());
 }
 
+#[tokio::test]
+async fn policy_client_async_rejects_expired_jws_policy_data() {
+    let now = OffsetDateTime::now_utc();
+    let expires = (now - time::Duration::seconds(5))
+        .format(&Rfc3339)
+        .expect("expires");
+    let modified = now.format(&Rfc3339).expect("modified");
+    let signed_policy = SignedPolicyData {
+        policy_data: PolicyData {
+            domain: "sports".to_string(),
+            policies: Vec::new(),
+        },
+        zms_signature: None,
+        zms_key_id: None,
+        modified,
+        expires,
+    };
+    let jws = build_jws_policy_data(&signed_policy);
+
+    let response = zts_public_key_response();
+    let (base_url, rx) = serve_once(response).await;
+    let zts = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+    let client = PolicyClientAsync::new(zts);
+
+    let err = client
+        .validate_jws_policy_data(&jws)
+        .await
+        .expect_err("should fail");
+    let message = format!("{}", err);
+    assert!(message.contains("policy data is expired"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.path, "/zts/v1/domain/sys.auth/service/zts/publickey/v1");
+}
+
+#[tokio::test]
+async fn policy_client_async_rejects_missing_zms_signature_for_jws_policy_data() {
+    let now = OffsetDateTime::now_utc();
+    let expires = (now + time::Duration::seconds(300))
+        .format(&Rfc3339)
+        .expect("expires");
+    let modified = now.format(&Rfc3339).expect("modified");
+    let signed_policy = SignedPolicyData {
+        policy_data: PolicyData {
+            domain: "sports".to_string(),
+            policies: Vec::new(),
+        },
+        zms_signature: None,
+        zms_key_id: None,
+        modified,
+        expires,
+    };
+    let jws = build_jws_policy_data(&signed_policy);
+
+    let response = zts_public_key_response();
+    let (base_url, rx) = serve_once(response).await;
+    let zts = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+    let mut client = PolicyClientAsync::new(zts);
+    client.config_mut().check_zms_signature = true;
+
+    let err = client
+        .validate_jws_policy_data(&jws)
+        .await
+        .expect_err("should fail");
+    let message = format!("{}", err);
+    assert!(message.contains("missing zms signature"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.path, "/zts/v1/domain/sys.auth/service/zts/publickey/v1");
+}
+
+#[tokio::test]
+async fn policy_client_async_rejects_missing_zms_signature_for_signed_policy_data() {
+    let now = OffsetDateTime::now_utc();
+    let expires = (now + time::Duration::seconds(300))
+        .format(&Rfc3339)
+        .expect("expires");
+    let modified = now.format(&Rfc3339).expect("modified");
+    let signed_policy = SignedPolicyData {
+        policy_data: PolicyData {
+            domain: "sports".to_string(),
+            policies: Vec::new(),
+        },
+        zms_signature: None,
+        zms_key_id: None,
+        modified,
+        expires,
+    };
+    let signed = build_domain_signed_policy_data(&signed_policy);
+
+    let response = zts_public_key_response();
+    let (base_url, rx) = serve_once(response).await;
+    let zts = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+    let mut client = PolicyClientAsync::new(zts);
+    client.config_mut().check_zms_signature = true;
+
+    let err = client
+        .validate_signed_policy_data(&signed)
+        .await
+        .expect_err("should fail");
+    let message = format!("{}", err);
+    assert!(message.contains("missing zms signature"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.path, "/zts/v1/domain/sys.auth/service/zts/publickey/v1");
+}
+
 fn build_es512_token() -> (String, JwkSet) {
     let mut rng = thread_rng();
     let signing_key = P521SigningKey::random(&mut rng);
@@ -264,6 +389,82 @@ fn ybase64_encode(data: &[u8]) -> String {
         .replace('+', ".")
         .replace('/', "_")
         .replace('=', "-")
+}
+
+fn zts_public_key_response() -> String {
+    let body = format!(
+        r#"{{"key":"{}","id":"v1"}}"#,
+        ybase64_encode(RSA_PUBLIC_KEY.as_bytes())
+    );
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    )
+}
+
+fn build_jws_policy_data(signed_policy: &SignedPolicyData) -> JWSPolicyData {
+    let protected = URL_SAFE_NO_PAD.encode(
+        serde_json::to_vec(&json!({
+            "alg": "RS256",
+            "kid": "v1",
+        }))
+        .expect("header"),
+    );
+    let payload = URL_SAFE_NO_PAD.encode(serde_json::to_vec(signed_policy).expect("payload"));
+    let signing_input = format!("{}.{}", protected, payload);
+    let private_key = RsaPrivateKey::from_pkcs1_pem(RSA_PRIVATE_KEY).expect("private key");
+    let signing_key = RsaSigningKey::<Sha256>::new(private_key);
+    let signature = signing_key.sign(signing_input.as_bytes());
+    let signature_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
+    JWSPolicyData {
+        payload,
+        protected_header: protected,
+        header: None,
+        signature: signature_b64,
+    }
+}
+
+fn build_domain_signed_policy_data(signed_policy: &SignedPolicyData) -> DomainSignedPolicyData {
+    let signed_json = canonical_json(&serde_json::to_value(signed_policy).expect("signed policy"));
+    let private_key = RsaPrivateKey::from_pkcs1_pem(RSA_PRIVATE_KEY).expect("private key");
+    let signing_key = RsaSigningKey::<Sha256>::new(private_key);
+    let signature = signing_key.sign(signed_json.as_bytes());
+    let signature_b64 = ybase64_encode(signature.to_bytes().as_slice());
+    DomainSignedPolicyData {
+        signed_policy_data: signed_policy.clone(),
+        signature: signature_b64,
+        key_id: "v1".to_string(),
+    }
+}
+
+fn canonical_json(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            let mut parts = Vec::new();
+            for key in keys {
+                let key_json = serde_json::to_string(key).unwrap_or_else(|_| format!("\"{key}\""));
+                let val = canonical_json(&map[key]);
+                parts.push(format!("{key_json}:{val}"));
+            }
+            format!("{{{}}}", parts.join(","))
+        }
+        serde_json::Value::Array(list) => {
+            let mut parts = Vec::new();
+            for item in list {
+                parts.push(canonical_json(item));
+            }
+            format!("[{}]", parts.join(","))
+        }
+        serde_json::Value::String(val) => {
+            serde_json::to_string(val).unwrap_or_else(|_| format!("\"{val}\""))
+        }
+        serde_json::Value::Number(val) => val.to_string(),
+        serde_json::Value::Bool(val) => val.to_string(),
+        serde_json::Value::Null => "null".to_string(),
+    }
 }
 
 const RSA_PRIVATE_KEY: &str = r#"-----BEGIN RSA PRIVATE KEY-----

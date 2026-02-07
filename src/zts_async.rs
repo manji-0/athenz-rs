@@ -90,7 +90,10 @@ impl ZtsAsyncClientBuilder {
     ) -> Result<Self, Error> {
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
             .map_err(|e| Error::InvalidHeader(format!("invalid header name: {}", e)))?;
-        self.auth = Some(AuthProvider::NToken { header, signer });
+        self.auth = Some(AuthProvider::NToken {
+            header,
+            signer: Box::new(signer),
+        });
         Ok(self)
     }
 
@@ -124,7 +127,7 @@ enum AuthProvider {
     },
     NToken {
         header: HeaderName,
-        signer: NTokenSigner,
+        signer: Box<NTokenSigner>,
     },
 }
 

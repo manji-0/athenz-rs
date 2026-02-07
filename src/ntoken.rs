@@ -501,8 +501,7 @@ impl NTokenValidatorAsync {
 }
 
 fn load_private_key(pem_bytes: &[u8]) -> Result<PrivateKey, Error> {
-    let blocks =
-        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {e}")))?;
+    let blocks = parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {e}")))?;
     for block in blocks {
         match block.tag() {
             "RSA PRIVATE KEY" => {
@@ -525,8 +524,7 @@ fn load_private_key(pem_bytes: &[u8]) -> Result<PrivateKey, Error> {
 }
 
 fn load_public_key(pem_bytes: &[u8]) -> Result<PublicKey, Error> {
-    let blocks =
-        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {e}")))?;
+    let blocks = parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {e}")))?;
     for block in blocks {
         match block.tag() {
             "RSA PUBLIC KEY" => {

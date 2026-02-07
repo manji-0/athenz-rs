@@ -503,7 +503,7 @@ impl ZtsClient {
                     .headers()
                     .get(reqwest::header::LOCATION)
                     .and_then(|v| v.to_str().ok())
-                    .map(|v| v.to_string());
+                    .map(str::to_owned);
                 let response = resp.json::<OidcResponse>()?;
                 Ok(IdTokenResponse {
                     response: Some(response),
@@ -1033,6 +1033,7 @@ mod tests {
             "HTTP/1.1 200 OK\r\n",
             "Content-Type: application/json\r\n",
             "Location: https://example.com/callback?token=abc\r\n",
+            "Content-Length: 89\r\n",
             "\r\n",
             "{\"version\":1,\"id_token\":\"abc\",\"token_type\":\"Bearer\",\"success\":true,\"expiration_time\":123}"
         );

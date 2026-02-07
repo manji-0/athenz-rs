@@ -105,7 +105,7 @@ impl NTokenBuilder {
     }
 
     pub fn with_key_service(mut self, key_service: impl Into<String>) -> Self {
-        self.key_service = Some(key_service.into());
+        self.key_service = Some(key_service.into().to_ascii_lowercase());
         self
     }
 
@@ -740,7 +740,7 @@ awIDAQAB
 
     #[test]
     fn ntoken_builder_lowercases_fields() {
-        let builder = NTokenBuilder::new("Sports", "API", "V1");
+        let builder = NTokenBuilder::new("Sports", "API", "V1").with_key_service("ZTS");
         let token = builder.sign(RSA_PRIVATE_KEY.as_bytes()).expect("token");
         let validator =
             NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
@@ -748,5 +748,6 @@ awIDAQAB
         assert_eq!(claims.domain, "sports");
         assert_eq!(claims.name, "api");
         assert_eq!(claims.key_version, "v1");
+        assert_eq!(claims.key_service.as_deref(), Some("zts"));
     }
 }

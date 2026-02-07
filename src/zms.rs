@@ -1943,6 +1943,31 @@ mod tests {
     }
 
     #[test]
+    fn get_pending_group_membership_sets_query() {
+        let response = ok_json_response(
+            r#"{"domainGroupMembersList":[{"domainName":"sports","members":[{"memberName":"user.jane","memberGroups":[{"groupName":"group1"}]}]}]}"#,
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_pending_group_membership(Some("user.jane"), Some("sports"))
+            .expect("request");
+        assert_eq!(result.domain_group_members_list.len(), 1);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.path, "/zms/v1/pending_group_members");
+        assert_eq!(req.query.get("principal").map(String::as_str), Some("user.jane"));
+        assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+
+        handle.join().expect("server");
+    }
+
+    #[test]
     fn get_roles_for_review_sets_query() {
         let response = ok_json_response(
             r#"{"list":[{"domainName":"sports","name":"role1","memberExpiryDays":1,"memberReviewDays":2,"serviceExpiryDays":3,"serviceReviewDays":4,"groupExpiryDays":5,"groupReviewDays":6,"lastReviewedDate":"2020-01-01","created":"2020-01-02"}]}"#,
@@ -1961,6 +1986,30 @@ mod tests {
         let req = rx.recv().expect("request");
         assert_eq!(req.method, "GET");
         assert_eq!(req.path, "/zms/v1/review/role");
+        assert_eq!(req.query.get("principal").map(String::as_str), Some("user.jane"));
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn get_groups_for_review_sets_query() {
+        let response = ok_json_response(
+            r#"{"list":[{"domainName":"sports","name":"group1","memberExpiryDays":1,"memberReviewDays":2,"serviceExpiryDays":3,"serviceReviewDays":4,"groupExpiryDays":5,"groupReviewDays":6,"lastReviewedDate":"2020-01-01","created":"2020-01-02"}]}"#,
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_groups_for_review(Some("user.jane"))
+            .expect("request");
+        assert_eq!(result.list.len(), 1);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.path, "/zms/v1/review/group");
         assert_eq!(req.query.get("principal").map(String::as_str), Some("user.jane"));
 
         handle.join().expect("server");

@@ -1,0 +1,31 @@
+[package]
+name = "athenz-provider-tenant"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Rust client for Athenz token issuance and validation (provider/tenant)"
+
+[dependencies]
+base64 = "0.21"
+hex = "0.4"
+log = "0.4"
+jsonwebtoken = "9"
+pkcs8 = "0.10"
+pem = "3"
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+p384 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+p521 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+rand = "0.8"
+regex = "1"
+rsa = { version = "0.9", features = ["sha2"] }
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+signature = "2"
+time = { version = "0.3", features = ["parsing"] }
+thiserror = "1"
+url = "2"
+
+[dev-dependencies]
+http = "0.2"

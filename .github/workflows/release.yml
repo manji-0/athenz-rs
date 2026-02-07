@@ -1,0 +1,229 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    name: create tag and release
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Read version
+        id: version
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import subprocess
+          import sys
+          import tomllib
+
+          def read_version(toml_text: str) -> str:
+              data = tomllib.loads(toml_text)
+              return data.get("package", {}).get("version", "")
+
+          current_text = pathlib.Path("Cargo.toml").read_text()
+          current_version = read_version(current_text)
+          if not current_version:
+              sys.exit("version not found in Cargo.toml")
+
+          previous_version = ""
+          try:
+              prev_text = subprocess.check_output(
+                  ["git", "show", f"{os.environ['GITHUB_SHA']}^:Cargo.toml"],
+                  text=True,
+              )
+              previous_version = read_version(prev_text)
+          except Exception:
+              previous_version = ""
+
+          changed = "true" if current_version != previous_version else "false"
+          tag = f"v{current_version}"
+          tag_exists = "false"
+          try:
+              out = subprocess.check_output(
+                  ["git", "ls-remote", "--tags", "origin", f"refs/tags/{tag}"],
+                  text=True,
+              ).strip()
+              if out:
+                  tag_exists = "true"
+          except Exception:
+              tag_exists = "false"
+
+          should_release = (
+              "true" if changed == "true" and tag_exists == "false" else "false"
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"version={current_version}\n")
+              f.write(f"changed={changed}\n")
+              f.write(f"tag_exists={tag_exists}\n")
+              f.write(f"should_release={should_release}\n")
+          PY
+
+      - name: Move Unreleased into version
+        id: changelog
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+
+          version = os.environ["VERSION"]
+          changelog = pathlib.Path("CHANGELOG.md")
+          if not changelog.exists():
+              raise SystemExit(0)
+
+          lines = changelog.read_text().splitlines()
+          unreleased_idx = None
+          for i, line in enumerate(lines):
+              if line.strip() == "## Unreleased":
+                  unreleased_idx = i
+                  break
+          if unreleased_idx is None:
+              raise SystemExit(0)
+
+          start = unreleased_idx + 1
+          end = len(lines)
+          for i in range(start, len(lines)):
+              if lines[i].startswith("## "):
+                  end = i
+                  break
+
+          unreleased = lines[start:end]
+          while unreleased and unreleased[0].strip() == "":
+              unreleased = unreleased[1:]
+          while unreleased and unreleased[-1].strip() == "":
+              unreleased = unreleased[:-1]
+          if not unreleased:
+              raise SystemExit(0)
+
+          new_lines = lines[:unreleased_idx + 1] + [""] + lines[end:]
+          version_header = f"## {version}"
+          version_idx = None
+          for i, line in enumerate(new_lines):
+              if line.strip() == version_header:
+                  version_idx = i
+                  break
+
+          if version_idx is None:
+              insert_pos = unreleased_idx + 2
+              insert = [version_header, ""] + unreleased + [""]
+              new_lines = new_lines[:insert_pos] + insert + new_lines[insert_pos:]
+          else:
+              insert_pos = version_idx + 1
+              if insert_pos < len(new_lines) and new_lines[insert_pos].strip() == "":
+                  insert_pos += 1
+              insert = list(unreleased)
+              if insert_pos < len(new_lines) and new_lines[insert_pos].strip() != "":
+                  insert.append("")
+              new_lines = new_lines[:insert_pos] + insert + new_lines[insert_pos:]
+
+          changelog.write_text("\n".join(new_lines).rstrip() + "\n")
+          PY
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "changelog_updated=false" >> "$GITHUB_OUTPUT"
+            echo "release_sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "chore(release): move unreleased to v${{ steps.version.outputs.version }}"
+          git push origin HEAD:main
+          echo "changelog_updated=true" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        env:
+          VERSION: "${{ steps.version.outputs.version }}"
+
+      - name: Check release exists
+        id: release
+        if: steps.version.outputs.tag_exists == 'true'
+        env:
+          GH_TOKEN: "${{ github.token }}"
+        run: |
+          if gh api "repos/${{ github.repository }}/releases/tags/v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "release_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate release notes
+        if: steps.version.outputs.changed == 'true'
+        env:
+          GH_TOKEN: "${{ github.token }}"
+        run: |
+          gh api "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="v${{ steps.version.outputs.version }}" \
+            -f target_commitish="${{ steps.changelog.outputs.release_sha }}" \
+            --template '{{.body}}' > release-notes.txt
+
+      - name: Append changelog entry
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import sys
+
+          version = "${{ steps.version.outputs.version }}"
+          changelog = pathlib.Path("CHANGELOG.md")
+          if not changelog.exists():
+              sys.exit(0)
+
+          lines = changelog.read_text().splitlines()
+          start = None
+          for i, line in enumerate(lines):
+              if line.strip() == f"## {version}":
+                  start = i + 1
+                  break
+          if start is None:
+              sys.exit(0)
+
+          end = len(lines)
+          for i in range(start, len(lines)):
+              if lines[i].startswith("## "):
+                  end = i
+                  break
+
+          section = "\n".join(lines[start:end]).strip()
+          if not section:
+              sys.exit(0)
+
+          with open("release-notes.txt", "a") as f:
+              f.write("\n\n## Changelog\n\n")
+              f.write(section.rstrip() + "\n")
+          PY
+
+      - name: Update existing release notes
+        if: steps.version.outputs.changed == 'true' && steps.version.outputs.tag_exists == 'true' && steps.release.outputs.release_exists == 'true'
+        env:
+          GH_TOKEN: "${{ github.token }}"
+        run: |
+          gh release edit "v${{ steps.version.outputs.version }}" \
+            --notes-file release-notes.txt
+
+      - name: Skip update when release is missing
+        if: steps.version.outputs.changed == 'true' && steps.version.outputs.tag_exists == 'true' && steps.release.outputs.release_exists == 'false'
+        run: |
+          echo "Tag exists but release is missing; skipping update."
+
+      - name: Create GitHub release
+        if: steps.version.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.version.outputs.version }}"
+          name: "v${{ steps.version.outputs.version }}"
+          target_commitish: "${{ steps.changelog.outputs.release_sha }}"
+          generate_release_notes: true
+          body_path: release-notes.txt

@@ -6,7 +6,7 @@ If you are new, start with `getting-started.md` and then move to the topic guide
 ## Quick example
 
 ```rust
-use athenz_provider_tenant::ZtsClient;
+use athenz_rs::ZtsClient;
 
 # fn example() -> Result<(), Box<dyn std::error::Error>> {
 let client = ZtsClient::builder("https://zts.example.com/zts/v1")?

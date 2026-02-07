@@ -8,7 +8,7 @@ Both clients are synchronous and based on `reqwest` blocking.
 
 ```rust
 use std::time::Duration;
-use athenz_provider_tenant::{NTokenSigner, ZtsClient};
+use athenz_rs::{NTokenSigner, ZtsClient};
 
 # fn example(cert_pem: &[u8], key_pem: &[u8], ca_pem: &[u8], ntoken_key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
 let signer = NTokenSigner::new("sports", "api", "v1", ntoken_key)?;
@@ -37,7 +37,7 @@ Notes:
 
 ```rust
 use std::time::Duration;
-use athenz_provider_tenant::ZmsClient;
+use athenz_rs::ZmsClient;
 
 # fn example(cert_pem: &[u8], key_pem: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
 let client = ZmsClient::builder("https://zms.example.com/zms/v1")?

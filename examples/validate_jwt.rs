@@ -1,4 +1,4 @@
-use athenz_provider_tenant::{JwksProvider, JwtValidator};
+use athenz_rs::{JwksProvider, JwtValidator};
 use std::env;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

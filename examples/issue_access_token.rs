@@ -1,4 +1,4 @@
-use athenz_provider_tenant::{AccessTokenRequest, ZtsClient};
+use athenz_rs::{AccessTokenRequest, ZtsClient};
 use std::env;
 use std::fs;
 

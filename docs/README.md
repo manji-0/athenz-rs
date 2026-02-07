@@ -29,5 +29,8 @@ let client = ZtsClient::builder("https://zts.example.com/zts/v1")?
 ## Other repository docs
 
 - `../CONTRIBUTING.md`
+- `../CODE_OF_CONDUCT.md`
+- `../SUPPORT.md`
+- `../MAINTAINERS.md`
 - `../SECURITY.md`
 - `../CHANGELOG.md`

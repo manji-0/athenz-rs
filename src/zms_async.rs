@@ -14,6 +14,10 @@ use reqwest::{Certificate, Client as HttpClient, Identity, RequestBuilder, Respo
 use std::time::Duration;
 use url::Url;
 
+/// Builder for [`ZmsAsyncClient`].
+///
+/// Available when the `async-client` feature is enabled. The `base_url` should
+/// point to the ZMS API root, for example `https://zms.example.com/zms/v1`.
 pub struct ZmsAsyncClientBuilder {
     base_url: Url,
     timeout: Option<Duration>,
@@ -45,11 +49,15 @@ impl ZmsAsyncClientBuilder {
         self
     }
 
+    /// Configure mutual TLS identity from a single PEM bundle containing the
+    /// certificate and private key.
     pub fn mtls_identity_from_pem(mut self, identity_pem: &[u8]) -> Result<Self, Error> {
         self.identity = Some(Identity::from_pem(identity_pem)?);
         Ok(self)
     }
 
+    /// Configure mutual TLS identity from separate PEM-encoded certificate
+    /// and private key. The inputs are concatenated with a newline if needed.
     pub fn mtls_identity_from_parts(
         mut self,
         cert_pem: &[u8],
@@ -121,6 +129,10 @@ enum AuthProvider {
     },
 }
 
+/// Async ZMS client (requires the `async-client` feature).
+///
+/// Use [`ZmsAsyncClient::builder`] with a base URL like
+/// `https://zms.example.com/zms/v1`.
 pub struct ZmsAsyncClient {
     base_url: Url,
     http: HttpClient,
@@ -146,10 +158,7 @@ impl ZmsAsyncClient {
     ) -> Result<Option<DomainList>, Error> {
         let url = self.build_url(&["domain"])?;
         let mut req = self.http.get(url);
-        let params = options.to_query_pairs();
-        if !params.is_empty() {
-            req = req.query(&params);
-        }
+        req = self.apply_query_params(req, options.to_query_pairs());
         if let Some(ref modified_since) = options.modified_since {
             req = req.header("If-Modified-Since", modified_since);
         }
@@ -271,10 +280,7 @@ impl ZmsAsyncClient {
     ) -> Result<RoleList, Error> {
         let url = self.build_url(&["domain", domain, "role"])?;
         let mut req = self.http.get(url);
-        let params = options.to_query_pairs();
-        if !params.is_empty() {
-            req = req.query(&params);
-        }
+        req = self.apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
@@ -287,10 +293,7 @@ impl ZmsAsyncClient {
     ) -> Result<Roles, Error> {
         let url = self.build_url(&["domain", domain, "roles"])?;
         let mut req = self.http.get(url);
-        let params = options.to_query_pairs();
-        if !params.is_empty() {
-            req = req.query(&params);
-        }
+        req = self.apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
@@ -304,10 +307,7 @@ impl ZmsAsyncClient {
     ) -> Result<Role, Error> {
         let url = self.build_url(&["domain", domain, "role", role])?;
         let mut req = self.http.get(url);
-        let params = options.to_query_pairs();
-        if !params.is_empty() {
-            req = req.query(&params);
-        }
+        req = self.apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
@@ -325,12 +325,9 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "role", role])?;
         let mut req = self.http.put(url).json(role_obj);
         req = self.apply_auth(req)?;
-        req = self.apply_audit_headers(req, audit_ref, None);
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
         }
         let resp = req.send().await?;
         self.expect_no_content_or_json(resp).await
@@ -416,10 +413,7 @@ impl ZmsAsyncClient {
     ) -> Result<PolicyList, Error> {
         let url = self.build_url(&["domain", domain, "policy"])?;
         let mut req = self.http.get(url);
-        let params = options.to_query_pairs();
-        if !params.is_empty() {
-            req = req.query(&params);
-        }
+        req = self.apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
@@ -432,10 +426,7 @@ impl ZmsAsyncClient {
     ) -> Result<Policies, Error> {
         let url = self.build_url(&["domain", domain, "policies"])?;
         let mut req = self.http.get(url);
-        let params = options.to_query_pairs();
-        if !params.is_empty() {
-            req = req.query(&params);
-        }
+        req = self.apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
@@ -591,10 +582,7 @@ impl ZmsAsyncClient {
     ) -> Result<ServiceIdentities, Error> {
         let url = self.build_url(&["domain", domain, "services"])?;
         let mut req = self.http.get(url);
-        let params = options.to_query_pairs();
-        if !params.is_empty() {
-            req = req.query(&params);
-        }
+        req = self.apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
@@ -607,10 +595,7 @@ impl ZmsAsyncClient {
     ) -> Result<ServiceIdentityList, Error> {
         let url = self.build_url(&["domain", domain, "service"])?;
         let mut req = self.http.get(url);
-        let params = options.to_query_pairs();
-        if !params.is_empty() {
-            req = req.query(&params);
-        }
+        req = self.apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
@@ -669,10 +654,7 @@ impl ZmsAsyncClient {
     ) -> Result<Groups, Error> {
         let url = self.build_url(&["domain", domain, "groups"])?;
         let mut req = self.http.get(url);
-        let params = options.to_query_pairs();
-        if !params.is_empty() {
-            req = req.query(&params);
-        }
+        req = self.apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
@@ -686,10 +668,7 @@ impl ZmsAsyncClient {
     ) -> Result<Group, Error> {
         let url = self.build_url(&["domain", domain, "group", group])?;
         let mut req = self.http.get(url);
-        let params = options.to_query_pairs();
-        if !params.is_empty() {
-            req = req.query(&params);
-        }
+        req = self.apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
@@ -833,6 +812,17 @@ impl ZmsAsyncClient {
         }
         if let Some(resource_owner) = resource_owner {
             req = req.header("Athenz-Resource-Owner", resource_owner);
+        }
+        req
+    }
+
+    fn apply_query_params(
+        &self,
+        mut req: RequestBuilder,
+        params: Vec<(String, String)>,
+    ) -> RequestBuilder {
+        if !params.is_empty() {
+            req = req.query(&params);
         }
         req
     }

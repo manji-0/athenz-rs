@@ -157,9 +157,12 @@ pub struct JwksProviderAsync {
 impl JwksProviderAsync {
     pub fn new(jwks_uri: impl AsRef<str>) -> Result<Self, Error> {
         let jwks_uri = Url::parse(jwks_uri.as_ref())?;
+        let http = AsyncHttpClient::builder()
+            .timeout(Duration::from_secs(10))
+            .build()?;
         Ok(Self {
             jwks_uri,
-            http: AsyncHttpClient::new(),
+            http,
             cache_ttl: Duration::from_secs(300),
             cache: AsyncRwLock::new(None),
             fetch_lock: AsyncMutex::new(()),

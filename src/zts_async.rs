@@ -27,7 +27,7 @@ impl ZtsAsyncClientBuilder {
         Ok(Self {
             base_url: Url::parse(base_url.as_ref())?,
             timeout: None,
-            disable_redirect: false,
+            disable_redirect: true,
             identity: None,
             ca_certs: Vec::new(),
             auth: None,
@@ -153,7 +153,8 @@ impl ZtsAsyncClient {
         let mut req = self.http.get(url);
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
-        match resp.status() {
+        let status = resp.status();
+        match status {
             StatusCode::OK => {
                 let response = resp.json::<OidcResponse>().await?;
                 Ok(IdTokenResponse {
@@ -161,7 +162,7 @@ impl ZtsAsyncClient {
                     location: None,
                 })
             }
-            StatusCode::FOUND => {
+            _ if status.is_redirection() => {
                 let location = resp
                     .headers()
                     .get(reqwest::header::LOCATION)

@@ -31,6 +31,13 @@ Examples:
 - Track issue type with labels (for example: `feat`, `bug`, `security`, `fix`, `docs`)
 - Keep the type label consistent with the title type; remove conflicting type labels
 
+## Issue implementation guide
+
+- Keep the repo's current branch on `main`.
+- For minor changes like typo fixes, work directly on `main`, then commit and push.
+- For changes that may alter test results or involve documentation updates, pull
+  remote `main` first, then create a worktree and do the work there.
+
 ## Branch names
 
 - Head branch names must include the Linear issue ID (for example: `codex/ISSUE-18-update-docs`)

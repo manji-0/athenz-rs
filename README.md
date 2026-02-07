@@ -68,6 +68,8 @@ println!("claims: {}", data.claims);
 - `docs/authentication.md` (mTLS/NToken)
 - `docs/token-validation.md` (JWKS, validation options, sanitize report)
 - `docs/policy.md` (policy validation and evaluation)
+- `docs/architecture.md` (module overview and data flow)
+- `docs/faq.md` (frequently asked questions)
 - `docs/clients.md` (client configuration)
 - `docs/api-coverage.md` (implemented ZTS/ZMS endpoints)
 - `docs/design-doc-athenz-rust-client-scope-policy.md` (scope/policy design)

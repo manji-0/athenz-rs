@@ -1,0 +1,50 @@
+# API Coverage
+
+This document summarizes the currently implemented ZTS and ZMS APIs.
+It is based on the public client methods in `src/zts.rs` and `src/zms.rs`.
+
+If you add new endpoints, update this list.
+
+## ZTS (tenant/provider)
+
+- OAuth/OIDC: issue AccessToken, issue ID Token, introspect token
+- OpenID/OAuth config: `/.well-known/openid-configuration`, `/.well-known/oauth-authorization-server`
+- JWKS / public keys: get JWK list, get public key entry
+- Instance identity: register, refresh, delete instance, get register token
+- Certificate authority: fetch CA bundle
+- SSH certificates: post SSH certificate request
+- Workloads: query by service or IP
+- Transport rules: fetch transport rules
+- External credentials: post external credentials
+- Status / info / schema: ZTS health and RDL schema
+- Role certificates: request role certificates, list roles requiring certs
+- Policy data: fetch signed policy data, fetch JWS policy data
+
+## ZMS (management)
+
+- Domain:
+  - Get domain, list domains
+  - Create top-level, sub-, and user domains
+  - Delete top-level, sub-, and user domains
+  - Update domain metadata
+- Roles:
+  - List roles / role list, get role
+  - Create/update role, delete role
+  - Role membership get/put/delete
+- Policies:
+  - List policies / policy list, get policy
+  - Create/update policy, delete policy
+  - Assertion get/put/delete
+- Service identities:
+  - Get service identity, list service identities
+  - Create/update service identity, delete service identity
+  - Public key entry get/put/delete
+- Groups:
+  - Get groups, list groups
+  - Create/update group, delete group
+  - Group membership get/put/delete
+
+## Gaps / to be tracked
+
+- This list does not claim full parity with all Athenz ZTS/ZMS endpoints.
+- Add missing APIs as they are implemented and update this document.

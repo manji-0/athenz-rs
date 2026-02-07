@@ -499,10 +499,15 @@ impl ZtsClient {
         let status = resp.status();
         match status {
             StatusCode::OK => {
+                let location = resp
+                    .headers()
+                    .get(reqwest::header::LOCATION)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| v.to_string());
                 let response = resp.json::<OidcResponse>()?;
                 Ok(IdTokenResponse {
                     response: Some(response),
-                    location: None,
+                    location,
                 })
             }
             StatusCode::MOVED_PERMANENTLY
@@ -1017,6 +1022,37 @@ mod tests {
             captured.path.starts_with("/zts/v1/oauth2/auth?"),
             "unexpected path: {}",
             captured.path
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn issue_id_token_ok_includes_location_header() {
+        let response = concat!(
+            "HTTP/1.1 200 OK\r\n",
+            "Content-Type: application/json\r\n",
+            "Location: https://example.com/callback?token=abc\r\n",
+            "\r\n",
+            "{\"version\":1,\"id_token\":\"abc\",\"token_type\":\"Bearer\",\"success\":true,\"expiration_time\":123}"
+        );
+        let (base_url, _rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let req = IdTokenRequest::new(
+            "sports.api",
+            "https://example.com/callback",
+            "openid",
+            "nonce-123",
+        );
+
+        let result = client.issue_id_token(&req).expect("request");
+        assert!(result.response.is_some());
+        assert_eq!(
+            result.location.as_deref(),
+            Some("https://example.com/callback?token=abc")
         );
 
         handle.join().expect("server");

@@ -1,7 +1,13 @@
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
+use tokio::time::timeout;
+
+const READ_TIMEOUT: Duration = Duration::from_millis(500);
+const MAX_READ_DURATION: Duration = Duration::from_secs(5);
+const MAX_HEADER_BYTES: usize = 64 * 1024;
 
 pub struct CapturedRequest {
     pub method: String,
@@ -67,11 +73,20 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 1024];
     let mut header_end = None;
+    let deadline = Instant::now() + MAX_READ_DURATION;
     loop {
-        let read = stream
-            .read(&mut chunk)
-            .await
-            .expect("failed to read from stream");
+        if buf.len() >= MAX_HEADER_BYTES {
+            break;
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        let read = match timeout(remaining.min(READ_TIMEOUT), stream.read(&mut chunk)).await {
+            Ok(Ok(read)) => read,
+            Ok(Err(_)) => break,
+            Err(_) => continue,
+        };
         if read == 0 {
             break;
         }
@@ -127,11 +142,17 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
 
     let body_read = buf.len().saturating_sub(header_end);
     let mut remaining = content_length.saturating_sub(body_read);
+    let body_deadline = Instant::now() + MAX_READ_DURATION;
     while remaining > 0 {
-        let read = stream
-            .read(&mut chunk)
-            .await
-            .expect("failed to read request body");
+        let remaining_time = body_deadline.saturating_duration_since(Instant::now());
+        if remaining_time.is_zero() {
+            break;
+        }
+        let read = match timeout(remaining_time.min(READ_TIMEOUT), stream.read(&mut chunk)).await {
+            Ok(Ok(read)) => read,
+            Ok(Err(_)) => break,
+            Err(_) => continue,
+        };
         if read == 0 {
             break;
         }

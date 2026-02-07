@@ -549,9 +549,10 @@ fn resolve_allowed_algs(options: &JwtValidationOptions) -> Result<&[Algorithm], 
 }
 
 fn allows_es512(options: &JwtValidationOptions) -> bool {
+    // ES512 isn't representable in jsonwebtoken::Algorithm; treat full EC allowlist as opt-in.
     ATHENZ_EC_ALGS
         .iter()
-        .any(|alg| options.allowed_algs.contains(alg))
+        .all(|alg| options.allowed_algs.contains(alg))
 }
 
 #[cfg(feature = "async-validate")]

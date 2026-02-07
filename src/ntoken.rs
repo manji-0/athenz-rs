@@ -368,7 +368,6 @@ impl Default for NTokenValidatorConfig {
     }
 }
 
-#[allow(private_interfaces)]
 pub enum NTokenValidator {
     Static(NTokenVerifier),
     Zts {
@@ -378,15 +377,17 @@ pub enum NTokenValidator {
     },
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct KeySource {
+pub struct KeySource {
     domain: String,
     name: String,
     key_version: String,
 }
 
+#[doc(hidden)]
 #[derive(Clone)]
-struct CachedKey {
+pub struct CachedKey {
     verifier: NTokenVerifier,
     expires_at: Instant,
 }
@@ -437,7 +438,6 @@ impl NTokenValidator {
 }
 
 #[cfg(feature = "async-validate")]
-#[allow(private_interfaces)]
 pub enum NTokenValidatorAsync {
     Static(NTokenVerifier),
     Zts {

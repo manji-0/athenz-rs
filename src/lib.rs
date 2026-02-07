@@ -39,8 +39,8 @@ pub use ntoken::{
 };
 
 pub use zts::{
-    AccessTokenRequest, IdTokenRequest, IdTokenResponse, ZtsClient, ZtsClientBuilder,
-    ConditionalResponse,
+    AccessTokenRequest, AccessTokenRequestBuilder, IdTokenRequest, IdTokenResponse, ZtsClient,
+    ZtsClientBuilder, ConditionalResponse,
 };
 
 pub use policy::{

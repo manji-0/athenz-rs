@@ -27,6 +27,10 @@ let client = ZtsClient::builder("https://zts.example.com/zts/v1")?
 let mut req = AccessTokenRequest::new("sports", vec!["reader".to_string()]);
 req.expires_in = Some(3600);
 req.id_token_service = Some("api".to_string());
+// override auto-composed scope if needed
+// let req = AccessTokenRequest::builder("sports")
+//     .raw_scope("custom:scope")
+//     .build();
 
 let token = client.issue_access_token(&req)?;
 println!("{}", token.access_token);

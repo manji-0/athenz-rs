@@ -18,6 +18,7 @@ pub struct AccessTokenRequest {
     pub domain: String,
     pub roles: Vec<String>,
     pub id_token_service: Option<String>,
+    pub raw_scope: Option<String>,
     pub expires_in: Option<i32>,
     pub proxy_principal_spiffe_uris: Option<String>,
     pub proxy_for_principal: Option<String>,
@@ -42,6 +43,7 @@ impl AccessTokenRequest {
             domain: domain.into(),
             roles,
             id_token_service: None,
+            raw_scope: None,
             expires_in: None,
             proxy_principal_spiffe_uris: None,
             proxy_for_principal: None,
@@ -59,6 +61,10 @@ impl AccessTokenRequest {
             actor: None,
             openid_issuer: None,
         }
+    }
+
+    pub fn builder(domain: impl Into<String>) -> AccessTokenRequestBuilder {
+        AccessTokenRequestBuilder::new(domain)
     }
 
     pub fn to_form(&self) -> String {
@@ -117,6 +123,9 @@ impl AccessTokenRequest {
     }
 
     fn scope(&self) -> String {
+        if let Some(ref raw_scope) = self.raw_scope {
+            return raw_scope.clone();
+        }
         let mut scopes = Vec::new();
         if self.roles.is_empty() || self.roles.iter().any(|r| r == "*") {
             scopes.push(format!("{}:domain", self.domain));
@@ -132,6 +141,118 @@ impl AccessTokenRequest {
             scopes.push(format!("{}:service.{}", self.domain, service));
         }
         scopes.join(" ")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AccessTokenRequestBuilder {
+    request: AccessTokenRequest,
+}
+
+impl AccessTokenRequestBuilder {
+    pub fn new(domain: impl Into<String>) -> Self {
+        Self {
+            request: AccessTokenRequest::new(domain, Vec::new()),
+        }
+    }
+
+    pub fn roles(mut self, roles: Vec<String>) -> Self {
+        self.request.roles = roles;
+        self
+    }
+
+    pub fn id_token_service(mut self, service: impl Into<String>) -> Self {
+        self.request.id_token_service = Some(service.into());
+        self
+    }
+
+    pub fn raw_scope(mut self, scope: impl Into<String>) -> Self {
+        self.request.raw_scope = Some(scope.into());
+        self
+    }
+
+    pub fn expires_in(mut self, value: i32) -> Self {
+        self.request.expires_in = Some(value);
+        self
+    }
+
+    pub fn proxy_principal_spiffe_uris(mut self, value: impl Into<String>) -> Self {
+        self.request.proxy_principal_spiffe_uris = Some(value.into());
+        self
+    }
+
+    pub fn proxy_for_principal(mut self, value: impl Into<String>) -> Self {
+        self.request.proxy_for_principal = Some(value.into());
+        self
+    }
+
+    pub fn authorization_details(mut self, value: impl Into<String>) -> Self {
+        self.request.authorization_details = Some(value.into());
+        self
+    }
+
+    pub fn client_assertion_type(mut self, value: impl Into<String>) -> Self {
+        self.request.client_assertion_type = Some(value.into());
+        self
+    }
+
+    pub fn client_assertion(mut self, value: impl Into<String>) -> Self {
+        self.request.client_assertion = Some(value.into());
+        self
+    }
+
+    pub fn requested_token_type(mut self, value: impl Into<String>) -> Self {
+        self.request.requested_token_type = Some(value.into());
+        self
+    }
+
+    pub fn audience(mut self, value: impl Into<String>) -> Self {
+        self.request.audience = Some(value.into());
+        self
+    }
+
+    pub fn resource(mut self, value: impl Into<String>) -> Self {
+        self.request.resource = Some(value.into());
+        self
+    }
+
+    pub fn subject_token(mut self, value: impl Into<String>) -> Self {
+        self.request.subject_token = Some(value.into());
+        self
+    }
+
+    pub fn subject_token_type(mut self, value: impl Into<String>) -> Self {
+        self.request.subject_token_type = Some(value.into());
+        self
+    }
+
+    pub fn assertion(mut self, value: impl Into<String>) -> Self {
+        self.request.assertion = Some(value.into());
+        self
+    }
+
+    pub fn actor_token(mut self, value: impl Into<String>) -> Self {
+        self.request.actor_token = Some(value.into());
+        self
+    }
+
+    pub fn actor_token_type(mut self, value: impl Into<String>) -> Self {
+        self.request.actor_token_type = Some(value.into());
+        self
+    }
+
+    pub fn actor(mut self, value: impl Into<String>) -> Self {
+        self.request.actor = Some(value.into());
+        self
+    }
+
+    pub fn openid_issuer(mut self, value: bool) -> Self {
+        self.request.openid_issuer = Some(value);
+        self
+    }
+
+    pub fn build(self) -> AccessTokenRequest {
+        self.request
     }
 }
 
@@ -763,6 +884,28 @@ mod tests {
         assert_eq!(scope, "sports:role.reader openid sports:service.api");
         let form = req.to_form();
         assert!(form.contains("scope=sports%3Arole.reader+openid+sports%3Aservice.api"));
+    }
+
+    #[test]
+    fn access_token_raw_scope_overrides_composed_scope() {
+        let mut req = AccessTokenRequest::new("sports", vec!["reader".to_string()]);
+        req.id_token_service = Some("api".to_string());
+        req.raw_scope = Some("custom:scope".to_string());
+        let scope = req.scope();
+        assert_eq!(scope, "custom:scope");
+        let form = req.to_form();
+        assert!(form.contains("scope=custom%3Ascope"));
+    }
+
+    #[test]
+    fn access_token_builder_sets_raw_scope() {
+        let req = AccessTokenRequest::builder("sports")
+            .roles(vec!["reader".to_string()])
+            .id_token_service("api")
+            .raw_scope("custom:scope")
+            .build();
+        let scope = req.scope();
+        assert_eq!(scope, "custom:scope");
     }
 
     #[test]

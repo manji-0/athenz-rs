@@ -87,10 +87,16 @@ impl NTokenBuilder {
         name: impl Into<String>,
         key_version: impl Into<String>,
     ) -> Self {
+        let mut domain = domain.into();
+        domain.make_ascii_lowercase();
+        let mut name = name.into();
+        name.make_ascii_lowercase();
+        let mut key_version = key_version.into();
+        key_version.make_ascii_lowercase();
         Self {
-            domain: domain.into().to_ascii_lowercase(),
-            name: name.into().to_ascii_lowercase(),
-            key_version: key_version.into().to_ascii_lowercase(),
+            domain,
+            name,
+            key_version,
             version: DEFAULT_VERSION.to_string(),
             key_service: None,
             hostname: None,
@@ -105,7 +111,9 @@ impl NTokenBuilder {
     }
 
     pub fn with_key_service(mut self, key_service: impl Into<String>) -> Self {
-        self.key_service = Some(key_service.into().to_ascii_lowercase());
+        let mut key_service = key_service.into();
+        key_service.make_ascii_lowercase();
+        self.key_service = Some(key_service);
         self
     }
 

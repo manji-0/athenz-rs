@@ -1,0 +1,14 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
+
+## Unreleased
+
+- Docs: reorganized README and added core documentation guides
+- Metadata: set MSRV to 1.88
+
+## 0.1.0
+
+- Initial release

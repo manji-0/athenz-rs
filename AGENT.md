@@ -23,3 +23,14 @@ Examples:
 - chore(ci): pin rust toolchain
 - refactor(docs)!: move setup into README
   BREAKING CHANGE: documentation paths updated
+
+## Linear issues
+
+- Titles must follow AngularJS style in English: `type(scope): subject`
+- Body must be written in English
+- Track issue type with labels (for example: `feat`, `bug`, `security`, `fix`, `docs`)
+- Keep the type label consistent with the title type; remove conflicting type labels
+
+## Branch names
+
+- Head branch names must include the Linear issue ID (for example: `codex/ISSUE-18-update-docs`)

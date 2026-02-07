@@ -504,7 +504,7 @@ impl ZtsClient {
                     location: None,
                 })
             }
-            StatusCode::FOUND => {
+            status if status.is_redirection() => {
                 let location = resp
                     .headers()
                     .get(reqwest::header::LOCATION)
@@ -966,6 +966,45 @@ mod tests {
         assert!(query.contains("output=json"));
         assert!(query.contains("roleInAudClaim=true"));
         assert!(query.contains("allScopePresent=true"));
+    }
+
+    #[test]
+    fn issue_id_token_accepts_redirects() {
+        let response = concat!(
+            "HTTP/1.1 303 See Other\r\n",
+            "Location: https://example.com/callback?token=abc\r\n",
+            "Content-Length: 0\r\n",
+            "\r\n"
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .disable_redirect(true)
+            .build()
+            .expect("build");
+        let req = IdTokenRequest::new(
+            "sports.api",
+            "https://example.com/callback",
+            "openid",
+            "nonce-123",
+        );
+
+        let result = client.issue_id_token(&req).expect("request");
+        assert!(result.response.is_none());
+        assert_eq!(
+            result.location.as_deref(),
+            Some("https://example.com/callback?token=abc")
+        );
+
+        let captured = rx.recv().expect("request");
+        assert_eq!(captured.method, "GET");
+        assert!(
+            captured.path.starts_with("/zts/v1/oauth2/auth?"),
+            "unexpected path: {}",
+            captured.path
+        );
+
+        handle.join().expect("server");
     }
 
     #[test]

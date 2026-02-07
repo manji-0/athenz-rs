@@ -1,103 +1,103 @@
 # Athenz Rust Client Scope & Policy
 
 ## Summary
-- Athenz Rust クライアントとしての機能スコープ、OpenSSL非依存方針、テスト方針を開発者向けに定義する。
-- 既存実装（reqwest + rustls など）に倣い、実用的で保守しやすい開発・検証ルールを明文化する。
+- Define the functional scope, OpenSSL-independent policy, and testing strategy for the Athenz Rust client for developers.
+- Following existing implementations (reqwest + rustls, etc.), document practical and maintainable development and verification rules.
 
 ## Goals
-- Athenz Service が提供するすべての API に対応する方針を明記する。
-- 特に以下をプロダクションレベルで実装する方針を固定する。
-  - 秘密鍵/証明書による署名済 JWT の発行
-  - クライアント署名済 JWT の検証
-  - mTLS 用サーバ/クライアント x.509 証明書の発行/更新
-- OpenSSL 非依存の方針を明確化する。
-- テスト戦略（Mock 方針と e2e の範囲/非範囲）を明文化する。
+- Clearly state the policy to support all APIs provided by Athenz Service.
+- Establish the policy to implement the following at production level:
+  - Issuance of signed JWTs using private keys/certificates
+  - Validation of client-signed JWTs
+  - Issuance/renewal of server/client x.509 certificates for mTLS
+- Clarify the policy of not depending on OpenSSL.
+- Document the testing strategy (mock policy and scope/non-scope of e2e).
 
 ## Non-Goals
-- Athenz サーバ実装の挙動差異を吸収するための互換層の提供
-- Athenz 以外の認証/認可基盤への適用
-- OpenSSL 依存を許容する構成（FIPS 対応など）を現時点で優先実装すること
+- Providing a compatibility layer to absorb behavioral differences in Athenz server implementations
+- Application to authentication/authorization platforms other than Athenz
+- Prioritizing implementation of configurations that allow OpenSSL dependencies (such as FIPS compliance) at this time
 
 ## Background / Context
-- athenz-rs は Athenz の Rust クライアント実装であり、API カバレッジの拡大と安定した検証が求められる。
-- 既存実装は reqwest + rustls を採用し、OpenSSL への依存を避けている。
+- athenz-rs is a Rust client implementation for Athenz, requiring expanded API coverage and stable validation.
+- Existing implementations adopt reqwest + rustls, avoiding dependency on OpenSSL.
 
 ## Requirements
 ### Functional
-- ZTS/ZMS の API を段階的にフルカバレッジへ拡大する。
-- JWT/NToken/Policy の発行・検証・評価を安定実装する。
-- mTLS 認証および証明書関連 API を本番品質で提供する。
+- Gradually expand ZTS/ZMS API coverage to full coverage.
+- Provide stable implementations for JWT/NToken/Policy issuance, validation, and evaluation.
+- Provide mTLS authentication and certificate-related APIs at production quality.
 
 ### Non-Functional
-- OpenSSL への依存を避ける（rustls/tls を標準）。
-- テストは可搬性・再現性を優先し、外部依存を最小化する。
-- 仕様変更に追従しやすい構成を維持する（API 追加のコストを抑える）。
+- Avoid dependency on OpenSSL (rustls/tls as standard).
+- Prioritize portability and reproducibility in testing, minimizing external dependencies.
+- Maintain a structure that easily follows specification changes (keeping API addition costs low).
 
 ## Proposed Design
 ### Architecture Overview
-- 既存のモジュール構成（zts / zms / jwt / ntoken / policy）を維持。
-- API ラッパは reqwest blocking を基準とし、必要に応じて async を検討。
+- Maintain existing module structure (zts / zms / jwt / ntoken / policy).
+- API wrappers are based on reqwest blocking, with async considered as needed.
 
 ### Components
-- ZTS client: OAuth/JWKS/インスタンス/証明書/ポリシー取得など
-- ZMS client: ドメイン/ロール/ポリシー/サービス/グループなど
-- JWT/Policy/NToken: 署名・検証・評価のユーティリティ群
+- ZTS client: OAuth/JWKS/instance/certificate/policy retrieval, etc.
+- ZMS client: domain/role/policy/service/group, etc.
+- JWT/Policy/NToken: utilities for signing, validation, and evaluation
 
 ### Data Model
-- Athenz RDL に準拠したモデル定義（serde を利用）
+- Model definitions compliant with Athenz RDL (using serde)
 
 ### APIs / Interfaces
-- ZTS/ZMS は REST API ラッパとして提供
-- JWT/Policy はオフライン検証を中心に設計
+- ZTS/ZMS provided as REST API wrappers
+- JWT/Policy designed primarily for offline validation
 
 ### Data Flow
-- オンライン: API → JSON → model
-- オフライン: JWKS/署名鍵 → JWT/Policy/NToken 検証
+- Online: API → JSON → model
+- Offline: JWKS/signing keys → JWT/Policy/NToken validation
 
 ## Operational Plan
 ### Deployment / Environments
-- Rust の standard toolchain で利用可能
-- TLS は rustls を標準とし、OpenSSL 依存を避ける
+- Available with Rust's standard toolchain
+- TLS uses rustls as standard, avoiding OpenSSL dependency
 
 ### Observability
-- 現状はログ/エラーの返却に留め、追加のメトリクスは任意
+- Currently limited to log/error returns, with additional metrics being optional
 
 ### Reliability / Failure Modes
-- API エラーは ResourceError を返却
-- JWT/署名検証エラーは明示的なエラー型で伝搬
+- API errors return ResourceError
+- JWT/signature validation errors propagate with explicit error types
 
 ### Security / Privacy
-- OpenSSL 非依存（rustls）
-- 署名検証は許可アルゴリズムの allowlist を維持
+- OpenSSL-independent (rustls)
+- Signature validation maintains an allowlist of permitted algorithms
 
 ## Rollout / Migration Plan
-- API 追加/変更は段階的に行い、既存メソッドの互換性を維持する
+- API additions/changes are made gradually, maintaining compatibility with existing methods
 
 ## Alternatives Considered
-- OpenSSL 依存: プラットフォーム差異と依存コストが大きいため不採用
-- 外部 ZTS/ZMS 統合テスト: 再現性と安定性の観点から最小化
+- OpenSSL dependency: Not adopted due to large platform differences and dependency costs
+- External ZTS/ZMS integration testing: Minimized from reproducibility and stability perspectives
 
 ## Risks and Mitigations
-- **仕様差異リスク**: RDL との差異が生じうる → Schema 参照とテスト追加でカバー
-- **API 追加漏れ**: 未実装 API の拡張計画を Linear issue として管理
-- **暗号互換性**: 署名検証の仕様差異 → allowlist とテストで明示的に検証
+- **Specification difference risk**: Differences from RDL may occur → Cover with schema references and additional tests
+- **Missing API additions**: Manage expansion plans for unimplemented APIs as Linear issues
+- **Cryptographic compatibility**: Specification differences in signature validation → Explicitly verify with allowlist and tests
 
 ## Open Questions
-- async クライアントを正式サポートするか
-- FIPS 必須環境への対応要否
+- Whether to officially support async clients
+- Whether to support FIPS-required environments
 
 ## Appendix
-### Testing Strategy (Mock 方針と e2e 範囲)
-- **Mock 方針**
-  - HTTP 通信はローカル TCP サーバ/モックで再現（パス/ヘッダ/クエリ/レスポンス）
-  - JWKS / JWT / NToken / Policy の署名検証はローカル生成鍵で検証
-  - ZTS/ZMS 依存部分は最小限のリクエスト/レスポンスパターンで代替
+### Testing Strategy (Mock Policy and E2E Scope)
+- **Mock Policy**
+  - HTTP communication reproduced with local TCP server/mocks (paths/headers/queries/responses)
+  - JWKS / JWT / NToken / Policy signature validation verified with locally generated keys
+  - ZTS/ZMS dependent parts replaced with minimal request/response patterns
 
-- **Mock により実現できる e2e 範囲**
-  - クライアントの URL/パラメータ生成、レスポンスパース
-  - JWT/NToken/Policy のオフライン検証
-  - 署名検証の正常/異常パターン
+- **E2E scope achievable with mocks**
+  - Client URL/parameter generation, response parsing
+  - Offline validation of JWT/NToken/Policy
+  - Normal/abnormal patterns of signature validation
 
-- **Mock では実現できない範囲**
-  - 実サーバ環境依存の動作（権限設定、DB連携、実際の署名鍵更新）
-  - 実 ZTS/ZMS との統合動作（本番と同等の設定に依存）
+- **Scope not achievable with mocks**
+  - Behavior dependent on actual server environment (permission settings, DB integration, actual signing key updates)
+  - Integration behavior with actual ZTS/ZMS (dependent on production-equivalent configuration)

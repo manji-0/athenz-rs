@@ -496,7 +496,8 @@ impl ZtsClient {
         let mut req = self.http.get(url);
         req = self.apply_auth(req)?;
         let resp = req.send()?;
-        match resp.status() {
+        let status = resp.status();
+        match status {
             StatusCode::OK => {
                 let response = resp.json::<OidcResponse>()?;
                 Ok(IdTokenResponse {
@@ -504,15 +505,28 @@ impl ZtsClient {
                     location: None,
                 })
             }
-            status if status.is_redirection() => {
+            StatusCode::MOVED_PERMANENTLY
+            | StatusCode::FOUND
+            | StatusCode::SEE_OTHER
+            | StatusCode::TEMPORARY_REDIRECT
+            | StatusCode::PERMANENT_REDIRECT => {
                 let location = resp
                     .headers()
                     .get(reqwest::header::LOCATION)
                     .and_then(|v| v.to_str().ok())
-                    .map(|v| v.to_string());
+                    .map(|v| v.to_string())
+                    .ok_or_else(|| {
+                        Error::Api(ResourceError {
+                            code: status.as_u16() as i32,
+                            message: "missing location header for redirect".to_string(),
+                            description: None,
+                            error: None,
+                            request_id: None,
+                        })
+                    })?;
                 Ok(IdTokenResponse {
                     response: None,
-                    location,
+                    location: Some(location),
                 })
             }
             _ => self.parse_error(resp),
@@ -872,6 +886,7 @@ impl ZtsClient {
 #[cfg(test)]
 mod tests {
     use super::{AccessTokenRequest, IdTokenRequest, ZtsClient};
+    use crate::error::Error;
     use std::collections::HashMap;
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
@@ -1003,6 +1018,34 @@ mod tests {
             "unexpected path: {}",
             captured.path
         );
+
+        handle.join().expect("server");
+    }
+
+    #[test]
+    fn issue_id_token_redirect_requires_location() {
+        let response = "HTTP/1.1 302 Found\r\nContent-Length: 0\r\n\r\n";
+        let (base_url, _rx, handle) = serve_once(response);
+        let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .disable_redirect(true)
+            .build()
+            .expect("build");
+        let req = IdTokenRequest::new(
+            "sports.api",
+            "https://example.com/callback",
+            "openid",
+            "nonce-123",
+        );
+
+        let err = client.issue_id_token(&req).expect_err("request");
+        match err {
+            Error::Api(resource) => {
+                assert_eq!(resource.code, 302);
+                assert!(resource.message.contains("missing location"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
 
         handle.join().expect("server");
     }

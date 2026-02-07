@@ -27,6 +27,8 @@ use signature::{SignatureEncoding, Signer as SignatureSigner, Verifier as Signat
 use reqwest::Client as AsyncHttpClient;
 #[cfg(feature = "async-validate")]
 use tokio::sync::RwLock as AsyncRwLock;
+#[cfg(feature = "async-validate")]
+use tokio::sync::Mutex as AsyncMutex;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -442,6 +444,7 @@ pub enum NTokenValidatorAsync {
         config: NTokenValidatorConfig,
         cache: AsyncRwLock<HashMap<KeySource, CachedKey>>,
         http: AsyncHttpClient,
+        fetch_lock: AsyncMutex<()>,
     },
 }
 
@@ -461,6 +464,7 @@ impl NTokenValidatorAsync {
             config,
             cache: AsyncRwLock::new(HashMap::new()),
             http,
+            fetch_lock: AsyncMutex::new(()),
         })
     }
 
@@ -478,9 +482,11 @@ impl NTokenValidatorAsync {
                 config,
                 cache,
                 http,
+                fetch_lock,
             } => {
                 let src = key_source_from_claims(&claims, config);
-                let verifier = get_cached_verifier_async(cache, http, config, &src).await?;
+                let verifier =
+                    get_cached_verifier_async(cache, fetch_lock, http, config, &src).await?;
                 verifier.verify(&unsigned, &signature)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
@@ -647,10 +653,21 @@ fn get_cached_verifier(
 #[cfg(feature = "async-validate")]
 async fn get_cached_verifier_async(
     cache: &AsyncRwLock<HashMap<KeySource, CachedKey>>,
+    fetch_lock: &AsyncMutex<()>,
     http: &AsyncHttpClient,
     config: &NTokenValidatorConfig,
     src: &KeySource,
 ) -> Result<NTokenVerifier, Error> {
+    {
+        let cache = cache.read().await;
+        if let Some(entry) = cache.get(src) {
+            if entry.expires_at > Instant::now() {
+                return Ok(entry.verifier.clone());
+            }
+        }
+    }
+
+    let _guard = fetch_lock.lock().await;
     {
         let cache = cache.read().await;
         if let Some(entry) = cache.get(src) {

@@ -77,9 +77,9 @@ impl ZtsAsyncClientBuilder {
     ) -> Result<Self, Error> {
         // Async builder validates header inputs to avoid request-time failures.
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
-            .map_err(|e| Error::InvalidHeader(format!("invalid header name: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
         let value = HeaderValue::from_str(token.as_ref())
-            .map_err(|e| Error::InvalidHeader(format!("invalid header value: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("invalid header value: {}", e)))?;
         self.auth = Some(AuthProvider::StaticHeader { header, value });
         Ok(self)
     }
@@ -91,7 +91,7 @@ impl ZtsAsyncClientBuilder {
     ) -> Result<Self, Error> {
         // Async builder validates header inputs to avoid request-time failures.
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
-            .map_err(|e| Error::InvalidHeader(format!("invalid header name: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
         self.auth = Some(AuthProvider::NToken {
             header,
             signer: Box::new(signer),
@@ -486,9 +486,8 @@ impl ZtsAsyncClient {
                 }
                 AuthProvider::NToken { header, signer } => {
                     let token = signer.token()?;
-                    let value = HeaderValue::from_str(&token).map_err(|e| {
-                        Error::InvalidHeader(format!("invalid header value: {}", e))
-                    })?;
+                    let value = HeaderValue::from_str(&token)
+                        .map_err(|e| Error::Crypto(format!("invalid header value: {}", e)))?;
                     req = req.header(header.clone(), value);
                 }
             }

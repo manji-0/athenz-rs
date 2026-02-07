@@ -28,8 +28,6 @@ impl fmt::Display for ResourceError {
 pub enum Error {
     #[error("invalid base url: {0}")]
     InvalidBaseUrl(String),
-    #[error("invalid header: {0}")]
-    InvalidHeader(String),
     #[error("url parse error: {0}")]
     Url(#[from] url::ParseError),
     #[error("http error: {0}")]

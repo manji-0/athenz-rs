@@ -212,10 +212,6 @@ impl JwtValidator {
             return Err(Error::UnsupportedAlg(format!("{alg:?}")));
         }
 
-        let jwks = self.jwks.fetch()?;
-        let key = select_jwk(&jwks, header.kid.as_deref())?;
-        let decoding_key = DecodingKey::from_jwk(key)?;
-
         let mut validation = Validation::new(alg);
         validation.leeway = self.options.leeway;
         validation.validate_exp = self.options.validate_exp;
@@ -226,6 +222,32 @@ impl JwtValidator {
             validation.set_audience(&self.options.audience);
         }
 
+        let jwks = self.jwks.fetch()?;
+        if header.kid.is_none() && jwks.keys.len() > 1 {
+            let mut last_err = None;
+            for jwk in &jwks.keys {
+                let decoding_key = match DecodingKey::from_jwk(jwk) {
+                    Ok(key) => key,
+                    Err(err) => {
+                        last_err = Some(Error::from(err));
+                        continue;
+                    }
+                };
+                match decode::<Value>(token, &decoding_key, &validation) {
+                    Ok(token_data) => {
+                        return Ok(JwtTokenData {
+                            header: header.clone(),
+                            claims: token_data.claims,
+                        });
+                    }
+                    Err(err) => last_err = Some(Error::from(err)),
+                }
+            }
+            return Err(last_err.unwrap_or_else(|| Error::MissingJwk("kid required".to_string())));
+        }
+
+        let key = select_jwk(&jwks, header.kid.as_deref())?;
+        let decoding_key = DecodingKey::from_jwk(key)?;
         let token_data = decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
         Ok(JwtTokenData {
             header,
@@ -252,7 +274,27 @@ impl JwtValidator {
         }
 
         let jwks = self.jwks.fetch()?;
+        if header.kid.is_none() && jwks.keys.len() > 1 {
+            let mut last_err = None;
+            for jwk in &jwks.keys {
+                match self.validate_es512_with_key(parts, header, jwk) {
+                    Ok(data) => return Ok(data),
+                    Err(err) => last_err = Some(err),
+                }
+            }
+            return Err(last_err.unwrap_or_else(|| jwt_error(ErrorKind::InvalidSignature)));
+        }
+
         let key = select_jwk(&jwks, header.kid.as_deref())?;
+        self.validate_es512_with_key(parts, header, key)
+    }
+
+    fn validate_es512_with_key(
+        &self,
+        parts: &JwtParts<'_>,
+        header: &JwtHeader,
+        key: &jsonwebtoken::jwk::Jwk,
+    ) -> Result<JwtTokenData<Value>, Error> {
         let verifying_key = p521_verifying_key_from_jwk(key)?;
         let signature_bytes = base64_url_decode(parts.signature)?;
         let signature = P521Signature::from_slice(&signature_bytes)
@@ -657,8 +699,12 @@ fn sanitize_jwks(value: &mut Value) -> Vec<RemovedAlg> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jsonwebtoken::{encode, EncodingKey, Header};
     use p521::ecdsa::SigningKey as P521SigningKey;
     use rand::thread_rng;
+    use rsa::pkcs1::DecodeRsaPrivateKey;
+    use rsa::traits::PublicKeyParts;
+    use rsa::{RsaPrivateKey, RsaPublicKey};
     use serde_json::json;
     use signature::Signer;
 
@@ -704,6 +750,84 @@ mod tests {
         let signature: P521Signature = signing_key.sign(signing_input.as_bytes());
         let signature_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
         let token = format!("{}.{}", signing_input, signature_b64);
+
+        (token, jwks)
+    }
+
+    const RSA_PRIVATE_KEY: &str = r#"-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEAxq83nCd8AqH5n40dEBMElbaJd2gFWu6bjhNzyp9562dpf454
+BUSN0uF+g3i1yzcwdvADTiuExKN1u/IoGURxVCa0JTzAPJw6/JIoyOZnHZCoarcg
+QQqZ56/udkSQ2NssrwGSQjOwxMrgIdH6XeLgGqVN4BoEEI+gpaQZa7rSytU5RFSG
+OnZWO2Vwgs1OBxiOiYg1gzA1spJXQhxcBWw/v+YrUFtjxBKsG1UrWbnHbgciiN5U
+2v51Yztjo8A1T+o9eIG90jVo3EhS2qhbzd8mLAsEhjV1sP8GItjfdfwXpXT7q2QG
+99W3PM75+HdwGLvJIrkED7YRj4CpMkz6F1etawIDAQABAoIBAD67C7/N56WdJodt
+soNkvcnXPEfrG+W9+Hc/RQvwljnxCKoxfUuMfYrbj2pLLnrfDfo/hYukyeKcCYwx
+xN9VcMK1BaPMLpX0bdtY+m+T73KyPbqT3ycqBbXVImFM/L67VLxcrqUgVOuNcn67
+IWWLQF6pWpErJaVk87/Ys/4DmpJXebLDyta8+ce6r0ppSG5+AifGo1byQT7kSJkF
+lyQsyKWoVN+02s7gLsln5JXXZ672y2Xtp/S3wK0vfzy/HcGSxzn1yE0M5UJtDm/Y
+qECnV1LQ0FB1l1a+/itHR8ipp5rScD4ZpzOPLKthglEvNPe4Lt5rieH9TR97siEe
+SrC8uyECgYEA5Q/elOJAddpE+cO22gTFt973DcPGjM+FYwgdrora+RfEXJsMDoKW
+AGSm5da7eFo8u/bJEvHSJdytc4CRQYnWNryIaUw2o/1LYXRvoEt1rEEgQ4pDkErR
+PsVcVuc3UDeeGtYJwJLV6pjxO11nodFv4IgaVj64SqvCOApTTJgWXF0CgYEA3gzN
+d3l376mSMuKc4Ep++TxybzA5mtF2qoXucZOon8EDJKr+vGQ9Z6X4YSdkSMNXqK1j
+ILmFH7V3dyMOKRBA84YeawFacPLBJq+42t5Q1OYdcKZbaArlBT8ImGT7tQODs3JN
+4w7DH+V1v/VCTl2zQaZRksb0lUsQbFiEfj+SVGcCgYAYIlDoTOJPyHyF+En2tJQE
+aHiNObhcs6yxH3TJJBYoMonc2/UsPjQBvJkdFD/SUWeewkSzO0lR9etMhRpI1nX8
+dGbG+WG0a4aasQLl162BRadZlmLB/DAJtg+hlGDukb2VxEFoyc/CFPUttQyrLv7j
+oFNuDNOsAmbHMsdOBaQtfQKBgQCb/NRuRNebdj0tIALikZLHVc5yC6e7+b/qJPIP
+uZIwv++MV89h2u1EHdTxszGA6DFxXnSPraQ2VU2aVPcCo9ds+9/sfePiCrbjjXhH
+0PtpxEoUM9lsqpKeb9yC6hXk4JYpfnf2tQ0gIBrrAclVsf9WdBdEDB4Prs7Xvgs9
+gT0zqwKBgQCzZubFO0oTYO9e2r8wxPPPsE3ZCjbP/y7lIoBbSzxDGUubXmbvD0GO
+MC8dM80plsTym96UxpKkQMAglKKLPtG2n8xB8v5H/uIB4oIegMSEx3F7MRWWIQmR
+Gea7bQ16YCzM/l2yygGhAW61bg2Z2GoVF6X5z/qhKGyo97V87qTbmg==
+-----END RSA PRIVATE KEY-----
+"#;
+
+    fn build_rs256_token_without_kid() -> (String, JwkSet) {
+        let private_key = RsaPrivateKey::from_pkcs1_pem(RSA_PRIVATE_KEY).expect("private key");
+        let public_key = RsaPublicKey::from(&private_key);
+        let n = public_key.n().to_bytes_be();
+        let e = public_key.e().to_bytes_be();
+        let mut bad_n = n.clone();
+        if let Some(first) = bad_n.first_mut() {
+            *first ^= 0x01;
+        }
+
+        let jwks_json = json!({
+            "keys": [
+                {
+                    "kty": "RSA",
+                    "kid": "bad-key",
+                    "alg": "RS256",
+                    "n": URL_SAFE_NO_PAD.encode(&bad_n),
+                    "e": URL_SAFE_NO_PAD.encode(&e),
+                },
+                {
+                    "kty": "RSA",
+                    "kid": "good-key",
+                    "alg": "RS256",
+                    "n": URL_SAFE_NO_PAD.encode(&n),
+                    "e": URL_SAFE_NO_PAD.encode(&e),
+                }
+            ]
+        });
+        let jwks = jwks_from_value(jwks_json).expect("jwks");
+
+        let exp = jsonwebtoken::get_current_timestamp() + 3600;
+        let claims = json!({
+            "iss": "athenz",
+            "aud": "client",
+            "sub": "principal",
+            "exp": exp,
+        });
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = None;
+        let token = encode(
+            &header,
+            &claims,
+            &EncodingKey::from_rsa_pem(RSA_PRIVATE_KEY.as_bytes()).expect("encoding key"),
+        )
+        .expect("token");
 
         (token, jwks)
     }
@@ -784,6 +908,24 @@ mod tests {
             Error::UnsupportedAlg(alg) => assert_eq!(alg, "ES512"),
             other => panic!("unexpected error: {:?}", other),
         }
+    }
+
+    #[test]
+    fn jwt_rs256_validates_without_kid_using_all_keys() {
+        let (token, jwks) = build_rs256_token_without_kid();
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let data = validator.validate_access_token(&token).expect("validate");
+        assert_eq!(data.claims["sub"], "principal");
     }
 
     fn jwks_from_value(value: Value) -> Result<JwkSet, Error> {

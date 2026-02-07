@@ -132,22 +132,22 @@ impl NTokenBuilder {
 
     fn unsigned_token(&self, now: i64, expiry: i64, salt: &str) -> String {
         let mut parts = Vec::new();
-        parts.push(format!("{}={}", TAG_VERSION, self.version));
-        parts.push(format!("{}={}", TAG_DOMAIN, self.domain));
-        parts.push(format!("{}={}", TAG_NAME, self.name));
-        parts.push(format!("{}={}", TAG_KEY_VERSION, self.key_version));
+        parts.push(format!("{TAG_VERSION}={}", self.version));
+        parts.push(format!("{TAG_DOMAIN}={}", self.domain));
+        parts.push(format!("{TAG_NAME}={}", self.name));
+        parts.push(format!("{TAG_KEY_VERSION}={}", self.key_version));
         if let Some(ref key_service) = self.key_service {
-            parts.push(format!("{}={}", TAG_KEY_SERVICE, key_service));
+            parts.push(format!("{TAG_KEY_SERVICE}={key_service}"));
         }
         if let Some(ref hostname) = self.hostname {
-            parts.push(format!("{}={}", TAG_HOSTNAME, hostname));
+            parts.push(format!("{TAG_HOSTNAME}={hostname}"));
         }
         if let Some(ref ip) = self.ip {
-            parts.push(format!("{}={}", TAG_IP, ip));
+            parts.push(format!("{TAG_IP}={ip}"));
         }
-        parts.push(format!("{}={}", TAG_SALT, salt));
-        parts.push(format!("{}={}", TAG_GENERATION_TIME, now));
-        parts.push(format!("{}={}", TAG_EXPIRE_TIME, expiry));
+        parts.push(format!("{TAG_SALT}={salt}"));
+        parts.push(format!("{TAG_GENERATION_TIME}={now}"));
+        parts.push(format!("{TAG_EXPIRE_TIME}={expiry}"));
         parts.join(";")
     }
 }
@@ -249,10 +249,7 @@ fn sign_with_key(builder: &NTokenBuilder, key: &PrivateKey) -> Result<(String, i
     };
     let signature = ybase64_encode(&signature);
 
-    Ok((
-        format!("{};{}={}", unsigned, TAG_SIGNATURE, signature),
-        expiry,
-    ))
+    Ok((format!("{unsigned};{TAG_SIGNATURE}={signature}"), expiry))
 }
 
 #[derive(Clone)]
@@ -273,34 +270,34 @@ impl NTokenVerifier {
             PublicKey::Rsa(rsa_key) => {
                 let verifying_key = RsaVerifyingKey::<Sha256>::new(rsa_key.clone());
                 let sig = RsaSignature::try_from(sig_bytes.as_slice())
-                    .map_err(|e| Error::Crypto(format!("rsa signature parse error: {}", e)))?;
+                    .map_err(|e| Error::Crypto(format!("rsa signature parse error: {e}")))?;
                 verifying_key
                     .verify(unsigned.as_bytes(), &sig)
-                    .map_err(|e| Error::Crypto(format!("rsa signature verify error: {}", e)))?;
+                    .map_err(|e| Error::Crypto(format!("rsa signature verify error: {e}")))?;
                 Ok(())
             }
             PublicKey::P256(verifying_key) => {
                 let sig = P256Signature::from_der(&sig_bytes)
-                    .map_err(|e| Error::Crypto(format!("p256 signature parse error: {}", e)))?;
+                    .map_err(|e| Error::Crypto(format!("p256 signature parse error: {e}")))?;
                 verifying_key
                     .verify(unsigned.as_bytes(), &sig)
-                    .map_err(|e| Error::Crypto(format!("p256 signature verify error: {}", e)))?;
+                    .map_err(|e| Error::Crypto(format!("p256 signature verify error: {e}")))?;
                 Ok(())
             }
             PublicKey::P384(verifying_key) => {
                 let sig = P384Signature::from_der(&sig_bytes)
-                    .map_err(|e| Error::Crypto(format!("p384 signature parse error: {}", e)))?;
+                    .map_err(|e| Error::Crypto(format!("p384 signature parse error: {e}")))?;
                 verifying_key
                     .verify(unsigned.as_bytes(), &sig)
-                    .map_err(|e| Error::Crypto(format!("p384 signature verify error: {}", e)))?;
+                    .map_err(|e| Error::Crypto(format!("p384 signature verify error: {e}")))?;
                 Ok(())
             }
             PublicKey::P521(verifying_key) => {
                 let sig = P521Signature::from_der(&sig_bytes)
-                    .map_err(|e| Error::Crypto(format!("p521 signature parse error: {}", e)))?;
+                    .map_err(|e| Error::Crypto(format!("p521 signature parse error: {e}")))?;
                 verifying_key
                     .verify(unsigned.as_bytes(), &sig)
-                    .map_err(|e| Error::Crypto(format!("p521 signature verify error: {}", e)))?;
+                    .map_err(|e| Error::Crypto(format!("p521 signature verify error: {e}")))?;
                 Ok(())
             }
         }
@@ -400,7 +397,7 @@ impl NTokenValidator {
 
 fn load_private_key(pem_bytes: &[u8]) -> Result<PrivateKey, Error> {
     let blocks =
-        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {}", e)))?;
+        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {e}")))?;
     for block in blocks {
         match block.tag() {
             "RSA PRIVATE KEY" => {
@@ -424,7 +421,7 @@ fn load_private_key(pem_bytes: &[u8]) -> Result<PrivateKey, Error> {
 
 fn load_public_key(pem_bytes: &[u8]) -> Result<PublicKey, Error> {
     let blocks =
-        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {}", e)))?;
+        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {e}")))?;
     for block in blocks {
         match block.tag() {
             "RSA PUBLIC KEY" => {
@@ -448,30 +445,30 @@ fn load_public_key(pem_bytes: &[u8]) -> Result<PublicKey, Error> {
 
 fn parse_rsa_private_pkcs1(der: &[u8]) -> Result<PrivateKey, Error> {
     let key = RsaPrivateKey::from_pkcs1_der(der)
-        .map_err(|e| Error::Crypto(format!("rsa pkcs1 private key error: {}", e)))?;
+        .map_err(|e| Error::Crypto(format!("rsa pkcs1 private key error: {e}")))?;
     Ok(PrivateKey::Rsa(key))
 }
 
 fn parse_rsa_private_pkcs8(der: &[u8]) -> Result<PrivateKey, Error> {
     let key = RsaPrivateKey::from_pkcs8_der(der)
-        .map_err(|e| Error::Crypto(format!("rsa pkcs8 private key error: {}", e)))?;
+        .map_err(|e| Error::Crypto(format!("rsa pkcs8 private key error: {e}")))?;
     Ok(PrivateKey::Rsa(key))
 }
 
 fn parse_ec_private_pkcs8(der: &[u8]) -> Result<PrivateKey, Error> {
     if let Ok(secret) = p256::SecretKey::from_pkcs8_der(der) {
         let key = P256SigningKey::from_bytes(&secret.to_bytes())
-            .map_err(|e| Error::Crypto(format!("p256 signing key error: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("p256 signing key error: {e}")))?;
         return Ok(PrivateKey::P256(key));
     }
     if let Ok(secret) = p384::SecretKey::from_pkcs8_der(der) {
         let key = P384SigningKey::from_bytes(&secret.to_bytes())
-            .map_err(|e| Error::Crypto(format!("p384 signing key error: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("p384 signing key error: {e}")))?;
         return Ok(PrivateKey::P384(key));
     }
     if let Ok(secret) = p521::SecretKey::from_pkcs8_der(der) {
         let key = P521SigningKey::from_bytes(&secret.to_bytes())
-            .map_err(|e| Error::Crypto(format!("p521 signing key error: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("p521 signing key error: {e}")))?;
         return Ok(PrivateKey::P521(key));
     }
     Err(Error::Crypto(
@@ -481,13 +478,13 @@ fn parse_ec_private_pkcs8(der: &[u8]) -> Result<PrivateKey, Error> {
 
 fn parse_rsa_public_pkcs1(der: &[u8]) -> Result<PublicKey, Error> {
     let key = RsaPublicKey::from_pkcs1_der(der)
-        .map_err(|e| Error::Crypto(format!("rsa pkcs1 public key error: {}", e)))?;
+        .map_err(|e| Error::Crypto(format!("rsa pkcs1 public key error: {e}")))?;
     Ok(PublicKey::Rsa(key))
 }
 
 fn parse_rsa_public_pkcs8(der: &[u8]) -> Result<PublicKey, Error> {
     let key = RsaPublicKey::from_public_key_der(der)
-        .map_err(|e| Error::Crypto(format!("rsa pkcs8 public key error: {}", e)))?;
+        .map_err(|e| Error::Crypto(format!("rsa pkcs8 public key error: {e}")))?;
     Ok(PublicKey::Rsa(key))
 }
 
@@ -495,19 +492,19 @@ fn parse_ec_public_pkcs8(der: &[u8]) -> Result<PublicKey, Error> {
     if let Ok(public_key) = p256::PublicKey::from_public_key_der(der) {
         let encoded = public_key.to_encoded_point(false);
         let key = P256VerifyingKey::from_encoded_point(&encoded)
-            .map_err(|e| Error::Crypto(format!("p256 public key error: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("p256 public key error: {e}")))?;
         return Ok(PublicKey::P256(key));
     }
     if let Ok(public_key) = p384::PublicKey::from_public_key_der(der) {
         let encoded = public_key.to_encoded_point(false);
         let key = P384VerifyingKey::from_encoded_point(&encoded)
-            .map_err(|e| Error::Crypto(format!("p384 public key error: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("p384 public key error: {e}")))?;
         return Ok(PublicKey::P384(key));
     }
     if let Ok(public_key) = p521::PublicKey::from_public_key_der(der) {
         let encoded = public_key.to_encoded_point(false);
         let key = P521VerifyingKey::from_encoded_point(&encoded)
-            .map_err(|e| Error::Crypto(format!("p521 public key error: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("p521 public key error: {e}")))?;
         return Ok(PublicKey::P521(key));
     }
     Err(Error::Crypto("unsupported ec public key".to_string()))
@@ -591,7 +588,7 @@ fn parse_unverified(token: &str) -> Result<(NToken, String, String), Error> {
 }
 
 fn split_token(token: &str) -> Result<(String, String), Error> {
-    let delim = format!(";{}=", TAG_SIGNATURE);
+    let delim = format!(";{TAG_SIGNATURE}=");
     let mut parts = token.splitn(2, &delim);
     let unsigned = parts
         .next()
@@ -654,7 +651,7 @@ fn parse_claims(unsigned: &str) -> Result<NToken, Error> {
 fn parse_unix(value: &str) -> Result<i64, Error> {
     value
         .parse::<i64>()
-        .map_err(|_| Error::Crypto(format!("invalid unix time: {}", value)))
+        .map_err(|_| Error::Crypto(format!("invalid unix time: {value}")))
 }
 
 fn unix_time_now() -> i64 {
@@ -682,7 +679,7 @@ fn ybase64_decode(data: &str) -> Result<Vec<u8>, Error> {
     let normalized = data.replace('.', "+").replace('_', "/").replace('-', "=");
     BASE64_STD
         .decode(normalized.as_bytes())
-        .map_err(|e| Error::Crypto(format!("ybase64 decode error: {}", e)))
+        .map_err(|e| Error::Crypto(format!("ybase64 decode error: {e}")))
 }
 
 #[cfg(test)]

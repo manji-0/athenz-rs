@@ -209,7 +209,7 @@ impl JwtValidator {
             Algorithm::from_str(alg).map_err(|_| Error::UnsupportedAlg(header.alg.clone()))?;
         let allowed_algs = resolve_allowed_algs(&self.options)?;
         if !allowed_algs.contains(&alg) {
-            return Err(Error::UnsupportedAlg(format!("{:?}", alg)));
+            return Err(Error::UnsupportedAlg(format!("{alg:?}")));
         }
 
         let jwks = self.jwks.fetch()?;
@@ -291,7 +291,7 @@ fn resolve_allowed_algs(options: &JwtValidationOptions) -> Result<&[Algorithm], 
     }
     for alg in &options.allowed_algs {
         if !ATHENZ_ALLOWED_ALGS.contains(alg) {
-            return Err(Error::UnsupportedAlg(format!("{:?}", alg)));
+            return Err(Error::UnsupportedAlg(format!("{alg:?}")));
         }
     }
     Ok(&options.allowed_algs)
@@ -356,7 +356,7 @@ fn decode_jwt_header(encoded: &str) -> Result<JwtHeader, Error> {
 fn base64_url_decode(data: &str) -> Result<Vec<u8>, Error> {
     URL_SAFE_NO_PAD
         .decode(data)
-        .map_err(|err| Error::Crypto(format!("base64url decode error: {}", err)))
+        .map_err(|err| Error::Crypto(format!("base64url decode error: {err}")))
 }
 
 fn p521_verifying_key_from_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> Result<P521VerifyingKey, Error> {

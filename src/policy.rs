@@ -512,7 +512,7 @@ fn validate_jws_policy_data(
 
     let payload = URL_SAFE_NO_PAD
         .decode(data.payload.as_bytes())
-        .map_err(|e| Error::Crypto(format!("jws payload decode error: {}", e)))?;
+        .map_err(|e| Error::Crypto(format!("jws payload decode error: {e}")))?;
     let signed_policy: SignedPolicyData = serde_json::from_slice(&payload)?;
 
     ensure_not_expired(&signed_policy.expires, config)?;
@@ -538,13 +538,12 @@ fn validate_jws_policy_data(
 
 fn ensure_not_expired(expires: &str, config: &PolicyValidatorConfig) -> Result<(), Error> {
     let expires_at = OffsetDateTime::parse(expires, &Rfc3339)
-        .map_err(|e| Error::Crypto(format!("invalid expires timestamp: {}", e)))?;
+        .map_err(|e| Error::Crypto(format!("invalid expires timestamp: {e}")))?;
     let now = OffsetDateTime::now_utc();
     let offset = time::Duration::seconds(config.expiry_offset.as_secs() as i64);
     if now > expires_at - offset {
         return Err(Error::Crypto(format!(
-            "policy data is expired on {}",
-            expires
+            "policy data is expired on {expires}"
         )));
     }
     Ok(())
@@ -553,7 +552,7 @@ fn ensure_not_expired(expires: &str, config: &PolicyValidatorConfig) -> Result<(
 fn parse_jws_protected_header(header: &str) -> Result<JwsProtectedHeader, Error> {
     let decoded = URL_SAFE_NO_PAD
         .decode(header.as_bytes())
-        .map_err(|e| Error::Crypto(format!("jws header decode error: {}", e)))?;
+        .map_err(|e| Error::Crypto(format!("jws header decode error: {e}")))?;
     let header: JwsProtectedHeader = serde_json::from_slice(&decoded)?;
     Ok(header)
 }
@@ -590,10 +589,10 @@ fn verify_jws_signature(
     signature: &str,
     public_key_pem: &[u8],
 ) -> Result<(), Error> {
-    let signing_input = format!("{}.{}", protected, payload);
+    let signing_input = format!("{protected}.{payload}");
     let sig_bytes = URL_SAFE_NO_PAD
         .decode(signature.as_bytes())
-        .map_err(|e| Error::Crypto(format!("jws signature decode error: {}", e)))?;
+        .map_err(|e| Error::Crypto(format!("jws signature decode error: {e}")))?;
 
     match alg {
         "RS256" => verify_rsa(&signing_input, &sig_bytes, public_key_pem, RsaHash::Sha256),
@@ -615,10 +614,10 @@ fn verify_signature_sha256(
         PublicKey::Rsa(key) => {
             let verifier = RsaVerifyingKey::<Sha256>::new(key);
             let sig = RsaSignature::try_from(signature)
-                .map_err(|e| Error::Crypto(format!("rsa signature error: {}", e)))?;
+                .map_err(|e| Error::Crypto(format!("rsa signature error: {e}")))?;
             verifier
                 .verify(message, &sig)
-                .map_err(|e| Error::Crypto(format!("rsa verify error: {}", e)))
+                .map_err(|e| Error::Crypto(format!("rsa verify error: {e}")))
         }
         PublicKey::P256(key) => verify_ecdsa_raw(message, signature, EcdsaCurve::P256, key),
         PublicKey::P384(key) => verify_ecdsa_raw(message, signature, EcdsaCurve::P384, key),
@@ -640,26 +639,26 @@ fn verify_rsa(
         RsaHash::Sha256 => {
             let verifier = RsaVerifyingKey::<Sha256>::new(key);
             let sig = RsaSignature::try_from(signature)
-                .map_err(|e| Error::Crypto(format!("rsa signature error: {}", e)))?;
+                .map_err(|e| Error::Crypto(format!("rsa signature error: {e}")))?;
             verifier
                 .verify(message.as_bytes(), &sig)
-                .map_err(|e| Error::Crypto(format!("rsa verify error: {}", e)))
+                .map_err(|e| Error::Crypto(format!("rsa verify error: {e}")))
         }
         RsaHash::Sha384 => {
             let verifier = RsaVerifyingKey::<Sha384>::new(key);
             let sig = RsaSignature::try_from(signature)
-                .map_err(|e| Error::Crypto(format!("rsa signature error: {}", e)))?;
+                .map_err(|e| Error::Crypto(format!("rsa signature error: {e}")))?;
             verifier
                 .verify(message.as_bytes(), &sig)
-                .map_err(|e| Error::Crypto(format!("rsa verify error: {}", e)))
+                .map_err(|e| Error::Crypto(format!("rsa verify error: {e}")))
         }
         RsaHash::Sha512 => {
             let verifier = RsaVerifyingKey::<Sha512>::new(key);
             let sig = RsaSignature::try_from(signature)
-                .map_err(|e| Error::Crypto(format!("rsa signature error: {}", e)))?;
+                .map_err(|e| Error::Crypto(format!("rsa signature error: {e}")))?;
             verifier
                 .verify(message.as_bytes(), &sig)
-                .map_err(|e| Error::Crypto(format!("rsa verify error: {}", e)))
+                .map_err(|e| Error::Crypto(format!("rsa verify error: {e}")))
         }
     }
 }
@@ -803,27 +802,27 @@ trait EcdsaVerifier {
 impl EcdsaVerifier for p256::ecdsa::VerifyingKey {
     fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), Error> {
         let sig = p256::ecdsa::Signature::from_slice(signature)
-            .map_err(|e| Error::Crypto(format!("p256 signature error: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("p256 signature error: {e}")))?;
         signature::Verifier::verify(self, message, &sig)
-            .map_err(|e| Error::Crypto(format!("p256 verify error: {}", e)))
+            .map_err(|e| Error::Crypto(format!("p256 verify error: {e}")))
     }
 }
 
 impl EcdsaVerifier for p384::ecdsa::VerifyingKey {
     fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), Error> {
         let sig = p384::ecdsa::Signature::from_slice(signature)
-            .map_err(|e| Error::Crypto(format!("p384 signature error: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("p384 signature error: {e}")))?;
         signature::Verifier::verify(self, message, &sig)
-            .map_err(|e| Error::Crypto(format!("p384 verify error: {}", e)))
+            .map_err(|e| Error::Crypto(format!("p384 verify error: {e}")))
     }
 }
 
 impl EcdsaVerifier for p521::ecdsa::VerifyingKey {
     fn verify(&self, message: &[u8], signature: &[u8]) -> Result<(), Error> {
         let sig = p521::ecdsa::Signature::from_slice(signature)
-            .map_err(|e| Error::Crypto(format!("p521 signature error: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("p521 signature error: {e}")))?;
         signature::Verifier::verify(self, message, &sig)
-            .map_err(|e| Error::Crypto(format!("p521 verify error: {}", e)))
+            .map_err(|e| Error::Crypto(format!("p521 verify error: {e}")))
     }
 }
 
@@ -837,7 +836,7 @@ enum PublicKey {
 
 fn load_public_key(pem_bytes: &[u8]) -> Result<PublicKey, Error> {
     let blocks =
-        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {}", e)))?;
+        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {e}")))?;
     for block in blocks {
         match block.tag() {
             "RSA PUBLIC KEY" => {
@@ -852,19 +851,19 @@ fn load_public_key(pem_bytes: &[u8]) -> Result<PublicKey, Error> {
                 if let Ok(key) = p256::PublicKey::from_public_key_der(block.contents()) {
                     let encoded = key.to_encoded_point(false);
                     let key = p256::ecdsa::VerifyingKey::from_encoded_point(&encoded)
-                        .map_err(|e| Error::Crypto(format!("p256 public key error: {}", e)))?;
+                        .map_err(|e| Error::Crypto(format!("p256 public key error: {e}")))?;
                     return Ok(PublicKey::P256(key));
                 }
                 if let Ok(key) = p384::PublicKey::from_public_key_der(block.contents()) {
                     let encoded = key.to_encoded_point(false);
                     let key = p384::ecdsa::VerifyingKey::from_encoded_point(&encoded)
-                        .map_err(|e| Error::Crypto(format!("p384 public key error: {}", e)))?;
+                        .map_err(|e| Error::Crypto(format!("p384 public key error: {e}")))?;
                     return Ok(PublicKey::P384(key));
                 }
                 if let Ok(key) = p521::PublicKey::from_public_key_der(block.contents()) {
                     let encoded = key.to_encoded_point(false);
                     let key = p521::ecdsa::VerifyingKey::from_encoded_point(&encoded)
-                        .map_err(|e| Error::Crypto(format!("p521 public key error: {}", e)))?;
+                        .map_err(|e| Error::Crypto(format!("p521 public key error: {e}")))?;
                     return Ok(PublicKey::P521(key));
                 }
             }
@@ -881,10 +880,9 @@ fn canonical_json(value: &serde_json::Value) -> String {
             keys.sort();
             let mut parts = Vec::new();
             for key in keys {
-                let key_json =
-                    serde_json::to_string(key).unwrap_or_else(|_| format!("\"{}\"", key));
+                let key_json = serde_json::to_string(key).unwrap_or_else(|_| format!("\"{key}\""));
                 let val = canonical_json(&map[key]);
-                parts.push(format!("{}:{}", key_json, val));
+                parts.push(format!("{key_json}:{val}"));
             }
             format!("{{{}}}", parts.join(","))
         }
@@ -896,7 +894,7 @@ fn canonical_json(value: &serde_json::Value) -> String {
             format!("[{}]", parts.join(","))
         }
         serde_json::Value::String(val) => {
-            serde_json::to_string(val).unwrap_or_else(|_| format!("\"{}\"", val))
+            serde_json::to_string(val).unwrap_or_else(|_| format!("\"{val}\""))
         }
         serde_json::Value::Number(val) => val.to_string(),
         serde_json::Value::Bool(val) => val.to_string(),
@@ -912,7 +910,7 @@ fn ybase64_decode(data: &str) -> Result<Vec<u8>, Error> {
     }
     BASE64_STD
         .decode(normalized.as_bytes())
-        .map_err(|e| Error::Crypto(format!("ybase64 decode error: {}", e)))
+        .map_err(|e| Error::Crypto(format!("ybase64 decode error: {e}")))
 }
 
 #[cfg(test)]
@@ -1062,7 +1060,7 @@ mod tests {
         });
         let protected = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).expect("header"));
         let payload_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("payload"));
-        let signing_input = format!("{}.{}", protected, payload_b64);
+        let signing_input = format!("{protected}.{payload_b64}");
 
         let private_key = RsaPrivateKey::from_pkcs1_pem(RSA_PRIVATE_KEY).expect("private key");
         let signing_key = RsaSigningKey::<Sha256>::new(private_key);

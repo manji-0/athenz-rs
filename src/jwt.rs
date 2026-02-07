@@ -10,8 +10,8 @@ use reqwest::blocking::Client as HttpClient;
 use serde_json::Value;
 use signature::Verifier as _;
 use std::collections::HashSet;
-use std::sync::RwLock;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::time::{Duration, Instant};
 use std::{fmt, str::FromStr};
 use url::Url;
@@ -205,8 +205,8 @@ impl JwtValidator {
             return self.validate_es512(&parts, &header);
         }
 
-        let alg = Algorithm::from_str(alg)
-            .map_err(|_| Error::UnsupportedAlg(header.alg.clone()))?;
+        let alg =
+            Algorithm::from_str(alg).map_err(|_| Error::UnsupportedAlg(header.alg.clone()))?;
         let allowed_algs = resolve_allowed_algs(&self.options)?;
         if !allowed_algs.contains(&alg) {
             return Err(Error::UnsupportedAlg(format!("{:?}", alg)));
@@ -241,7 +241,11 @@ impl JwtValidator {
         self.validate(token)
     }
 
-    fn validate_es512(&self, parts: &JwtParts<'_>, header: &JwtHeader) -> Result<JwtTokenData<Value>, Error> {
+    fn validate_es512(
+        &self,
+        parts: &JwtParts<'_>,
+        header: &JwtHeader,
+    ) -> Result<JwtTokenData<Value>, Error> {
         resolve_allowed_algs(&self.options)?;
         if !allows_es512(&self.options) {
             return Err(Error::UnsupportedAlg("ES512".to_string()));
@@ -259,8 +263,7 @@ impl JwtValidator {
             .map_err(|_| jwt_error(ErrorKind::InvalidSignature))?;
 
         let claims_bytes = base64_url_decode(parts.payload)?;
-        let claims: Value = serde_json::from_slice(&claims_bytes)
-            .map_err(jwt_json_error)?;
+        let claims: Value = serde_json::from_slice(&claims_bytes).map_err(jwt_json_error)?;
 
         let mut validation = Validation::new(Algorithm::RS256);
         validation.leeway = self.options.leeway;
@@ -308,9 +311,15 @@ struct JwtParts<'a> {
 
 fn split_jwt(token: &str) -> Result<JwtParts<'_>, Error> {
     let mut iter = token.split('.');
-    let header = iter.next().ok_or_else(|| jwt_error(ErrorKind::InvalidToken))?;
-    let payload = iter.next().ok_or_else(|| jwt_error(ErrorKind::InvalidToken))?;
-    let signature = iter.next().ok_or_else(|| jwt_error(ErrorKind::InvalidToken))?;
+    let header = iter
+        .next()
+        .ok_or_else(|| jwt_error(ErrorKind::InvalidToken))?;
+    let payload = iter
+        .next()
+        .ok_or_else(|| jwt_error(ErrorKind::InvalidToken))?;
+    let signature = iter
+        .next()
+        .ok_or_else(|| jwt_error(ErrorKind::InvalidToken))?;
     if iter.next().is_some() {
         return Err(jwt_error(ErrorKind::InvalidToken));
     }
@@ -328,8 +337,14 @@ fn decode_jwt_header(encoded: &str) -> Result<JwtHeader, Error> {
         .get("alg")
         .and_then(Value::as_str)
         .ok_or_else(|| jwt_error(ErrorKind::InvalidToken))?;
-    let kid = raw.get("kid").and_then(Value::as_str).map(|s| s.to_string());
-    let typ = raw.get("typ").and_then(Value::as_str).map(|s| s.to_string());
+    let kid = raw
+        .get("kid")
+        .and_then(Value::as_str)
+        .map(|s| s.to_string());
+    let typ = raw
+        .get("typ")
+        .and_then(Value::as_str)
+        .map(|s| s.to_string());
     Ok(JwtHeader {
         alg: alg.to_string(),
         kid,
@@ -348,7 +363,9 @@ fn p521_verifying_key_from_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> Result<P521Verif
     match &jwk.algorithm {
         AlgorithmParameters::EllipticCurve(params) => {
             if params.curve != EllipticCurve::P521 {
-                return Err(Error::UnsupportedAlg("ES512 requires P-521 key".to_string()));
+                return Err(Error::UnsupportedAlg(
+                    "ES512 requires P-521 key".to_string(),
+                ));
             }
             let x = decode_p521_coord(&params.x)?;
             let y = decode_p521_coord(&params.y)?;
@@ -559,9 +576,16 @@ where
     }
 }
 
-fn select_jwk<'a>(jwks: &'a JwkSet, kid: Option<&str>) -> Result<&'a jsonwebtoken::jwk::Jwk, Error> {
+fn select_jwk<'a>(
+    jwks: &'a JwkSet,
+    kid: Option<&str>,
+) -> Result<&'a jsonwebtoken::jwk::Jwk, Error> {
     if let Some(kid) = kid {
-        if let Some(jwk) = jwks.keys.iter().find(|k| k.common.key_id.as_deref() == Some(kid)) {
+        if let Some(jwk) = jwks
+            .keys
+            .iter()
+            .find(|k| k.common.key_id.as_deref() == Some(kid))
+        {
             return Ok(jwk);
         }
         return Err(Error::MissingJwk(kid.to_string()));
@@ -598,11 +622,17 @@ fn sanitize_jwks(value: &mut Value) -> Vec<RemovedAlg> {
         let Some(alg_value) = object.get("alg").cloned() else {
             continue;
         };
-        let kid = object.get("kid").and_then(Value::as_str).map(|s| s.to_string());
+        let kid = object
+            .get("kid")
+            .and_then(Value::as_str)
+            .map(|s| s.to_string());
         let alg = match alg_value.as_str() {
             Some(alg) => alg,
             None => {
-                warn!("jwks key alg is not a string; kid={}", kid.as_deref().unwrap_or("<none>"));
+                warn!(
+                    "jwks key alg is not a string; kid={}",
+                    kid.as_deref().unwrap_or("<none>")
+                );
                 object.remove("alg");
                 removed.push(RemovedAlg {
                     kid,
@@ -673,7 +703,8 @@ mod tests {
         });
 
         let header_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).expect("header json"));
-        let payload_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("payload json"));
+        let payload_b64 =
+            URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("payload json"));
         let signing_input = format!("{}.{}", header_b64, payload_b64);
         let signature: P521Signature = signing_key.sign(signing_input.as_bytes());
         let signature_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
@@ -751,7 +782,9 @@ mod tests {
         options.audience = vec!["client".to_string()];
 
         let validator = JwtValidator::new(jwks_provider).with_options(options);
-        let err = validator.validate_access_token(&token).expect_err("should reject");
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
         match err {
             Error::UnsupportedAlg(alg) => assert_eq!(alg, "ES512"),
             other => panic!("unexpected error: {:?}", other),

@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::models::{
-    Assertion, AssertionEffect, DomainSignedPolicyData, JWSPolicyData, PolicyData,
-    PublicKeyEntry, SignedPolicyData, SignedPolicyRequest,
+    Assertion, AssertionEffect, DomainSignedPolicyData, JWSPolicyData, PolicyData, PublicKeyEntry,
+    SignedPolicyData, SignedPolicyRequest,
 };
 use crate::zts::ZtsClient;
 use base64::engine::general_purpose::{STANDARD as BASE64_STD, URL_SAFE_NO_PAD};
@@ -81,7 +81,9 @@ impl PolicyClient {
         request: &SignedPolicyRequest,
         etag: Option<&str>,
     ) -> Result<PolicyFetchResponse<JWSPolicyData>, Error> {
-        let response = self.zts.post_domain_signed_policy_data_jws(domain, request, etag)?;
+        let response = self
+            .zts
+            .post_domain_signed_policy_data_jws(domain, request, etag)?;
         Ok(PolicyFetchResponse {
             data: response.data,
             etag: response.etag,
@@ -92,11 +94,7 @@ impl PolicyClient {
         &self,
         data: &DomainSignedPolicyData,
     ) -> Result<PolicyData, Error> {
-        validate_signed_policy_data(
-            data,
-            &self.zts,
-            &self.config,
-        )
+        validate_signed_policy_data(data, &self.zts, &self.config)
     }
 
     pub fn validate_jws_policy_data(&self, data: &JWSPolicyData) -> Result<PolicyData, Error> {
@@ -334,7 +332,8 @@ impl AssertionEntry {
         }
         let role_has_wildcard = contains_match_char(&role);
         let action = Match::from_pattern(&assertion.action.to_lowercase());
-        let resource_value = strip_domain_prefix_if_matches(&assertion.resource.to_lowercase(), domain);
+        let resource_value =
+            strip_domain_prefix_if_matches(&assertion.resource.to_lowercase(), domain);
         let resource = Match::from_pattern(&resource_value);
         Self {
             role,
@@ -447,7 +446,10 @@ fn pattern_from_glob(glob: &str) -> String {
 }
 
 fn is_regex_meta(c: char) -> bool {
-    matches!(c, '^' | '$' | '.' | '|' | '[' | '+' | '\\' | '(' | ')' | '{')
+    matches!(
+        c,
+        '^' | '$' | '.' | '|' | '[' | '+' | '\\' | '(' | ')' | '{'
+    )
 }
 
 fn validate_signed_policy_data(
@@ -459,7 +461,12 @@ fn validate_signed_policy_data(
 
     ensure_not_expired(&signed_policy.expires, config)?;
 
-    let zts_key_pem = get_public_key_pem(zts, &config.sys_auth_domain, &config.zts_service, &data.key_id)?;
+    let zts_key_pem = get_public_key_pem(
+        zts,
+        &config.sys_auth_domain,
+        &config.zts_service,
+        &data.key_id,
+    )?;
     let signed_json = canonical_json(&serde_json::to_value(signed_policy)?);
     verify_ybase64_signature_sha256(&signed_json, &data.signature, &zts_key_pem)?;
 
@@ -469,7 +476,12 @@ fn validate_signed_policy_data(
         if zms_signature.is_empty() || zms_key_id.is_empty() {
             return Err(Error::Crypto("missing zms signature or key id".to_string()));
         }
-        let zms_key_pem = get_public_key_pem(zts, &config.sys_auth_domain, &config.zms_service, zms_key_id)?;
+        let zms_key_pem = get_public_key_pem(
+            zts,
+            &config.sys_auth_domain,
+            &config.zms_service,
+            zms_key_id,
+        )?;
         let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
         verify_ybase64_signature_sha256(&policy_json, zms_signature, &zms_key_pem)?;
     }
@@ -483,7 +495,12 @@ fn validate_jws_policy_data(
     config: &PolicyValidatorConfig,
 ) -> Result<PolicyData, Error> {
     let header = parse_jws_protected_header(&data.protected_header)?;
-    let zts_key_pem = get_public_key_pem(zts, &config.sys_auth_domain, &config.zts_service, &header.kid)?;
+    let zts_key_pem = get_public_key_pem(
+        zts,
+        &config.sys_auth_domain,
+        &config.zts_service,
+        &header.kid,
+    )?;
 
     verify_jws_signature(
         &header.alg,
@@ -506,7 +523,12 @@ fn validate_jws_policy_data(
         if zms_signature.is_empty() || zms_key_id.is_empty() {
             return Err(Error::Crypto("missing zms signature or key id".to_string()));
         }
-        let zms_key_pem = get_public_key_pem(zts, &config.sys_auth_domain, &config.zms_service, zms_key_id)?;
+        let zms_key_pem = get_public_key_pem(
+            zts,
+            &config.sys_auth_domain,
+            &config.zms_service,
+            zms_key_id,
+        )?;
         let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
         verify_ybase64_signature_sha256(&policy_json, zms_signature, &zms_key_pem)?;
     }
@@ -520,7 +542,10 @@ fn ensure_not_expired(expires: &str, config: &PolicyValidatorConfig) -> Result<(
     let now = OffsetDateTime::now_utc();
     let offset = time::Duration::seconds(config.expiry_offset.as_secs() as i64);
     if now > expires_at - offset {
-        return Err(Error::Crypto(format!("policy data is expired on {}", expires)));
+        return Err(Error::Crypto(format!(
+            "policy data is expired on {}",
+            expires
+        )));
     }
     Ok(())
 }
@@ -647,9 +672,15 @@ fn verify_ecdsa(
 ) -> Result<(), Error> {
     let key = load_public_key(public_key_pem)?;
     match (curve, key) {
-        (EcdsaCurve::P256, PublicKey::P256(key)) => verify_ecdsa_raw(message.as_bytes(), signature, curve, key),
-        (EcdsaCurve::P384, PublicKey::P384(key)) => verify_ecdsa_raw(message.as_bytes(), signature, curve, key),
-        (EcdsaCurve::P521, PublicKey::P521(key)) => verify_ecdsa_raw(message.as_bytes(), signature, curve, key),
+        (EcdsaCurve::P256, PublicKey::P256(key)) => {
+            verify_ecdsa_raw(message.as_bytes(), signature, curve, key)
+        }
+        (EcdsaCurve::P384, PublicKey::P384(key)) => {
+            verify_ecdsa_raw(message.as_bytes(), signature, curve, key)
+        }
+        (EcdsaCurve::P521, PublicKey::P521(key)) => {
+            verify_ecdsa_raw(message.as_bytes(), signature, curve, key)
+        }
         _ => Err(Error::Crypto("public key curve mismatch".to_string())),
     }
 }
@@ -704,7 +735,9 @@ fn der_to_p1363(signature: &[u8], size: usize) -> Result<Vec<u8>, Error> {
     let (r_len, next) = read_der_length(signature, idx + 1)?;
     idx = next;
     if idx + r_len > signature.len() {
-        return Err(Error::Crypto("invalid der signature (r length)".to_string()));
+        return Err(Error::Crypto(
+            "invalid der signature (r length)".to_string(),
+        ));
     }
     let r_bytes = &signature[idx..idx + r_len];
     idx += r_len;
@@ -718,7 +751,9 @@ fn der_to_p1363(signature: &[u8], size: usize) -> Result<Vec<u8>, Error> {
     let (s_len, next) = read_der_length(signature, idx + 1)?;
     idx = next;
     if idx + s_len > signature.len() {
-        return Err(Error::Crypto("invalid der signature (s length)".to_string()));
+        return Err(Error::Crypto(
+            "invalid der signature (s length)".to_string(),
+        ));
     }
     let s_bytes = &signature[idx..idx + s_len];
 
@@ -801,8 +836,8 @@ enum PublicKey {
 }
 
 fn load_public_key(pem_bytes: &[u8]) -> Result<PublicKey, Error> {
-    let blocks = parse_many(pem_bytes)
-        .map_err(|e| Error::Crypto(format!("pem parse error: {}", e)))?;
+    let blocks =
+        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {}", e)))?;
     for block in blocks {
         match block.tag() {
             "RSA PUBLIC KEY" => {
@@ -846,7 +881,8 @@ fn canonical_json(value: &serde_json::Value) -> String {
             keys.sort();
             let mut parts = Vec::new();
             for key in keys {
-                let key_json = serde_json::to_string(key).unwrap_or_else(|_| format!("\"{}\"", key));
+                let key_json =
+                    serde_json::to_string(key).unwrap_or_else(|_| format!("\"{}\"", key));
                 let val = canonical_json(&map[key]);
                 parts.push(format!("{}:{}", key_json, val));
             }
@@ -869,10 +905,7 @@ fn canonical_json(value: &serde_json::Value) -> String {
 }
 
 fn ybase64_decode(data: &str) -> Result<Vec<u8>, Error> {
-    let mut normalized = data
-        .replace('.', "+")
-        .replace('_', "/")
-        .replace('-', "=");
+    let mut normalized = data.replace('.', "+").replace('_', "/").replace('-', "=");
     let rem = normalized.len() % 4;
     if rem != 0 {
         normalized.push_str(&"=".repeat(4 - rem));
@@ -886,10 +919,10 @@ fn ybase64_decode(data: &str) -> Result<Vec<u8>, Error> {
 mod tests {
     use super::*;
     use crate::models::Policy;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use crate::models::{
         AssertionCondition, AssertionConditionData, AssertionConditionOperator, AssertionConditions,
     };
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use rsa::pkcs1::DecodeRsaPrivateKey;
     use rsa::pkcs1v15::SigningKey as RsaSigningKey;
     use rsa::RsaPrivateKey;
@@ -912,7 +945,10 @@ mod tests {
             "path": "a\\b",
         });
         let canon = canonical_json(&value);
-        assert_eq!(canon, "{\"key\":\"value\\\"quoted\\\"\",\"path\":\"a\\\\b\"}");
+        assert_eq!(
+            canon,
+            "{\"key\":\"value\\\"quoted\\\"\",\"path\":\"a\\\\b\"}"
+        );
     }
 
     #[test]

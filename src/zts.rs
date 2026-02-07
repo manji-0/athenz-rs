@@ -1,11 +1,11 @@
 use crate::error::{Error, ResourceError};
 use crate::models::{
-    AccessTokenResponse, CertificateAuthorityBundle, InstanceIdentity, InstanceRefreshInformation,
-    InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken, IntrospectResponse,
-    OidcResponse, OAuthConfig, OpenIdConfig, PublicKeyEntry, RoleAccess, RoleCertificate, RoleCertificateRequest,
-    SSHCertRequest, SSHCertificates, Workloads, TransportRules, ExternalCredentialsRequest,
-    ExternalCredentialsResponse, Status, Info, RdlSchema, JwkList, DomainSignedPolicyData,
-    JWSPolicyData, SignedPolicyRequest,
+    AccessTokenResponse, CertificateAuthorityBundle, DomainSignedPolicyData,
+    ExternalCredentialsRequest, ExternalCredentialsResponse, Info, InstanceIdentity,
+    InstanceRefreshInformation, InstanceRegisterInformation, InstanceRegisterResponse,
+    InstanceRegisterToken, IntrospectResponse, JWSPolicyData, JwkList, OAuthConfig, OidcResponse,
+    OpenIdConfig, PublicKeyEntry, RdlSchema, RoleAccess, RoleCertificate, RoleCertificateRequest,
+    SSHCertRequest, SSHCertificates, SignedPolicyRequest, Status, TransportRules, Workloads,
 };
 use crate::ntoken::NTokenSigner;
 use reqwest::blocking::{Client as HttpClient, RequestBuilder, Response};
@@ -386,7 +386,11 @@ impl ZtsClientBuilder {
         Ok(self)
     }
 
-    pub fn mtls_identity_from_parts(mut self, cert_pem: &[u8], key_pem: &[u8]) -> Result<Self, Error> {
+    pub fn mtls_identity_from_parts(
+        mut self,
+        cert_pem: &[u8],
+        key_pem: &[u8],
+    ) -> Result<Self, Error> {
         let mut combined = Vec::new();
         combined.extend_from_slice(cert_pem);
         if !combined.ends_with(b"\n") {
@@ -442,8 +446,14 @@ impl ZtsClientBuilder {
 }
 
 enum AuthProvider {
-    StaticHeader { header: String, value: String },
-    NToken { header: String, signer: NTokenSigner },
+    StaticHeader {
+        header: String,
+        value: String,
+    },
+    NToken {
+        header: String,
+        signer: NTokenSigner,
+    },
 }
 
 pub struct ZtsClient {
@@ -463,7 +473,10 @@ impl ZtsClient {
         ZtsClientBuilder::new(base_url)
     }
 
-    pub fn issue_access_token(&self, request: &AccessTokenRequest) -> Result<AccessTokenResponse, Error> {
+    pub fn issue_access_token(
+        &self,
+        request: &AccessTokenRequest,
+    ) -> Result<AccessTokenResponse, Error> {
         let url = self.build_url(&["oauth2", "token"])?;
         let body = request.to_form();
         let mut req = self
@@ -838,15 +851,14 @@ impl ZtsClient {
     fn parse_error<T>(&self, resp: Response) -> Result<T, Error> {
         let status = resp.status();
         let body = resp.bytes()?;
-        let mut err = serde_json::from_slice::<ResourceError>(&body).unwrap_or_else(|_| {
-            ResourceError {
+        let mut err =
+            serde_json::from_slice::<ResourceError>(&body).unwrap_or_else(|_| ResourceError {
                 code: status.as_u16() as i32,
                 message: String::from_utf8_lossy(&body).to_string(),
                 description: None,
                 error: None,
                 request_id: None,
-            }
-        });
+            });
         if err.code == 0 {
             err.code = status.as_u16() as i32;
         }
@@ -875,10 +887,8 @@ mod tests {
 
     #[test]
     fn access_token_scope_roles() {
-        let req = AccessTokenRequest::new(
-            "sports",
-            vec!["reader".to_string(), "writer".to_string()],
-        );
+        let req =
+            AccessTokenRequest::new("sports", vec!["reader".to_string(), "writer".to_string()]);
         let scope = req.scope();
         assert_eq!(scope, "sports:role.reader sports:role.writer");
     }
@@ -976,7 +986,10 @@ mod tests {
         let req = rx.recv().expect("request");
         assert_eq!(req.method, "GET");
         assert_eq!(req.path, "/zts/v1/domain/sports/signed_policy_data");
-        assert_eq!(req.headers.get("if-none-match").map(String::as_str), Some("tag-1"));
+        assert_eq!(
+            req.headers.get("if-none-match").map(String::as_str),
+            Some("tag-1")
+        );
 
         handle.join().expect("server");
     }
@@ -987,7 +1000,13 @@ mod tests {
         headers: HashMap<String, String>,
     }
 
-    fn serve_once(response: &'static str) -> (String, mpsc::Receiver<CapturedRequest>, thread::JoinHandle<()>) {
+    fn serve_once(
+        response: &'static str,
+    ) -> (
+        String,
+        mpsc::Receiver<CapturedRequest>,
+        thread::JoinHandle<()>,
+    ) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().expect("addr");
         let (tx, rx) = mpsc::channel();
@@ -1033,6 +1052,10 @@ mod tests {
             }
         }
 
-        CapturedRequest { method, path, headers }
+        CapturedRequest {
+            method,
+            path,
+            headers,
+        }
     }
 }

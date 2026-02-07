@@ -2,19 +2,27 @@ use crate::error::Error;
 use crate::models::PublicKeyEntry;
 use base64::engine::general_purpose::STANDARD as BASE64_STD;
 use base64::Engine as _;
+use p256::ecdsa::{
+    Signature as P256Signature, SigningKey as P256SigningKey, VerifyingKey as P256VerifyingKey,
+};
+use p256::elliptic_curve::sec1::ToEncodedPoint;
+use p384::ecdsa::{
+    Signature as P384Signature, SigningKey as P384SigningKey, VerifyingKey as P384VerifyingKey,
+};
+use p521::ecdsa::{
+    Signature as P521Signature, SigningKey as P521SigningKey, VerifyingKey as P521VerifyingKey,
+};
 use pem::parse_many;
 use pkcs8::{DecodePrivateKey, DecodePublicKey};
 use rand::RngCore;
+use reqwest::blocking::Client as HttpClient;
 use rsa::pkcs1::{DecodeRsaPrivateKey, DecodeRsaPublicKey};
-use rsa::pkcs1v15::{Signature as RsaSignature, SigningKey as RsaSigningKey, VerifyingKey as RsaVerifyingKey};
+use rsa::pkcs1v15::{
+    Signature as RsaSignature, SigningKey as RsaSigningKey, VerifyingKey as RsaVerifyingKey,
+};
 use rsa::{RsaPrivateKey, RsaPublicKey};
 use sha2::Sha256;
 use signature::{SignatureEncoding, Signer as SignatureSigner, Verifier as SignatureVerifier};
-use p256::ecdsa::{Signature as P256Signature, SigningKey as P256SigningKey, VerifyingKey as P256VerifyingKey};
-use p256::elliptic_curve::sec1::ToEncodedPoint;
-use p384::ecdsa::{Signature as P384Signature, SigningKey as P384SigningKey, VerifyingKey as P384VerifyingKey};
-use p521::ecdsa::{Signature as P521Signature, SigningKey as P521SigningKey, VerifyingKey as P521VerifyingKey};
-use reqwest::blocking::Client as HttpClient;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -74,7 +82,11 @@ pub struct NTokenBuilder {
 }
 
 impl NTokenBuilder {
-    pub fn new(domain: impl Into<String>, name: impl Into<String>, key_version: impl Into<String>) -> Self {
+    pub fn new(
+        domain: impl Into<String>,
+        name: impl Into<String>,
+        key_version: impl Into<String>,
+    ) -> Self {
         Self {
             domain: domain.into(),
             name: name.into(),
@@ -237,7 +249,10 @@ fn sign_with_key(builder: &NTokenBuilder, key: &PrivateKey) -> Result<(String, i
     };
     let signature = ybase64_encode(&signature);
 
-    Ok((format!("{};{}={}", unsigned, TAG_SIGNATURE, signature), expiry))
+    Ok((
+        format!("{};{}={}", unsigned, TAG_SIGNATURE, signature),
+        expiry,
+    ))
 }
 
 #[derive(Clone)]
@@ -340,9 +355,9 @@ struct CachedKey {
 
 impl NTokenValidator {
     pub fn new_with_public_key(public_key_pem: &[u8]) -> Result<Self, Error> {
-        Ok(NTokenValidator::Static(NTokenVerifier::from_public_key_pem(
-            public_key_pem,
-        )?))
+        Ok(NTokenValidator::Static(
+            NTokenVerifier::from_public_key_pem(public_key_pem)?,
+        ))
     }
 
     pub fn new_with_zts(config: NTokenValidatorConfig) -> Result<Self, Error> {
@@ -384,8 +399,8 @@ impl NTokenValidator {
 }
 
 fn load_private_key(pem_bytes: &[u8]) -> Result<PrivateKey, Error> {
-    let blocks = parse_many(pem_bytes)
-        .map_err(|e| Error::Crypto(format!("pem parse error: {}", e)))?;
+    let blocks =
+        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {}", e)))?;
     for block in blocks {
         match block.tag() {
             "RSA PRIVATE KEY" => {
@@ -408,8 +423,8 @@ fn load_private_key(pem_bytes: &[u8]) -> Result<PrivateKey, Error> {
 }
 
 fn load_public_key(pem_bytes: &[u8]) -> Result<PublicKey, Error> {
-    let blocks = parse_many(pem_bytes)
-        .map_err(|e| Error::Crypto(format!("pem parse error: {}", e)))?;
+    let blocks =
+        parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {}", e)))?;
     for block in blocks {
         match block.tag() {
             "RSA PUBLIC KEY" => {
@@ -459,7 +474,9 @@ fn parse_ec_private_pkcs8(der: &[u8]) -> Result<PrivateKey, Error> {
             .map_err(|e| Error::Crypto(format!("p521 signing key error: {}", e)))?;
         return Ok(PrivateKey::P521(key));
     }
-    Err(Error::Crypto("unsupported ec pkcs8 private key".to_string()))
+    Err(Error::Crypto(
+        "unsupported ec pkcs8 private key".to_string(),
+    ))
 }
 
 fn parse_rsa_public_pkcs1(der: &[u8]) -> Result<PublicKey, Error> {
@@ -662,10 +679,7 @@ fn ybase64_encode(data: &[u8]) -> String {
 }
 
 fn ybase64_decode(data: &str) -> Result<Vec<u8>, Error> {
-    let normalized = data
-        .replace('.', "+")
-        .replace('_', "/")
-        .replace('-', "=");
+    let normalized = data.replace('.', "+").replace('_', "/").replace('-', "=");
     BASE64_STD
         .decode(normalized.as_bytes())
         .map_err(|e| Error::Crypto(format!("ybase64 decode error: {}", e)))
@@ -717,8 +731,8 @@ awIDAQAB
 
     #[test]
     fn ntoken_sign_and_verify_rsa() {
-        let signer = NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes())
-            .expect("signer");
+        let signer =
+            NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
         let token = signer.sign_once().expect("token");
         let validator =
             NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");

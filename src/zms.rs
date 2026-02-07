@@ -1,7 +1,7 @@
 use crate::error::{Error, ResourceError};
 use crate::models::{
-    Assertion, Domain, DomainList, DomainMeta, Group, GroupMembership, Groups, Membership, Policy,
-    PolicyList, Policies, PublicKeyEntry, Role, RoleList, Roles, ServiceIdentities,
+    Assertion, Domain, DomainList, DomainMeta, Group, GroupMembership, Groups, Membership,
+    Policies, Policy, PolicyList, PublicKeyEntry, Role, RoleList, Roles, ServiceIdentities,
     ServiceIdentity, ServiceIdentityList, SubDomain, TopLevelDomain, UserDomain,
 };
 use crate::ntoken::NTokenSigner;
@@ -313,7 +313,11 @@ impl ZmsClientBuilder {
         Ok(self)
     }
 
-    pub fn mtls_identity_from_parts(mut self, cert_pem: &[u8], key_pem: &[u8]) -> Result<Self, Error> {
+    pub fn mtls_identity_from_parts(
+        mut self,
+        cert_pem: &[u8],
+        key_pem: &[u8],
+    ) -> Result<Self, Error> {
         let mut combined = Vec::new();
         combined.extend_from_slice(cert_pem);
         if !combined.ends_with(b"\n") {
@@ -369,8 +373,14 @@ impl ZmsClientBuilder {
 }
 
 enum AuthProvider {
-    StaticHeader { header: String, value: String },
-    NToken { header: String, signer: NTokenSigner },
+    StaticHeader {
+        header: String,
+        value: String,
+    },
+    NToken {
+        header: String,
+        signer: NTokenSigner,
+    },
 }
 
 pub struct ZmsClient {
@@ -544,7 +554,11 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
-    pub fn get_role_list(&self, domain: &str, options: &RoleListOptions) -> Result<RoleList, Error> {
+    pub fn get_role_list(
+        &self,
+        domain: &str,
+        options: &RoleListOptions,
+    ) -> Result<RoleList, Error> {
         let url = self.build_url(&["domain", domain, "role"])?;
         let mut req = self.http.get(url);
         let params = options.to_query_pairs();
@@ -1177,15 +1191,14 @@ impl ZmsClient {
     fn parse_error<T>(&self, resp: Response) -> Result<T, Error> {
         let status = resp.status();
         let body = resp.bytes()?;
-        let mut err = serde_json::from_slice::<ResourceError>(&body).unwrap_or_else(|_| {
-            ResourceError {
+        let mut err =
+            serde_json::from_slice::<ResourceError>(&body).unwrap_or_else(|_| ResourceError {
                 code: status.as_u16() as i32,
                 message: String::from_utf8_lossy(&body).to_string(),
                 description: None,
                 error: None,
                 request_id: None,
-            }
-        });
+            });
         if err.code == 0 {
             err.code = status.as_u16() as i32;
         }
@@ -1247,7 +1260,13 @@ mod tests {
         query: HashMap<String, String>,
     }
 
-    fn serve_once(response: String) -> (String, mpsc::Receiver<CapturedRequest>, thread::JoinHandle<()>) {
+    fn serve_once(
+        response: String,
+    ) -> (
+        String,
+        mpsc::Receiver<CapturedRequest>,
+        thread::JoinHandle<()>,
+    ) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         let addr = listener.local_addr().expect("addr");
         let (tx, rx) = mpsc::channel();

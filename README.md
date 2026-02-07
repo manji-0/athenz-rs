@@ -68,6 +68,7 @@ println!("claims: {}", data.claims);
 - `docs/authentication.md` (mTLS/NToken)
 - `docs/token-validation.md` (JWKS, validation options, sanitize report)
 - `docs/policy.md` (policy validation and evaluation)
+- `docs/examples.md` (runnable examples)
 - `docs/architecture.md` (module overview and data flow)
 - `docs/faq.md` (frequently asked questions)
 - `docs/clients.md` (client configuration)

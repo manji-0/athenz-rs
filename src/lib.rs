@@ -7,6 +7,8 @@ mod ntoken;
 mod policy;
 mod zms;
 mod zts;
+#[cfg(feature = "async-client")]
+mod zms_async;
 
 pub use error::{Error, ResourceError};
 
@@ -52,3 +54,5 @@ pub use zms::{
     PolicyListOptions, RoleGetOptions, RoleListOptions, RolesQueryOptions,
     ServiceIdentitiesQueryOptions, ServiceListOptions, ZmsClient, ZmsClientBuilder,
 };
+#[cfg(feature = "async-client")]
+pub use zms_async::{ZmsAsyncClient, ZmsAsyncClientBuilder};

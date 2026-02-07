@@ -76,9 +76,9 @@ impl ZtsAsyncClientBuilder {
         token: impl AsRef<str>,
     ) -> Result<Self, Error> {
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
-            .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
+            .map_err(|e| Error::InvalidHeader(format!("invalid header name: {}", e)))?;
         let value = HeaderValue::from_str(token.as_ref())
-            .map_err(|e| Error::Crypto(format!("invalid header value: {}", e)))?;
+            .map_err(|e| Error::InvalidHeader(format!("invalid header value: {}", e)))?;
         self.auth = Some(AuthProvider::StaticHeader { header, value });
         Ok(self)
     }
@@ -89,7 +89,7 @@ impl ZtsAsyncClientBuilder {
         signer: NTokenSigner,
     ) -> Result<Self, Error> {
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
-            .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
+            .map_err(|e| Error::InvalidHeader(format!("invalid header name: {}", e)))?;
         self.auth = Some(AuthProvider::NToken { header, signer });
         Ok(self)
     }
@@ -203,12 +203,14 @@ impl ZtsAsyncClient {
 
     pub async fn get_oauth_config(&self) -> Result<OAuthConfig, Error> {
         let url = self.build_url(&[".well-known", "oauth-authorization-server"])?;
+        // Well-known discovery endpoints are typically public; omit auth to match sync client.
         let resp = self.http.get(url).send().await?;
         self.expect_ok_json(resp).await
     }
 
     pub async fn get_openid_config(&self) -> Result<OpenIdConfig, Error> {
         let url = self.build_url(&[".well-known", "openid-configuration"])?;
+        // Well-known discovery endpoints are typically public; omit auth to match sync client.
         let resp = self.http.get(url).send().await?;
         self.expect_ok_json(resp).await
     }

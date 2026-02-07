@@ -87,10 +87,16 @@ impl NTokenBuilder {
         name: impl Into<String>,
         key_version: impl Into<String>,
     ) -> Self {
+        let mut domain = domain.into();
+        domain.make_ascii_lowercase();
+        let mut name = name.into();
+        name.make_ascii_lowercase();
+        let mut key_version = key_version.into();
+        key_version.make_ascii_lowercase();
         Self {
-            domain: domain.into(),
-            name: name.into(),
-            key_version: key_version.into(),
+            domain,
+            name,
+            key_version,
             version: DEFAULT_VERSION.to_string(),
             key_service: None,
             hostname: None,
@@ -105,7 +111,9 @@ impl NTokenBuilder {
     }
 
     pub fn with_key_service(mut self, key_service: impl Into<String>) -> Self {
-        self.key_service = Some(key_service.into());
+        let mut key_service = key_service.into();
+        key_service.make_ascii_lowercase();
+        self.key_service = Some(key_service);
         self
     }
 
@@ -736,5 +744,18 @@ awIDAQAB
         let claims = validator.validate(&token).expect("validate");
         assert_eq!(claims.domain, "sports");
         assert_eq!(claims.name, "api");
+    }
+
+    #[test]
+    fn ntoken_builder_lowercases_fields() {
+        let builder = NTokenBuilder::new("Sports", "API", "V1").with_key_service("ZTS");
+        let token = builder.sign(RSA_PRIVATE_KEY.as_bytes()).expect("token");
+        let validator =
+            NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+        let claims = validator.validate(&token).expect("validate");
+        assert_eq!(claims.domain, "sports");
+        assert_eq!(claims.name, "api");
+        assert_eq!(claims.key_version, "v1");
+        assert_eq!(claims.key_service.as_deref(), Some("zts"));
     }
 }

@@ -149,6 +149,16 @@ impl AccessTokenRequest {
 }
 
 #[derive(Debug, Clone)]
+/// Builder for constructing [`AccessTokenRequest`] values.
+///
+/// This is the preferred, forward-compatible way to create access token requests.
+/// It composes the OAuth/OIDC `scope` parameter from `domain`, `roles`, and
+/// `id_token_service`. If [`raw_scope`](AccessTokenRequestBuilder::raw_scope)
+/// is set, that value is used as-is and overrides the composed scopes.
+///
+/// The underlying [`AccessTokenRequest`] struct remains public, so you can still
+/// mutate its fields directly if needed, but using this builder is recommended
+/// to remain compatible with future extensions.
 pub struct AccessTokenRequestBuilder {
     request: AccessTokenRequest,
 }

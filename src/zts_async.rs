@@ -75,6 +75,7 @@ impl ZtsAsyncClientBuilder {
         header: impl AsRef<str>,
         token: impl AsRef<str>,
     ) -> Result<Self, Error> {
+        // Async builder validates header inputs to avoid request-time failures.
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
             .map_err(|e| Error::InvalidHeader(format!("invalid header name: {}", e)))?;
         let value = HeaderValue::from_str(token.as_ref())
@@ -88,6 +89,7 @@ impl ZtsAsyncClientBuilder {
         header: impl AsRef<str>,
         signer: NTokenSigner,
     ) -> Result<Self, Error> {
+        // Async builder validates header inputs to avoid request-time failures.
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
             .map_err(|e| Error::InvalidHeader(format!("invalid header name: {}", e)))?;
         self.auth = Some(AuthProvider::NToken {

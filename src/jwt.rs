@@ -224,15 +224,20 @@ impl JwtValidator {
 
         let jwks = self.jwks.fetch()?;
         if header.kid.is_none() && jwks.keys.len() > 1 {
-            let mut last_err = None;
+            let mut decode_err = None;
+            let mut key_err = None;
+            let mut attempted_decode = false;
             for jwk in &jwks.keys {
                 let decoding_key = match DecodingKey::from_jwk(jwk) {
                     Ok(key) => key,
                     Err(err) => {
-                        last_err = Some(Error::from(err));
+                        if key_err.is_none() {
+                            key_err = Some(Error::from(err));
+                        }
                         continue;
                     }
                 };
+                attempted_decode = true;
                 match decode::<Value>(token, &decoding_key, &validation) {
                     Ok(token_data) => {
                         return Ok(JwtTokenData {
@@ -240,10 +245,19 @@ impl JwtValidator {
                             claims: token_data.claims,
                         });
                     }
-                    Err(err) => last_err = Some(Error::from(err)),
+                    Err(err) => {
+                        if decode_err.is_none() {
+                            decode_err = Some(Error::from(err));
+                        }
+                    }
                 }
             }
-            return Err(last_err.unwrap_or_else(|| Error::MissingJwk("kid required".to_string())));
+            if attempted_decode {
+                return Err(decode_err
+                    .or(key_err)
+                    .unwrap_or_else(|| Error::MissingJwk("kid required".to_string())));
+            }
+            return Err(key_err.unwrap_or_else(|| Error::MissingJwk("kid required".to_string())));
         }
 
         let key = select_jwk(&jwks, header.kid.as_deref())?;
@@ -275,14 +289,25 @@ impl JwtValidator {
 
         let jwks = self.jwks.fetch()?;
         if header.kid.is_none() && jwks.keys.len() > 1 {
-            let mut last_err = None;
+            let mut decode_err = None;
+            let mut key_err = None;
             for jwk in &jwks.keys {
                 match self.validate_es512_with_key(parts, header, jwk) {
                     Ok(data) => return Ok(data),
-                    Err(err) => last_err = Some(err),
+                    Err(err) => {
+                        if is_es512_key_error(&err) {
+                            if key_err.is_none() {
+                                key_err = Some(err);
+                            }
+                        } else if decode_err.is_none() {
+                            decode_err = Some(err);
+                        }
+                    }
                 }
             }
-            return Err(last_err.unwrap_or_else(|| jwt_error(ErrorKind::InvalidSignature)));
+            return Err(decode_err
+                .or(key_err)
+                .unwrap_or_else(|| jwt_error(ErrorKind::InvalidSignature)));
         }
 
         let key = select_jwk(&jwks, header.kid.as_deref())?;
@@ -419,6 +444,14 @@ fn p521_verifying_key_from_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> Result<P521Verif
                 .map_err(|_| jwt_error(ErrorKind::InvalidEcdsaKey))
         }
         _ => Err(Error::UnsupportedAlg("ES512 requires EC key".to_string())),
+    }
+}
+
+fn is_es512_key_error(err: &Error) -> bool {
+    match err {
+        Error::UnsupportedAlg(_) => true,
+        Error::Jwt(jwt_err) => matches!(jwt_err.kind(), ErrorKind::InvalidEcdsaKey),
+        _ => false,
     }
 }
 
@@ -702,7 +735,7 @@ mod tests {
     use jsonwebtoken::{encode, EncodingKey, Header};
     use p521::ecdsa::SigningKey as P521SigningKey;
     use rand::thread_rng;
-    use rsa::pkcs1::DecodeRsaPrivateKey;
+    use rsa::pkcs1::{EncodeRsaPrivateKey, LineEnding};
     use rsa::traits::PublicKeyParts;
     use rsa::{RsaPrivateKey, RsaPublicKey};
     use serde_json::json;
@@ -754,37 +787,70 @@ mod tests {
         (token, jwks)
     }
 
-    const RSA_PRIVATE_KEY: &str = r#"-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEAxq83nCd8AqH5n40dEBMElbaJd2gFWu6bjhNzyp9562dpf454
-BUSN0uF+g3i1yzcwdvADTiuExKN1u/IoGURxVCa0JTzAPJw6/JIoyOZnHZCoarcg
-QQqZ56/udkSQ2NssrwGSQjOwxMrgIdH6XeLgGqVN4BoEEI+gpaQZa7rSytU5RFSG
-OnZWO2Vwgs1OBxiOiYg1gzA1spJXQhxcBWw/v+YrUFtjxBKsG1UrWbnHbgciiN5U
-2v51Yztjo8A1T+o9eIG90jVo3EhS2qhbzd8mLAsEhjV1sP8GItjfdfwXpXT7q2QG
-99W3PM75+HdwGLvJIrkED7YRj4CpMkz6F1etawIDAQABAoIBAD67C7/N56WdJodt
-soNkvcnXPEfrG+W9+Hc/RQvwljnxCKoxfUuMfYrbj2pLLnrfDfo/hYukyeKcCYwx
-xN9VcMK1BaPMLpX0bdtY+m+T73KyPbqT3ycqBbXVImFM/L67VLxcrqUgVOuNcn67
-IWWLQF6pWpErJaVk87/Ys/4DmpJXebLDyta8+ce6r0ppSG5+AifGo1byQT7kSJkF
-lyQsyKWoVN+02s7gLsln5JXXZ672y2Xtp/S3wK0vfzy/HcGSxzn1yE0M5UJtDm/Y
-qECnV1LQ0FB1l1a+/itHR8ipp5rScD4ZpzOPLKthglEvNPe4Lt5rieH9TR97siEe
-SrC8uyECgYEA5Q/elOJAddpE+cO22gTFt973DcPGjM+FYwgdrora+RfEXJsMDoKW
-AGSm5da7eFo8u/bJEvHSJdytc4CRQYnWNryIaUw2o/1LYXRvoEt1rEEgQ4pDkErR
-PsVcVuc3UDeeGtYJwJLV6pjxO11nodFv4IgaVj64SqvCOApTTJgWXF0CgYEA3gzN
-d3l376mSMuKc4Ep++TxybzA5mtF2qoXucZOon8EDJKr+vGQ9Z6X4YSdkSMNXqK1j
-ILmFH7V3dyMOKRBA84YeawFacPLBJq+42t5Q1OYdcKZbaArlBT8ImGT7tQODs3JN
-4w7DH+V1v/VCTl2zQaZRksb0lUsQbFiEfj+SVGcCgYAYIlDoTOJPyHyF+En2tJQE
-aHiNObhcs6yxH3TJJBYoMonc2/UsPjQBvJkdFD/SUWeewkSzO0lR9etMhRpI1nX8
-dGbG+WG0a4aasQLl162BRadZlmLB/DAJtg+hlGDukb2VxEFoyc/CFPUttQyrLv7j
-oFNuDNOsAmbHMsdOBaQtfQKBgQCb/NRuRNebdj0tIALikZLHVc5yC6e7+b/qJPIP
-uZIwv++MV89h2u1EHdTxszGA6DFxXnSPraQ2VU2aVPcCo9ds+9/sfePiCrbjjXhH
-0PtpxEoUM9lsqpKeb9yC6hXk4JYpfnf2tQ0gIBrrAclVsf9WdBdEDB4Prs7Xvgs9
-gT0zqwKBgQCzZubFO0oTYO9e2r8wxPPPsE3ZCjbP/y7lIoBbSzxDGUubXmbvD0GO
-MC8dM80plsTym96UxpKkQMAglKKLPtG2n8xB8v5H/uIB4oIegMSEx3F7MRWWIQmR
-Gea7bQ16YCzM/l2yygGhAW61bg2Z2GoVF6X5z/qhKGyo97V87qTbmg==
------END RSA PRIVATE KEY-----
-"#;
+    fn build_es512_token_without_kid() -> (String, JwkSet) {
+        let mut rng = thread_rng();
+        let signing_key = P521SigningKey::random(&mut rng);
+        let verifying_key = P521VerifyingKey::from(&signing_key);
+        let encoded_point = verifying_key.to_encoded_point(false);
+        let x = encoded_point.x().expect("x coord");
+        let y = encoded_point.y().expect("y coord");
+
+        let bad_signing_key = P521SigningKey::random(&mut rng);
+        let bad_verifying_key = P521VerifyingKey::from(&bad_signing_key);
+        let bad_point = bad_verifying_key.to_encoded_point(false);
+        let bad_x = bad_point.x().expect("x coord");
+        let bad_y = bad_point.y().expect("y coord");
+
+        let jwks_json = json!({
+            "keys": [
+                {
+                    "kty": "EC",
+                    "crv": "P-521",
+                    "x": URL_SAFE_NO_PAD.encode(bad_x),
+                    "y": URL_SAFE_NO_PAD.encode(bad_y),
+                    "use": "sig",
+                    "kid": "bad-key",
+                    "alg": "ES512",
+                },
+                {
+                    "kty": "EC",
+                    "crv": "P-521",
+                    "x": URL_SAFE_NO_PAD.encode(x),
+                    "y": URL_SAFE_NO_PAD.encode(y),
+                    "use": "sig",
+                    "kid": "good-key",
+                    "alg": "ES512",
+                }
+            ]
+        });
+        let jwks = jwks_from_value(jwks_json).expect("jwks");
+
+        let header = json!({
+            "alg": "ES512",
+            "typ": "JWT",
+        });
+        let exp = jsonwebtoken::get_current_timestamp() + 3600;
+        let payload = json!({
+            "iss": "athenz",
+            "aud": "client",
+            "sub": "principal",
+            "exp": exp,
+        });
+
+        let header_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).expect("header json"));
+        let payload_b64 =
+            URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("payload json"));
+        let signing_input = format!("{}.{}", header_b64, payload_b64);
+        let signature: P521Signature = signing_key.sign(signing_input.as_bytes());
+        let signature_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
+        let token = format!("{}.{}", signing_input, signature_b64);
+
+        (token, jwks)
+    }
 
     fn build_rs256_token_without_kid() -> (String, JwkSet) {
-        let private_key = RsaPrivateKey::from_pkcs1_pem(RSA_PRIVATE_KEY).expect("private key");
+        let mut rng = thread_rng();
+        let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("private key");
         let public_key = RsaPublicKey::from(&private_key);
         let n = public_key.n().to_bytes_be();
         let e = public_key.e().to_bytes_be();
@@ -822,10 +888,13 @@ Gea7bQ16YCzM/l2yygGhAW61bg2Z2GoVF6X5z/qhKGyo97V87qTbmg==
         });
         let mut header = Header::new(Algorithm::RS256);
         header.kid = None;
+        let pem = private_key
+            .to_pkcs1_pem(LineEnding::LF)
+            .expect("private key pem");
         let token = encode(
             &header,
             &claims,
-            &EncodingKey::from_rsa_pem(RSA_PRIVATE_KEY.as_bytes()).expect("encoding key"),
+            &EncodingKey::from_rsa_pem(pem.as_bytes()).expect("encoding key"),
         )
         .expect("token");
 
@@ -884,6 +953,25 @@ Gea7bQ16YCzM/l2yygGhAW61bg2Z2GoVF6X5z/qhKGyo97V87qTbmg==
         let data = validator.validate_access_token(&token).expect("validate");
         assert_eq!(data.claims["iss"], "athenz");
         assert_eq!(data.claims["aud"], "client");
+        assert_eq!(data.header.alg, "ES512");
+    }
+
+    #[test]
+    fn jwt_es512_validates_without_kid_using_all_keys() {
+        let (token, jwks) = build_es512_token_without_kid();
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::athenz_default();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let data = validator.validate_access_token(&token).expect("validate");
+        assert_eq!(data.claims["sub"], "principal");
         assert_eq!(data.header.alg, "ES512");
     }
 

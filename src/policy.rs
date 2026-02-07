@@ -373,12 +373,7 @@ impl Match {
                     Ok(regex) => Match::Regex(regex),
                     Err(err) => {
                         warn!(
-                            "invalid wildcard pattern in policy {} for {}: pattern='{}' regex='{}' error={}",
-                            policy_name,
-                            context,
-                            pattern,
-                            regex_pattern,
-                            err
+                            "invalid wildcard pattern in policy {policy_name} for {context}: pattern='{pattern}' regex='{regex_pattern}' error={err}"
                         );
                         Match::Invalid
                     }

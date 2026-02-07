@@ -81,7 +81,7 @@ impl ZmsAsyncClientBuilder {
     pub fn ntoken_signer(mut self, header: impl Into<String>, signer: NTokenSigner) -> Self {
         self.auth = Some(AuthProvider::NToken {
             header: header.into(),
-            signer: Box::new(signer),
+            signer,
         });
         self
     }
@@ -109,6 +109,7 @@ impl ZmsAsyncClientBuilder {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum AuthProvider {
     StaticHeader {
         header: String,
@@ -116,7 +117,7 @@ enum AuthProvider {
     },
     NToken {
         header: String,
-        signer: Box<NTokenSigner>,
+        signer: NTokenSigner,
     },
 }
 
@@ -170,12 +171,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain"])?;
         let mut req = self.http.post(url).json(detail);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
     }
@@ -190,12 +186,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["subdomain", parent])?;
         let mut req = self.http.post(url).json(detail);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
     }
@@ -210,12 +201,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["userdomain", name])?;
         let mut req = self.http.post(url).json(detail);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
     }
@@ -229,12 +215,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", name])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -249,12 +230,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["subdomain", parent, name])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -268,12 +244,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["userdomain", name])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -288,12 +259,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", name, "meta"])?;
         let mut req = self.http.put(url).json(meta);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -359,9 +325,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "role", role])?;
         let mut req = self.http.put(url).json(role_obj);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
+        req = self.apply_audit_headers(req, audit_ref, None);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
         }
@@ -382,12 +346,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "role", role])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -423,9 +382,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "role", role, "member", member])?;
         let mut req = self.http.put(url).json(membership);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
+        req = self.apply_audit_headers(req, audit_ref, None);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
         }
@@ -447,12 +404,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "role", role, "member", member])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -509,9 +461,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "policy", policy])?;
         let mut req = self.http.put(url).json(policy_obj);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
+        req = self.apply_audit_headers(req, audit_ref, None);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
         }
@@ -532,12 +482,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "policy", policy])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -567,12 +512,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "policy", policy, "assertion"])?;
         let mut req = self.http.put(url).json(assertion);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
     }
@@ -589,12 +529,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "policy", policy, "assertion", &id])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -623,9 +558,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "service", service])?;
         let mut req = self.http.put(url).json(detail);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
+        req = self.apply_audit_headers(req, audit_ref, None);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
         }
@@ -646,12 +579,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "service", service])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -713,12 +641,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "service", service, "publickey", key_id])?;
         let mut req = self.http.put(url).json(entry);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -734,12 +657,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "service", service, "publickey", key_id])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -789,9 +707,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "group", group])?;
         let mut req = self.http.put(url).json(detail);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
+        req = self.apply_audit_headers(req, audit_ref, None);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
         }
@@ -812,12 +728,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "group", group])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -853,9 +764,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "group", group, "member", member])?;
         let mut req = self.http.put(url).json(membership);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
+        req = self.apply_audit_headers(req, audit_ref, None);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
         }
@@ -877,12 +786,7 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "group", group, "member", member])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
-        if let Some(audit_ref) = audit_ref {
-            req = req.header("Y-Audit-Ref", audit_ref);
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
-        }
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }
@@ -916,6 +820,21 @@ impl ZmsAsyncClient {
             }
         }
         Ok(req)
+    }
+
+    fn apply_audit_headers(
+        &self,
+        mut req: RequestBuilder,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> RequestBuilder {
+        if let Some(audit_ref) = audit_ref {
+            req = req.header("Y-Audit-Ref", audit_ref);
+        }
+        if let Some(resource_owner) = resource_owner {
+            req = req.header("Athenz-Resource-Owner", resource_owner);
+        }
+        req
     }
 
     async fn expect_ok_json<T: serde::de::DeserializeOwned>(

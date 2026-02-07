@@ -76,13 +76,32 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
     }
 
     let mut headers = Vec::new();
+    let mut content_length: usize = 0;
     for line in lines {
         if line.is_empty() {
             break;
         }
         if let Some((name, value)) = line.split_once(':') {
-            headers.push((name.trim().to_string(), value.trim().to_string()));
+            let name = name.trim();
+            let value = value.trim();
+            if name.eq_ignore_ascii_case("Content-Length") {
+                content_length = value.parse().unwrap_or(0);
+            }
+            headers.push((name.to_string(), value.to_string()));
         }
+    }
+
+    let body_read = buf.len().saturating_sub(header_end);
+    let mut remaining = content_length.saturating_sub(body_read);
+    while remaining > 0 {
+        let read = stream
+            .read(&mut chunk)
+            .await
+            .expect("failed to read request body");
+        if read == 0 {
+            break;
+        }
+        remaining = remaining.saturating_sub(read);
     }
 
     CapturedRequest {

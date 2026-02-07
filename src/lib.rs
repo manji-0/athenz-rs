@@ -9,6 +9,8 @@ mod zms;
 #[cfg(feature = "async-client")]
 mod zms_async;
 mod zts;
+#[cfg(feature = "async-client")]
+mod zts_async;
 
 pub use error::{Error, ResourceError};
 
@@ -16,6 +18,8 @@ pub use jwt::{
     jwks_from_slice, jwks_from_slice_with_report, JwksProvider, JwksSanitizeReport, JwtHeader,
     JwtTokenData, JwtValidationOptions, JwtValidator, RemovedAlg, RemovedAlgReason,
 };
+#[cfg(feature = "async-validate")]
+pub use jwt::{JwksProviderAsync, JwtValidatorAsync};
 
 pub use models::{
     AccessTokenResponse, Assertion, AssertionCondition, AssertionConditionData,
@@ -38,16 +42,22 @@ pub use models::{
 pub use ntoken::{
     NToken, NTokenBuilder, NTokenClaims, NTokenSigner, NTokenValidator, NTokenValidatorConfig,
 };
+#[cfg(feature = "async-validate")]
+pub use ntoken::NTokenValidatorAsync;
 
 pub use zts::{
     AccessTokenRequest, AccessTokenRequestBuilder, ConditionalResponse, IdTokenRequest,
     IdTokenResponse, ZtsClient, ZtsClientBuilder,
 };
+#[cfg(feature = "async-client")]
+pub use zts_async::{ZtsAsyncClient, ZtsAsyncClientBuilder};
 
 pub use policy::{
     PolicyClient, PolicyDecision, PolicyFetchResponse, PolicyMatch, PolicyStore,
     PolicyValidatorConfig,
 };
+#[cfg(feature = "async-validate")]
+pub use policy::PolicyClientAsync;
 
 pub use zms::{
     DomainListOptions, GroupGetOptions, GroupsQueryOptions, PoliciesQueryOptions,

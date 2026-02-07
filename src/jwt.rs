@@ -7,6 +7,8 @@ use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use log::warn;
 use p521::ecdsa::{Signature as P521Signature, VerifyingKey as P521VerifyingKey};
 use reqwest::blocking::Client as HttpClient;
+#[cfg(feature = "async-validate")]
+use reqwest::Client as AsyncHttpClient;
 use serde_json::Value;
 use signature::Verifier as _;
 use std::collections::HashSet;
@@ -135,6 +137,59 @@ pub struct JwksProvider {
 struct CachedJwks {
     jwks: JwkSet,
     expires_at: Instant,
+}
+
+#[cfg(feature = "async-validate")]
+#[derive(Debug)]
+pub struct JwksProviderAsync {
+    jwks_uri: Url,
+    http: AsyncHttpClient,
+    cache_ttl: Duration,
+    cache: RwLock<Option<CachedJwks>>,
+}
+
+#[cfg(feature = "async-validate")]
+impl JwksProviderAsync {
+    pub fn new(jwks_uri: impl AsRef<str>) -> Result<Self, Error> {
+        let jwks_uri = Url::parse(jwks_uri.as_ref())?;
+        Ok(Self {
+            jwks_uri,
+            http: AsyncHttpClient::new(),
+            cache_ttl: Duration::from_secs(300),
+            cache: RwLock::new(None),
+        })
+    }
+
+    pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
+        self.cache_ttl = ttl;
+        self
+    }
+
+    pub fn with_preloaded(self, jwks: JwkSet) -> Self {
+        let cached = CachedJwks {
+            jwks,
+            expires_at: Instant::now() + self.cache_ttl,
+        };
+        *self.cache.write().unwrap() = Some(cached);
+        self
+    }
+
+    pub async fn fetch(&self) -> Result<JwkSet, Error> {
+        if let Some(cached) = self.cache.read().unwrap().as_ref() {
+            if cached.expires_at > Instant::now() {
+                return Ok(cached.jwks.clone());
+            }
+        }
+
+        let body = self.http.get(self.jwks_uri.clone()).send().await?.bytes().await?;
+        let jwks = jwks_from_slice(&body)?;
+        let cached = CachedJwks {
+            jwks: jwks.clone(),
+            expires_at: Instant::now() + self.cache_ttl,
+        };
+        *self.cache.write().unwrap() = Some(cached);
+        Ok(jwks)
+    }
 }
 
 impl JwksProvider {
@@ -308,6 +363,118 @@ impl JwtValidator {
 
         let claims_bytes = base64_url_decode(parts.payload)?;
         let claims: Value = serde_json::from_slice(&claims_bytes).map_err(jwt_json_error)?;
+
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.leeway = self.options.leeway;
+        validation.validate_exp = self.options.validate_exp;
+        if let Some(ref issuer) = self.options.issuer {
+            validation.set_issuer(&[issuer.as_str()]);
+        }
+        if !self.options.audience.is_empty() {
+            validation.set_audience(&self.options.audience);
+        }
+        validate_claims(&claims, &validation)?;
+
+        Ok(JwtTokenData {
+            header: header.clone(),
+            claims,
+        })
+    }
+}
+
+#[cfg(feature = "async-validate")]
+#[derive(Debug)]
+pub struct JwtValidatorAsync {
+    jwks: JwksProviderAsync,
+    options: JwtValidationOptions,
+}
+
+#[cfg(feature = "async-validate")]
+impl JwtValidatorAsync {
+    pub fn new(jwks: JwksProviderAsync) -> Self {
+        Self {
+            jwks,
+            options: JwtValidationOptions::default(),
+        }
+    }
+
+    pub fn with_options(mut self, options: JwtValidationOptions) -> Self {
+        self.options = options;
+        self
+    }
+
+    pub async fn validate(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
+        let parts = split_jwt(token)?;
+        let header = decode_jwt_header(parts.header)?;
+        let alg = header.alg.as_str();
+        if !ATHENZ_ALLOWED_ALG_NAMES.contains(&alg) {
+            return Err(Error::UnsupportedAlg(header.alg.clone()));
+        }
+
+        if alg == "ES512" {
+            return self.validate_es512(&parts, &header).await;
+        }
+
+        let alg = Algorithm::from_str(alg)
+            .map_err(|_| Error::UnsupportedAlg(header.alg.clone()))?;
+        let allowed_algs = resolve_allowed_algs(&self.options)?;
+        if !allowed_algs.contains(&alg) {
+            return Err(Error::UnsupportedAlg(format!("{:?}", alg)));
+        }
+
+        let jwks = self.jwks.fetch().await?;
+        let key = select_jwk(&jwks, header.kid.as_deref())?;
+        let decoding_key = DecodingKey::from_jwk(key)?;
+
+        let mut validation = Validation::new(alg);
+        validation.leeway = self.options.leeway;
+        validation.validate_exp = self.options.validate_exp;
+        if let Some(ref issuer) = self.options.issuer {
+            validation.set_issuer(&[issuer.as_str()]);
+        }
+        if !self.options.audience.is_empty() {
+            validation.set_audience(&self.options.audience);
+        }
+
+        let token_data = decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
+        Ok(JwtTokenData {
+            header,
+            claims: token_data.claims,
+        })
+    }
+
+    pub async fn validate_access_token(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
+        self.validate(token).await
+    }
+
+    pub async fn validate_id_token(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
+        self.validate(token).await
+    }
+
+    async fn validate_es512(
+        &self,
+        parts: &JwtParts<'_>,
+        header: &JwtHeader,
+    ) -> Result<JwtTokenData<Value>, Error> {
+        resolve_allowed_algs(&self.options)?;
+        if !allows_es512(&self.options) {
+            return Err(Error::UnsupportedAlg("ES512".to_string()));
+        }
+
+        let jwks = self.jwks.fetch().await?;
+        let key = select_jwk(&jwks, header.kid.as_deref())?;
+        let verifying_key = p521_verifying_key_from_jwk(key)?;
+        let signature_bytes = base64_url_decode(parts.signature)?;
+        let signature = P521Signature::from_slice(&signature_bytes)
+            .map_err(|_| jwt_error(ErrorKind::InvalidSignature))?;
+        let signing_input = format!("{}.{}", parts.header, parts.payload);
+        verifying_key
+            .verify(signing_input.as_bytes(), &signature)
+            .map_err(|_| jwt_error(ErrorKind::InvalidSignature))?;
+
+        let claims_bytes = base64_url_decode(parts.payload)?;
+        let claims: Value = serde_json::from_slice(&claims_bytes)
+            .map_err(jwt_json_error)?;
 
         let mut validation = Validation::new(Algorithm::RS256);
         validation.leeway = self.options.leeway;

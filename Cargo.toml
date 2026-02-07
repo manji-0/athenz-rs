@@ -24,6 +24,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 signature = "2"
+tokio = { version = "1", features = ["sync"], optional = true }
 time = { version = "0.3", features = ["parsing"] }
 thiserror = "1"
 url = "2"
@@ -34,3 +35,4 @@ tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-threa
 
 [features]
 async-client = []
+async-validate = ["async-client", "tokio"]

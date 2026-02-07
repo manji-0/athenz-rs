@@ -23,6 +23,8 @@ use rsa::pkcs1v15::{
 use rsa::{RsaPrivateKey, RsaPublicKey};
 use sha2::Sha256;
 use signature::{SignatureEncoding, Signer as SignatureSigner, Verifier as SignatureVerifier};
+#[cfg(feature = "async-validate")]
+use reqwest::Client as AsyncHttpClient;
 use std::collections::HashMap;
 use std::sync::RwLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -430,6 +432,63 @@ impl NTokenValidator {
     }
 }
 
+#[cfg(feature = "async-validate")]
+#[allow(private_interfaces)]
+pub enum NTokenValidatorAsync {
+    Static(NTokenVerifier),
+    Zts {
+        config: NTokenValidatorConfig,
+        cache: RwLock<HashMap<KeySource, CachedKey>>,
+        http: AsyncHttpClient,
+    },
+}
+
+#[cfg(feature = "async-validate")]
+impl NTokenValidatorAsync {
+    pub fn new_with_public_key(public_key_pem: &[u8]) -> Result<Self, Error> {
+        Ok(NTokenValidatorAsync::Static(NTokenVerifier::from_public_key_pem(
+            public_key_pem,
+        )?))
+    }
+
+    pub fn new_with_zts(config: NTokenValidatorConfig) -> Result<Self, Error> {
+        let http = AsyncHttpClient::builder()
+            .timeout(config.public_key_fetch_timeout)
+            .build()?;
+        Ok(NTokenValidatorAsync::Zts {
+            config,
+            cache: RwLock::new(HashMap::new()),
+            http,
+        })
+    }
+
+    pub async fn validate(&self, token: &str) -> Result<NToken, Error> {
+        let (claims, unsigned, signature) = parse_unverified(token)?;
+        match self {
+            NTokenValidatorAsync::Static(verifier) => {
+                verifier.verify(&unsigned, &signature)?;
+                if claims.is_expired() {
+                    return Err(Error::Crypto("ntoken expired".to_string()));
+                }
+                Ok(claims)
+            }
+            NTokenValidatorAsync::Zts {
+                config,
+                cache,
+                http,
+            } => {
+                let src = key_source_from_claims(&claims, config);
+                let verifier = get_cached_verifier_async(cache, http, config, &src).await?;
+                verifier.verify(&unsigned, &signature)?;
+                if claims.is_expired() {
+                    return Err(Error::Crypto("ntoken expired".to_string()));
+                }
+                Ok(claims)
+            }
+        }
+    }
+}
+
 fn load_private_key(pem_bytes: &[u8]) -> Result<PrivateKey, Error> {
     let blocks =
         parse_many(pem_bytes).map_err(|e| Error::Crypto(format!("pem parse error: {e}")))?;
@@ -572,6 +631,45 @@ fn get_cached_verifier(
         )));
     }
     let entry: PublicKeyEntry = resp.json()?;
+    let pem_bytes = ybase64_decode(&entry.key)?;
+    let verifier = NTokenVerifier::from_public_key_pem(&pem_bytes)?;
+
+    let cached = CachedKey {
+        verifier: verifier.clone(),
+        expires_at: Instant::now() + config.cache_ttl,
+    };
+    cache.write().unwrap().insert(src.clone(), cached);
+    Ok(verifier)
+}
+
+#[cfg(feature = "async-validate")]
+async fn get_cached_verifier_async(
+    cache: &RwLock<HashMap<KeySource, CachedKey>>,
+    http: &AsyncHttpClient,
+    config: &NTokenValidatorConfig,
+    src: &KeySource,
+) -> Result<NTokenVerifier, Error> {
+    if let Some(entry) = cache.read().unwrap().get(src) {
+        if entry.expires_at > Instant::now() {
+            return Ok(entry.verifier.clone());
+        }
+    }
+
+    let url = format!(
+        "{}/domain/{}/service/{}/publickey/{}",
+        config.zts_base_url.trim_end_matches('/'),
+        src.domain,
+        src.name,
+        src.key_version
+    );
+    let resp = http.get(url).send().await?;
+    if !resp.status().is_success() {
+        return Err(Error::Crypto(format!(
+            "unable to fetch public key: status {}",
+            resp.status()
+        )));
+    }
+    let entry: PublicKeyEntry = resp.json().await?;
     let pem_bytes = ybase64_decode(&entry.key)?;
     let verifier = NTokenVerifier::from_public_key_pem(&pem_bytes)?;
 

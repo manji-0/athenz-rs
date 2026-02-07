@@ -413,10 +413,11 @@ struct ClaimsForValidation {
     aud: TryParse<Audience>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum TryParse<T> {
     Parsed(T),
     FailedToParse,
+    #[default]
     NotPresent,
 }
 
@@ -427,12 +428,6 @@ impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for TryParse<T> {
             Ok(None) => TryParse::NotPresent,
             Err(_) => TryParse::FailedToParse,
         })
-    }
-}
-
-impl<T> Default for TryParse<T> {
-    fn default() -> Self {
-        Self::NotPresent
     }
 }
 

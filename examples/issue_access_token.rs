@@ -3,9 +3,8 @@ use std::env;
 use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let zts_url = env::var("ATHENZ_ZTS_URL").unwrap_or_else(|_| {
-        "https://zts.example.com/zts/v1".to_string()
-    });
+    let zts_url =
+        env::var("ATHENZ_ZTS_URL").unwrap_or_else(|_| "https://zts.example.com/zts/v1".to_string());
     let cert_path = match env::var("ATHENZ_CLIENT_CERT_PEM") {
         Ok(value) => value,
         Err(_) => {

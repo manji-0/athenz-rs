@@ -2,9 +2,8 @@ use athenz_provider_tenant::{PolicyClient, PolicyDecision, PolicyStore, ZtsClien
 use std::env;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let zts_url = env::var("ATHENZ_ZTS_URL").unwrap_or_else(|_| {
-        "https://zts.example.com/zts/v1".to_string()
-    });
+    let zts_url =
+        env::var("ATHENZ_ZTS_URL").unwrap_or_else(|_| "https://zts.example.com/zts/v1".to_string());
     let domain = match env::var("ATHENZ_POLICY_DOMAIN") {
         Ok(value) => value,
         Err(_) => {
@@ -24,7 +23,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         store.insert(policy_data);
 
         let roles = vec![format!("{}:role.reader", domain)];
-        let result = store.allow_action(&domain, &roles, "read", &format!("{}:resource.read", domain));
+        let result = store.allow_action(
+            &domain,
+            &roles,
+            "read",
+            &format!("{}:resource.read", domain),
+        );
         if result.decision == PolicyDecision::Allow {
             println!("allowed");
         } else {

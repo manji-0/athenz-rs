@@ -7,7 +7,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(value) => value,
         Err(_) => {
             eprintln!("ATHENZ_NTOKEN is not set. Skipping.");
-            eprintln!("Example: ATHENZ_NTOKEN='v=S1;d=...;s=...' cargo run --example validate_ntoken");
+            eprintln!(
+                "Example: ATHENZ_NTOKEN='v=S1;d=...;s=...' cargo run --example validate_ntoken"
+            );
             return Ok(());
         }
     };

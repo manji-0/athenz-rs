@@ -285,11 +285,11 @@ impl RoleAssertions {
         if !self.wildcard.is_empty() {
             for role in roles {
                 for wild in &self.wildcard {
-                    if wild.role_match.matches(role) {
-                        if match_assertions(&wild.assertions, action, resource) {
-                            *matched_role = Some(role.clone());
-                            return true;
-                        }
+                    if wild.role_match.matches(role)
+                        && match_assertions(&wild.assertions, action, resource)
+                    {
+                        *matched_role = Some(role.clone());
+                        return true;
                     }
                 }
             }

@@ -417,7 +417,7 @@ impl ZtsClientBuilder {
     pub fn ntoken_signer(mut self, header: impl Into<String>, signer: NTokenSigner) -> Self {
         self.auth = Some(AuthProvider::NToken {
             header: header.into(),
-            signer,
+            signer: Box::new(signer),
         });
         self
     }
@@ -452,7 +452,7 @@ enum AuthProvider {
     },
     NToken {
         header: String,
-        signer: NTokenSigner,
+        signer: Box<NTokenSigner>,
     },
 }
 

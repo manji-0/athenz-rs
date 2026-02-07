@@ -344,7 +344,7 @@ impl ZmsClientBuilder {
     pub fn ntoken_signer(mut self, header: impl Into<String>, signer: NTokenSigner) -> Self {
         self.auth = Some(AuthProvider::NToken {
             header: header.into(),
-            signer,
+            signer: Box::new(signer),
         });
         self
     }
@@ -379,7 +379,7 @@ enum AuthProvider {
     },
     NToken {
         header: String,
-        signer: NTokenSigner,
+        signer: Box<NTokenSigner>,
     },
 }
 
@@ -661,6 +661,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn put_role_membership(
         &self,
         domain: &str,
@@ -1086,6 +1087,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn put_group_membership(
         &self,
         domain: &str,

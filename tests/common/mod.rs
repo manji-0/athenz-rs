@@ -56,7 +56,7 @@ pub fn json_response(status: &str, body: &str) -> String {
 }
 
 pub fn empty_response(status: &str) -> String {
-    format!("HTTP/1.1 {status}\r\n\r\n")
+    format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n")
 }
 
 async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {

@@ -85,9 +85,9 @@ impl ZmsAsyncClientBuilder {
         token: impl AsRef<str>,
     ) -> Result<Self, Error> {
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
-            .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("invalid header name (config): {}", e)))?;
         let value = HeaderValue::from_str(token.as_ref())
-            .map_err(|e| Error::Crypto(format!("invalid header value: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("invalid header value (config): {}", e)))?;
         self.auth = Some(AuthProvider::StaticHeader { header, value });
         Ok(self)
     }
@@ -98,7 +98,7 @@ impl ZmsAsyncClientBuilder {
         signer: NTokenSigner,
     ) -> Result<Self, Error> {
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
-            .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("invalid header name (config): {}", e)))?;
         self.auth = Some(AuthProvider::NToken { header, signer });
         Ok(self)
     }
@@ -388,12 +388,9 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "role", role, "member", member])?;
         let mut req = self.http.put(url).json(membership);
         req = self.apply_auth(req)?;
-        req = self.apply_audit_headers(req, audit_ref, None);
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
         }
         let resp = req.send().await?;
         self.expect_no_content_or_json(resp).await

@@ -73,6 +73,9 @@ println!("claims: {}", data.claims);
 - `docs/clients.md` (client configuration)
 - `docs/api-coverage.md` (implemented ZTS/ZMS endpoints)
 - `docs/design-doc-athenz-rust-client-scope-policy.md` (scope/policy design)
+- `CODE_OF_CONDUCT.md` (community guidelines)
+- `SUPPORT.md` (support and issue reporting)
+- `MAINTAINERS.md` (maintainer list)
 - `SECURITY.md` (vulnerability reporting)
 - `CHANGELOG.md` (release notes)
 

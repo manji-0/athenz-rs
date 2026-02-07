@@ -2,6 +2,7 @@
 name = "athenz-provider-tenant"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.88"
 license = "Apache-2.0"
 description = "Rust client for Athenz token issuance and validation (provider/tenant)"
 

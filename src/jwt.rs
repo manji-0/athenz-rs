@@ -36,6 +36,8 @@ const ATHENZ_RSA_ALGS: &[Algorithm] = &[Algorithm::RS256, Algorithm::RS384, Algo
 const ATHENZ_EC_ALGS: &[Algorithm] = &[Algorithm::ES256, Algorithm::ES384];
 const ATHENZ_ALLOWED_ALG_NAMES: &[&str] = &["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"];
 const ATHENZ_ALLOWED_JWT_TYPES: &[&str] = &["at+jwt", "jwt"];
+const ES512_DISABLED_MESSAGE: &str =
+    "ES512 is not enabled; configure JwtValidationOptions.allowed_algs to include ES256 and ES384";
 // Safety bound on how many kid-less JWKS keys we try when no `kid` is present in the JWT.
 // `10` was chosen to cover typical deployments where JWKS sets are small (O(1–10) active keys)
 // while preventing unbounded work on misconfigured or very large JWKS endpoints.
@@ -175,10 +177,7 @@ impl JwksProviderAsync {
         self.cache_ttl = ttl;
         let cache = self.cache.into_inner();
         self.cache = AsyncRwLock::new(cache.map(|mut cached| {
-            let new_expiry = Instant::now() + self.cache_ttl;
-            if new_expiry < cached.expires_at {
-                cached.expires_at = new_expiry;
-            }
+            cached.expires_at = Instant::now() + self.cache_ttl;
             cached
         }));
         self
@@ -268,10 +267,7 @@ impl JwksProvider {
     pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
         self.cache_ttl = ttl;
         if let Some(cached) = self.cache.write().unwrap().as_mut() {
-            let new_expiry = Instant::now() + self.cache_ttl;
-            if new_expiry < cached.expires_at {
-                cached.expires_at = new_expiry;
-            }
+            cached.expires_at = Instant::now() + self.cache_ttl;
         }
         self
     }
@@ -397,7 +393,7 @@ impl JwtValidator {
     ) -> Result<JwtTokenData<Value>, Error> {
         resolve_allowed_algs(&self.options)?;
         if !allows_es512(&self.options) {
-            return Err(Error::UnsupportedAlg("ES512".to_string()));
+            return Err(Error::UnsupportedAlg(ES512_DISABLED_MESSAGE.to_string()));
         }
 
         let jwks = self.jwks.fetch()?;
@@ -530,7 +526,7 @@ impl JwtValidatorAsync {
     ) -> Result<JwtTokenData<Value>, Error> {
         resolve_allowed_algs(&self.options)?;
         if !allows_es512(&self.options) {
-            return Err(Error::UnsupportedAlg("ES512".to_string()));
+            return Err(Error::UnsupportedAlg(ES512_DISABLED_MESSAGE.to_string()));
         }
 
         let jwks = self.jwks.fetch().await?;
@@ -1358,7 +1354,7 @@ mod tests {
             .validate_access_token(&token)
             .expect_err("should reject");
         match err {
-            Error::UnsupportedAlg(alg) => assert_eq!(alg, "ES512"),
+            Error::UnsupportedAlg(alg) => assert!(alg.contains("ES512 is not enabled")),
             other => panic!("unexpected error: {:?}", other),
         }
     }

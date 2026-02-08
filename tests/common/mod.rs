@@ -6,14 +6,16 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 
 const READ_TIMEOUT: Duration = Duration::from_millis(500);
-const MAX_READ_DURATION: Duration = Duration::from_secs(5);
+const MAX_READ_DURATION: Duration = Duration::from_secs(6);
 const MAX_HEADER_BYTES: usize = 64 * 1024;
+const MAX_BODY_BYTES: usize = 64 * 1024;
 
 pub struct CapturedRequest {
     pub method: String,
     pub path: String,
     pub headers: Vec<(String, String)>,
     pub query: HashMap<String, String>,
+    pub body: Vec<u8>,
 }
 
 impl CapturedRequest {
@@ -77,20 +79,15 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
     let deadline = Instant::now() + MAX_READ_DURATION;
     loop {
         if buf.len() >= MAX_HEADER_BYTES {
-            incomplete_reason = Some("header_too_large");
-            break;
+            panic!("request headers too large");
         }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
-            incomplete_reason = Some("timeout");
-            break;
+            panic!("timed out reading request headers");
         }
         let read = match timeout(remaining.min(READ_TIMEOUT), stream.read(&mut chunk)).await {
             Ok(Ok(read)) => read,
-            Ok(Err(_)) => {
-                incomplete_reason = Some("read_error");
-                break;
-            }
+            Ok(Err(e)) => panic!("read_request I/O error: {e}"),
             Err(_) => continue,
         };
         if read == 0 {
@@ -100,18 +97,16 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
         let remaining_space = MAX_HEADER_BYTES.saturating_sub(buf.len());
         let take = read.min(remaining_space);
         if take == 0 {
-            incomplete_reason = Some("header_too_large");
-            break;
+            panic!("request headers too large");
         }
         buf.extend_from_slice(&chunk[..take]);
-        if take < read {
-            incomplete_reason = Some("header_too_large");
-            break;
-        }
         let start = buf.len().saturating_sub(take + 3);
         if let Some(pos) = find_header_end(&buf, start) {
             header_end = Some(pos);
             break;
+        }
+        if take < read {
+            panic!("request headers too large");
         }
     }
 
@@ -124,6 +119,7 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
                 path: format!("<{}>", reason),
                 headers: Vec::new(),
                 query: HashMap::new(),
+                body: Vec::new(),
             };
         }
     };
@@ -157,31 +153,52 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
             headers.push((name.to_string(), value.to_string()));
         }
     }
+    if content_length > MAX_BODY_BYTES {
+        panic!(
+            "request body too large: {} > {} bytes",
+            content_length, MAX_BODY_BYTES
+        );
+    }
 
     let body_read = buf.len().saturating_sub(header_end);
-    let mut remaining = content_length.saturating_sub(body_read);
-    let body_deadline = Instant::now() + MAX_READ_DURATION;
+    let mut body = Vec::new();
+    let initial_take = content_length.min(body_read);
+    if initial_take > 0 {
+        body.extend_from_slice(&buf[header_end..header_end + initial_take]);
+    }
+    let mut remaining = content_length.saturating_sub(initial_take);
     while remaining > 0 {
-        let remaining_time = body_deadline.saturating_duration_since(Instant::now());
+        let remaining_time = deadline.saturating_duration_since(Instant::now());
         if remaining_time.is_zero() {
             break;
         }
         let read = match timeout(remaining_time.min(READ_TIMEOUT), stream.read(&mut chunk)).await {
             Ok(Ok(read)) => read,
-            Ok(Err(_)) => break,
+            Ok(Err(e)) => panic!("read_request body I/O error: {e}"),
             Err(_) => continue,
         };
         if read == 0 {
             break;
         }
-        remaining = remaining.saturating_sub(read);
+        let take = remaining.min(read);
+        if take > 0 {
+            body.extend_from_slice(&chunk[..take]);
+        }
+        remaining = remaining.saturating_sub(take);
     }
 
+    if remaining > 0 {
+        panic!(
+            "read_request body incomplete: expected {content_length} bytes, got {} bytes",
+            content_length.saturating_sub(remaining)
+        );
+    }
     CapturedRequest {
         method,
         path,
         headers,
         query,
+        body,
     }
 }
 

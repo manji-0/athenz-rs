@@ -9,10 +9,15 @@ use crate::models::{
 };
 use crate::ntoken::NTokenSigner;
 use crate::zts::{AccessTokenRequest, ConditionalResponse, IdTokenRequest, IdTokenResponse};
+use reqwest::header::{HeaderName, HeaderValue};
 use reqwest::{Certificate, Client as HttpClient, Identity, RequestBuilder, Response, StatusCode};
 use std::time::Duration;
 use url::Url;
 
+/// Async ZTS client builder.
+///
+/// `base_url` should point to the ZTS v1 root (e.g., `https://zts.example/zts/v1`).
+/// Trailing slashes are allowed.
 pub struct ZtsAsyncClientBuilder {
     base_url: Url,
     timeout: Option<Duration>,
@@ -23,6 +28,9 @@ pub struct ZtsAsyncClientBuilder {
 }
 
 impl ZtsAsyncClientBuilder {
+    /// Create a new async client builder.
+    ///
+    /// `base_url` should point to the ZTS v1 root (e.g., `https://zts.example/zts/v1`).
     pub fn new(base_url: impl AsRef<str>) -> Result<Self, Error> {
         Ok(Self {
             base_url: Url::parse(base_url.as_ref())?,
@@ -39,16 +47,31 @@ impl ZtsAsyncClientBuilder {
         self
     }
 
-    pub fn disable_redirect(mut self, disable: bool) -> Self {
-        self.disable_redirect = disable;
+    /// Control whether HTTP redirects should be followed.
+    ///
+    /// If auth headers are configured, enabling redirects is rejected to avoid
+    /// leaking credentials to redirected hosts.
+    pub fn follow_redirects(mut self, follow_redirects: bool) -> Self {
+        self.disable_redirect = !follow_redirects;
         self
     }
 
+    /// Set to true to disable HTTP redirects.
+    ///
+    /// Deprecated: prefer `follow_redirects(false)` for clarity.
+    #[deprecated(note = "Use follow_redirects(false) instead")]
+    pub fn disable_redirect(mut self, disable_redirect: bool) -> Self {
+        self.disable_redirect = disable_redirect;
+        self
+    }
+
+    /// Configure mTLS identity from a combined PEM (cert + key).
     pub fn mtls_identity_from_pem(mut self, identity_pem: &[u8]) -> Result<Self, Error> {
         self.identity = Some(Identity::from_pem(identity_pem)?);
         Ok(self)
     }
 
+    /// Configure mTLS identity from separate cert/key PEMs.
     pub fn mtls_identity_from_parts(
         mut self,
         cert_pem: &[u8],
@@ -64,28 +87,54 @@ impl ZtsAsyncClientBuilder {
         Ok(self)
     }
 
+    /// Add a CA certificate PEM for TLS validation.
     pub fn add_ca_cert_pem(mut self, ca_pem: &[u8]) -> Result<Self, Error> {
         self.ca_certs.push(Certificate::from_pem(ca_pem)?);
         Ok(self)
     }
 
-    pub fn ntoken_auth(mut self, header: impl Into<String>, token: impl Into<String>) -> Self {
-        self.auth = Some(AuthProvider::StaticHeader {
-            header: header.into(),
-            value: token.into(),
-        });
-        self
+    /// Configure a static auth header.
+    ///
+    /// Header name/value are validated immediately.
+    pub fn ntoken_auth(
+        mut self,
+        header: impl AsRef<str>,
+        token: impl AsRef<str>,
+    ) -> Result<Self, Error> {
+        // Async builder validates header inputs to avoid request-time failures.
+        let header = HeaderName::from_bytes(header.as_ref().as_bytes())
+            .map_err(|e| Error::Crypto(format!("config error: invalid header name: {}", e)))?;
+        let value = HeaderValue::from_str(token.as_ref())
+            .map_err(|e| Error::Crypto(format!("config error: invalid header value: {}", e)))?;
+        self.auth = Some(AuthProvider::StaticHeader { header, value });
+        Ok(self)
     }
 
-    pub fn ntoken_signer(mut self, header: impl Into<String>, signer: NTokenSigner) -> Self {
-        self.auth = Some(AuthProvider::NToken {
-            header: header.into(),
-            signer: Box::new(signer),
-        });
-        self
+    /// Configure a signer-based auth header.
+    ///
+    /// Header name is validated immediately; token generation happens per request.
+    pub fn ntoken_signer(
+        mut self,
+        header: impl AsRef<str>,
+        signer: NTokenSigner,
+    ) -> Result<Self, Error> {
+        // Async builder validates header inputs to avoid request-time failures.
+        let header = HeaderName::from_bytes(header.as_ref().as_bytes())
+            .map_err(|e| Error::Crypto(format!("config error: invalid header name: {}", e)))?;
+        self.auth = Some(AuthProvider::NToken { header, signer });
+        Ok(self)
     }
 
+    /// Build the async client.
+    ///
+    /// Redirects are rejected when auth headers are configured.
     pub fn build(self) -> Result<ZtsAsyncClient, Error> {
+        if self.auth.is_some() && !self.disable_redirect {
+            return Err(Error::Crypto(
+                "config error: follow_redirects(true) is not allowed when auth is configured"
+                    .to_string(),
+            ));
+        }
         let mut builder = HttpClient::builder();
         if let Some(timeout) = self.timeout {
             builder = builder.timeout(timeout);
@@ -104,25 +153,29 @@ impl ZtsAsyncClientBuilder {
             base_url: self.base_url,
             http,
             auth: self.auth,
+            disable_redirect: self.disable_redirect,
         })
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum AuthProvider {
     StaticHeader {
-        header: String,
-        value: String,
+        header: HeaderName,
+        value: HeaderValue,
     },
     NToken {
-        header: String,
-        signer: Box<NTokenSigner>,
+        header: HeaderName,
+        signer: NTokenSigner,
     },
 }
 
+/// Async ZTS client. Requires the `async-client` feature.
 pub struct ZtsAsyncClient {
     base_url: Url,
     http: HttpClient,
     auth: Option<AuthProvider>,
+    disable_redirect: bool,
 }
 
 impl ZtsAsyncClient {
@@ -147,6 +200,12 @@ impl ZtsAsyncClient {
     }
 
     pub async fn issue_id_token(&self, request: &IdTokenRequest) -> Result<IdTokenResponse, Error> {
+        if !self.disable_redirect {
+            return Err(Error::Crypto(
+                "config error: issue_id_token requires follow_redirects(false) to observe Location header"
+                    .to_string(),
+            ));
+        }
         let mut url = self.build_url(&["oauth2", "auth"])?;
         let query = request.to_query();
         url.set_query(Some(&query));
@@ -194,12 +253,14 @@ impl ZtsAsyncClient {
 
     pub async fn get_oauth_config(&self) -> Result<OAuthConfig, Error> {
         let url = self.build_url(&[".well-known", "oauth-authorization-server"])?;
+        // Well-known discovery endpoints are typically public; omit auth to match sync client.
         let resp = self.http.get(url).send().await?;
         self.expect_ok_json(resp).await
     }
 
     pub async fn get_openid_config(&self) -> Result<OpenIdConfig, Error> {
         let url = self.build_url(&[".well-known", "openid-configuration"])?;
+        // Well-known discovery endpoints are typically public; omit auth to match sync client.
         let resp = self.http.get(url).send().await?;
         self.expect_ok_json(resp).await
     }
@@ -230,6 +291,7 @@ impl ZtsAsyncClient {
         if let Some(service) = service {
             req = req.query(&[("service", service)]);
         }
+        req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
     }
@@ -466,11 +528,17 @@ impl ZtsAsyncClient {
         if let Some(ref auth) = self.auth {
             match auth {
                 AuthProvider::StaticHeader { header, value } => {
-                    req = req.header(header, value);
+                    req = req.header(header.clone(), value.clone());
                 }
                 AuthProvider::NToken { header, signer } => {
                     let token = signer.token()?;
-                    req = req.header(header, token);
+                    let value = HeaderValue::from_str(&token).map_err(|e| {
+                        Error::Crypto(format!(
+                            "invalid auth header value generated by ntoken signer: {}",
+                            e
+                        ))
+                    })?;
+                    req = req.header(header.clone(), value);
                 }
             }
         }

@@ -14,6 +14,7 @@ pub struct CapturedRequest {
     pub path: String,
     pub headers: Vec<(String, String)>,
     pub query: HashMap<String, String>,
+    pub body: Vec<u8>,
 }
 
 impl CapturedRequest {
@@ -124,6 +125,7 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
                 path: format!("<{}>", reason),
                 headers: Vec::new(),
                 query: HashMap::new(),
+                body: Vec::new(),
             };
         }
     };
@@ -159,7 +161,12 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
     }
 
     let body_read = buf.len().saturating_sub(header_end);
-    let mut remaining = content_length.saturating_sub(body_read);
+    let mut body = Vec::new();
+    let initial_take = content_length.min(body_read);
+    if initial_take > 0 {
+        body.extend_from_slice(&buf[header_end..header_end + initial_take]);
+    }
+    let mut remaining = content_length.saturating_sub(initial_take);
     let body_deadline = Instant::now() + MAX_READ_DURATION;
     while remaining > 0 {
         let remaining_time = body_deadline.saturating_duration_since(Instant::now());
@@ -174,7 +181,11 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
         if read == 0 {
             break;
         }
-        remaining = remaining.saturating_sub(read);
+        let take = remaining.min(read);
+        if take > 0 {
+            body.extend_from_slice(&chunk[..take]);
+        }
+        remaining = remaining.saturating_sub(take);
     }
 
     CapturedRequest {
@@ -182,6 +193,7 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
         path,
         headers,
         query,
+        body,
     }
 }
 

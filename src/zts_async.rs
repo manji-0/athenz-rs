@@ -44,7 +44,13 @@ impl ZtsAsyncClientBuilder {
         self
     }
 
-    /// Set to true to disable HTTP redirects.
+    /// Control whether HTTP redirects should be followed.
+    pub fn follow_redirects(mut self, follow_redirects: bool) -> Self {
+        self.disable_redirect = !follow_redirects;
+        self
+    }
+
+    /// Set to true to disable HTTP redirects. Prefer `follow_redirects(false)` for clarity.
     pub fn disable_redirect(mut self, disable_redirects: bool) -> Self {
         self.disable_redirect = disable_redirects;
         self
@@ -169,7 +175,7 @@ impl ZtsAsyncClient {
     pub async fn issue_id_token(&self, request: &IdTokenRequest) -> Result<IdTokenResponse, Error> {
         if !self.disable_redirect {
             return Err(Error::Crypto(
-                "config error: issue_id_token requires disable_redirect(true) to observe Location header"
+                "config error: issue_id_token requires follow_redirects(false) to observe Location header"
                     .to_string(),
             ));
         }

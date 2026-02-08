@@ -18,6 +18,12 @@ println!("claims: {}", data.claims);
 
 `JwksProvider` caches JWKS for 5 minutes by default. Use `with_cache_ttl` to override.
 
+Note: audience validation is enforced when a token includes an `aud` claim. If you do not
+set `JwtValidationOptions.audience`, tokens with `aud` will fail with `InvalidAudience`.
+`JwtValidationOptions.audience` is a list of allowed audiences (e.g., `Vec<String>`); validation
+succeeds if the token's `aud` claim matches any of the configured values. Configure the expected
+audiences when your tokens include `aud`.
+
 ## Validation options
 
 You can customize issuer, audience, leeway, and allowed algorithms.

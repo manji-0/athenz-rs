@@ -27,6 +27,7 @@ pub const ATHENZ_ALLOWED_ALGS: &[Algorithm] = &[
 const ATHENZ_RSA_ALGS: &[Algorithm] = &[Algorithm::RS256, Algorithm::RS384, Algorithm::RS512];
 const ATHENZ_EC_ALGS: &[Algorithm] = &[Algorithm::ES256, Algorithm::ES384];
 const ATHENZ_ALLOWED_ALG_NAMES: &[&str] = &["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"];
+const MAX_KIDLESS_JWKS_KEYS: usize = 10;
 const SUPPORTED_JWK_ALGS: &[&str] = &[
     "HS256",
     "HS384",
@@ -226,8 +227,12 @@ impl JwtValidator {
         if header.kid.is_none() && jwks.keys.len() > 1 {
             let mut decode_err = None;
             let mut key_err = None;
-            let mut attempted_decode = false;
-            for jwk in &jwks.keys {
+            for jwk in jwks
+                .keys
+                .iter()
+                .filter(|jwk| is_rs_jwk(jwk))
+                .take(MAX_KIDLESS_JWKS_KEYS)
+            {
                 let decoding_key = match DecodingKey::from_jwk(jwk) {
                     Ok(key) => key,
                     Err(err) => {
@@ -237,7 +242,6 @@ impl JwtValidator {
                         continue;
                     }
                 };
-                attempted_decode = true;
                 match decode::<Value>(token, &decoding_key, &validation) {
                     Ok(token_data) => {
                         return Ok(JwtTokenData {
@@ -252,12 +256,9 @@ impl JwtValidator {
                     }
                 }
             }
-            if attempted_decode {
-                return Err(decode_err
-                    .or(key_err)
-                    .unwrap_or_else(|| Error::MissingJwk("kid required".to_string())));
-            }
-            return Err(key_err.unwrap_or_else(|| Error::MissingJwk("kid required".to_string())));
+            return Err(decode_err
+                .or(key_err)
+                .unwrap_or_else(|| Error::MissingJwk("kid required".to_string())));
         }
 
         let key = select_jwk(&jwks, header.kid.as_deref())?;
@@ -291,7 +292,12 @@ impl JwtValidator {
         if header.kid.is_none() && jwks.keys.len() > 1 {
             let mut decode_err = None;
             let mut key_err = None;
-            for jwk in &jwks.keys {
+            for jwk in jwks
+                .keys
+                .iter()
+                .filter(|jwk| is_es512_jwk(jwk))
+                .take(MAX_KIDLESS_JWKS_KEYS)
+            {
                 match self.validate_es512_with_key(parts, header, jwk) {
                     Ok(data) => return Ok(data),
                     Err(err) => {
@@ -453,6 +459,17 @@ fn is_es512_key_error(err: &Error) -> bool {
         Error::Jwt(jwt_err) => matches!(jwt_err.kind(), ErrorKind::InvalidEcdsaKey),
         _ => false,
     }
+}
+
+fn is_rs_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> bool {
+    matches!(jwk.algorithm, AlgorithmParameters::RSA(_))
+}
+
+fn is_es512_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> bool {
+    matches!(
+        jwk.algorithm,
+        AlgorithmParameters::EllipticCurve(ref params) if params.curve == EllipticCurve::P521
+    )
 }
 
 fn decode_p521_coord(value: &str) -> Result<Vec<u8>, Error> {

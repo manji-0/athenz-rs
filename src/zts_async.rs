@@ -14,6 +14,10 @@ use reqwest::{Certificate, Client as HttpClient, Identity, RequestBuilder, Respo
 use std::time::Duration;
 use url::Url;
 
+/// Async ZTS client builder.
+///
+/// `base_url` should point to the ZTS v1 root (e.g., `https://zts.example/zts/v1`).
+/// Trailing slashes are allowed.
 pub struct ZtsAsyncClientBuilder {
     base_url: Url,
     timeout: Option<Duration>,
@@ -92,10 +96,7 @@ impl ZtsAsyncClientBuilder {
         // Async builder validates header inputs to avoid request-time failures.
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
             .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
-        self.auth = Some(AuthProvider::NToken {
-            header,
-            signer: Box::new(signer),
-        });
+        self.auth = Some(AuthProvider::NToken { header, signer });
         Ok(self)
     }
 
@@ -123,6 +124,7 @@ impl ZtsAsyncClientBuilder {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum AuthProvider {
     StaticHeader {
         header: HeaderName,
@@ -130,10 +132,11 @@ enum AuthProvider {
     },
     NToken {
         header: HeaderName,
-        signer: Box<NTokenSigner>,
+        signer: NTokenSigner,
     },
 }
 
+/// Async ZTS client. Requires the `async-client` feature.
 pub struct ZtsAsyncClient {
     base_url: Url,
     http: HttpClient,

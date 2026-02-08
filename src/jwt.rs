@@ -27,6 +27,7 @@ pub const ATHENZ_ALLOWED_ALGS: &[Algorithm] = &[
 const ATHENZ_RSA_ALGS: &[Algorithm] = &[Algorithm::RS256, Algorithm::RS384, Algorithm::RS512];
 const ATHENZ_EC_ALGS: &[Algorithm] = &[Algorithm::ES256, Algorithm::ES384];
 const ATHENZ_ALLOWED_ALG_NAMES: &[&str] = &["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"];
+const ATHENZ_ALLOWED_JWT_TYPES: &[&str] = &["at+jwt", "jwt"];
 // Safety bound on how many kid-less JWKS keys we try when no `kid` is present in the JWT.
 // `10` was chosen to cover typical deployments where JWKS sets are small (O(1–10) active keys)
 // while preventing unbounded work on misconfigured or very large JWKS endpoints.
@@ -201,6 +202,7 @@ impl JwtValidator {
     pub fn validate(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
         let parts = split_jwt(token)?;
         let header = decode_jwt_header(parts.header)?;
+        validate_jwt_typ(header.typ.as_deref())?;
         let alg = header.alg.as_str();
         if !ATHENZ_ALLOWED_ALG_NAMES.contains(&alg) {
             return Err(Error::UnsupportedAlg(header.alg.clone()));
@@ -393,6 +395,17 @@ fn decode_jwt_header(encoded: &str) -> Result<JwtHeader, Error> {
         typ,
         raw,
     })
+}
+
+fn validate_jwt_typ(typ: Option<&str>) -> Result<(), Error> {
+    let Some(typ) = typ else {
+        return Ok(());
+    };
+    let normalized = typ.to_ascii_lowercase();
+    if ATHENZ_ALLOWED_JWT_TYPES.contains(&normalized.as_str()) {
+        return Ok(());
+    }
+    Err(jwt_error(ErrorKind::InvalidToken))
 }
 
 fn base64_url_decode(data: &str) -> Result<Vec<u8>, Error> {
@@ -794,6 +807,10 @@ mod tests {
     use std::sync::OnceLock;
 
     fn build_es512_token() -> (String, JwkSet) {
+        build_es512_token_with_typ(Some("JWT"))
+    }
+
+    fn build_es512_token_with_typ(typ: Option<&str>) -> (String, JwkSet) {
         let mut rng = thread_rng();
         let signing_key = P521SigningKey::random(&mut rng);
         let verifying_key = P521VerifyingKey::from(&signing_key);
@@ -815,11 +832,13 @@ mod tests {
         });
         let jwks = jwks_from_value(jwks_json).expect("jwks");
 
-        let header = json!({
+        let mut header = json!({
             "alg": "ES512",
             "kid": kid,
-            "typ": "JWT",
         });
+        if let Some(typ) = typ {
+            header["typ"] = json!(typ);
+        }
         let exp = jsonwebtoken::get_current_timestamp() + 3600;
         let payload = json!({
             "iss": "athenz",
@@ -1229,6 +1248,29 @@ mod tests {
             .expect_err("should reject");
         match err {
             Error::Jwt(jwt_err) => assert_eq!(jwt_err.kind(), &ErrorKind::InvalidSignature),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn jwt_rejects_invalid_typ() {
+        let (token, jwks) = build_es512_token_with_typ(Some("JAG"));
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::athenz_default();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::Jwt(err) => assert_eq!(err.kind(), &ErrorKind::InvalidToken),
             other => panic!("unexpected error: {:?}", other),
         }
     }

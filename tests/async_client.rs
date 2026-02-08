@@ -359,10 +359,10 @@ fn builder_rejects_redirects_with_auth() {
         .expect("builder")
         .ntoken_auth("Athenz-Principal-Auth", "token")
         .expect("auth");
-    let err = builder
-        .follow_redirects(true)
-        .build()
-        .expect_err("should reject redirects with auth");
+    let err = match builder.follow_redirects(true).build() {
+        Ok(_) => panic!("should reject redirects with auth"),
+        Err(err) => err,
+    };
     match err {
         Error::Crypto(message) => assert!(message.contains("follow_redirects(true)")),
         other => panic!("unexpected error: {other:?}"),

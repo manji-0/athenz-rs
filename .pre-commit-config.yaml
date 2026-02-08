@@ -13,3 +13,8 @@ repos:
         entry: cargo test
         language: system
         pass_filenames: false
+      - id: cargo-test-async-client
+        name: cargo test --features async-client
+        entry: cargo test --features async-client
+        language: system
+        pass_filenames: false

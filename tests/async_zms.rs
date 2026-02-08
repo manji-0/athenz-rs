@@ -1,6 +1,10 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{DomainListOptions, NTokenSigner, ZmsAsyncClient};
+use rand::thread_rng;
+use rsa::pkcs1::EncodeRsaPrivateKey;
+use rsa::RsaPrivateKey;
+use std::sync::OnceLock;
 use tokio::time::{timeout, Duration};
 
 mod common;
@@ -134,9 +138,14 @@ async fn get_domain_list_reports_status_on_empty_error_body() {
     assert!(message.contains("500"));
 }
 
-// Test-only RSA private key fixture.
-const TEST_RSA_PRIVATE_KEY_PEM: &str = include_str!("fixtures/test_rsa_private_key.pem");
-
 fn test_signer() -> NTokenSigner {
-    NTokenSigner::new("sports", "api", "v1", TEST_RSA_PRIVATE_KEY_PEM.as_bytes()).expect("signer")
+    static TEST_RSA_PRIVATE_KEY: OnceLock<String> = OnceLock::new();
+    let pem = TEST_RSA_PRIVATE_KEY.get_or_init(|| {
+        let mut rng = thread_rng();
+        let key = RsaPrivateKey::new(&mut rng, 2048).expect("private key");
+        key.to_pkcs1_pem(rsa::pkcs1::LineEnding::LF)
+            .expect("pem")
+            .to_string()
+    });
+    NTokenSigner::new("sports", "api", "v1", pem.as_bytes()).expect("signer")
 }

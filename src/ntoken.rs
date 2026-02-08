@@ -793,12 +793,18 @@ awIDAQAB
         signer
             .builder_mut()
             .set_hostname("host.example")
-            .set_ip("127.0.0.1");
+            .set_ip("127.0.0.1")
+            .set_key_service("ZTS")
+            .set_version("S2")
+            .set_expiration(Duration::from_secs(90));
         let token = signer.sign_once().expect("token");
         let validator =
             NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
         let claims = validator.validate(&token).expect("validate");
         assert_eq!(claims.hostname.as_deref(), Some("host.example"));
         assert_eq!(claims.ip.as_deref(), Some("127.0.0.1"));
+        assert_eq!(claims.key_service.as_deref(), Some("zts"));
+        assert_eq!(claims.version, "S2");
+        assert_eq!(claims.expiry_time - claims.generation_time, 90);
     }
 }

@@ -27,6 +27,11 @@ pub const ATHENZ_ALLOWED_ALGS: &[Algorithm] = &[
 const ATHENZ_RSA_ALGS: &[Algorithm] = &[Algorithm::RS256, Algorithm::RS384, Algorithm::RS512];
 const ATHENZ_EC_ALGS: &[Algorithm] = &[Algorithm::ES256, Algorithm::ES384];
 const ATHENZ_ALLOWED_ALG_NAMES: &[&str] = &["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"];
+// Safety bound on how many kid-less JWKS keys we try when no `kid` is present in the JWT.
+// `10` was chosen to cover typical deployments where JWKS sets are small (O(1–10) active keys)
+// while preventing unbounded work on misconfigured or very large JWKS endpoints.
+const MAX_KIDLESS_JWKS_KEYS: usize = 10;
+const NO_COMPATIBLE_JWK_MESSAGE: &str = "no compatible jwks key for alg";
 const SUPPORTED_JWK_ALGS: &[&str] = &[
     "HS256",
     "HS384",
@@ -212,10 +217,6 @@ impl JwtValidator {
             return Err(Error::UnsupportedAlg(format!("{alg:?}")));
         }
 
-        let jwks = self.jwks.fetch()?;
-        let key = select_jwk(&jwks, header.kid.as_deref())?;
-        let decoding_key = DecodingKey::from_jwk(key)?;
-
         let mut validation = Validation::new(alg);
         validation.leeway = self.options.leeway;
         validation.validate_exp = self.options.validate_exp;
@@ -226,6 +227,28 @@ impl JwtValidator {
             validation.set_audience(&self.options.audience);
         }
 
+        let jwks = self.jwks.fetch()?;
+        if header.kid.is_none() && jwks.keys.len() > 1 && ATHENZ_RSA_ALGS.contains(&alg) {
+            let keys = jwks.keys.iter().filter(|jwk| is_rs_jwk(jwk));
+            let result = validate_kidless_jwks(
+                keys,
+                &header.alg,
+                |jwk| {
+                    let decoding_key = DecodingKey::from_jwk(jwk).map_err(Error::from)?;
+                    let token_data =
+                        decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
+                    Ok(JwtTokenData {
+                        header: header.clone(),
+                        claims: token_data.claims,
+                    })
+                },
+                is_rs_key_error,
+            );
+            return result;
+        }
+
+        let key = select_jwk(&jwks, header.kid.as_deref())?;
+        let decoding_key = DecodingKey::from_jwk(key)?;
         let token_data = decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
         Ok(JwtTokenData {
             header,
@@ -252,7 +275,26 @@ impl JwtValidator {
         }
 
         let jwks = self.jwks.fetch()?;
+        if header.kid.is_none() && jwks.keys.len() > 1 {
+            let keys = jwks.keys.iter().filter(|jwk| is_es512_jwk(jwk));
+            return validate_kidless_jwks(
+                keys,
+                &header.alg,
+                |jwk| self.validate_es512_with_key(parts, header, jwk),
+                is_es512_key_error,
+            );
+        }
+
         let key = select_jwk(&jwks, header.kid.as_deref())?;
+        self.validate_es512_with_key(parts, header, key)
+    }
+
+    fn validate_es512_with_key(
+        &self,
+        parts: &JwtParts<'_>,
+        header: &JwtHeader,
+        key: &jsonwebtoken::jwk::Jwk,
+    ) -> Result<JwtTokenData<Value>, Error> {
         let verifying_key = p521_verifying_key_from_jwk(key)?;
         let signature_bytes = base64_url_decode(parts.signature)?;
         let signature = P521Signature::from_slice(&signature_bytes)
@@ -380,8 +422,92 @@ fn p521_verifying_key_from_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> Result<P521Verif
     }
 }
 
+fn is_es512_key_error(err: &Error) -> bool {
+    match err {
+        Error::UnsupportedAlg(_) => true,
+        Error::Jwt(jwt_err) => matches!(jwt_err.kind(), ErrorKind::InvalidEcdsaKey),
+        _ => false,
+    }
+}
+
+fn is_rs_key_error(err: &Error) -> bool {
+    match err {
+        Error::Jwt(jwt_err) => matches!(
+            jwt_err.kind(),
+            ErrorKind::InvalidKeyFormat
+                | ErrorKind::InvalidAlgorithm
+                | ErrorKind::InvalidAlgorithmName
+                | ErrorKind::InvalidRsaKey(_)
+        ),
+        _ => false,
+    }
+}
+
+fn is_signature_error(err: &Error) -> bool {
+    match err {
+        Error::Jwt(jwt_err) => matches!(jwt_err.kind(), ErrorKind::InvalidSignature),
+        _ => false,
+    }
+}
+
+fn kidless_no_compatible_jwk(alg: &str) -> Error {
+    Error::Crypto(format!("{NO_COMPATIBLE_JWK_MESSAGE} {alg} (kid missing)"))
+}
+
+fn validate_kidless_jwks<'a, I, F, K>(
+    keys: I,
+    alg: &str,
+    mut try_key: F,
+    is_key_error: K,
+) -> Result<JwtTokenData<Value>, Error>
+where
+    I: Iterator<Item = &'a jsonwebtoken::jwk::Jwk>,
+    F: FnMut(&'a jsonwebtoken::jwk::Jwk) -> Result<JwtTokenData<Value>, Error>,
+    K: Fn(&Error) -> bool,
+{
+    let mut signature_err = None;
+    let mut key_err = None;
+    let mut candidates = 0usize;
+    for jwk in keys.take(MAX_KIDLESS_JWKS_KEYS) {
+        candidates += 1;
+        match try_key(jwk) {
+            Ok(data) => return Ok(data),
+            Err(err) => {
+                if is_key_error(&err) {
+                    if key_err.is_none() {
+                        key_err = Some(err);
+                    }
+                } else if is_signature_error(&err) {
+                    if signature_err.is_none() {
+                        signature_err = Some(err);
+                    }
+                } else {
+                    return Err(err);
+                }
+            }
+        }
+    }
+    if candidates == 0 {
+        return Err(kidless_no_compatible_jwk(alg));
+    }
+    Err(signature_err
+        .or(key_err)
+        .unwrap_or_else(|| kidless_no_compatible_jwk(alg)))
+}
+
+fn is_rs_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> bool {
+    matches!(jwk.algorithm, AlgorithmParameters::RSA(_))
+}
+
+fn is_es512_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> bool {
+    matches!(
+        jwk.algorithm,
+        AlgorithmParameters::EllipticCurve(ref params) if params.curve == EllipticCurve::P521
+    )
+}
+
 fn decode_p521_coord(value: &str) -> Result<Vec<u8>, Error> {
-    let bytes = base64_url_decode(value)?;
+    let bytes = base64_url_decode(value).map_err(|_| jwt_error(ErrorKind::InvalidEcdsaKey))?;
     const P521_COORD_SIZE: usize = 66;
     if bytes.len() > P521_COORD_SIZE {
         return Err(jwt_error(ErrorKind::InvalidEcdsaKey));
@@ -657,10 +783,15 @@ fn sanitize_jwks(value: &mut Value) -> Vec<RemovedAlg> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jsonwebtoken::{encode, EncodingKey, Header};
     use p521::ecdsa::SigningKey as P521SigningKey;
     use rand::thread_rng;
+    use rsa::pkcs1::{DecodeRsaPrivateKey, EncodeRsaPrivateKey, LineEnding};
+    use rsa::traits::PublicKeyParts;
+    use rsa::{RsaPrivateKey, RsaPublicKey};
     use serde_json::json;
     use signature::Signer;
+    use std::sync::OnceLock;
 
     fn build_es512_token() -> (String, JwkSet) {
         let mut rng = thread_rng();
@@ -706,6 +837,137 @@ mod tests {
         let token = format!("{}.{}", signing_input, signature_b64);
 
         (token, jwks)
+    }
+
+    fn build_es512_token_without_kid() -> (String, JwkSet) {
+        let mut rng = thread_rng();
+        let signing_key = P521SigningKey::random(&mut rng);
+        let verifying_key = P521VerifyingKey::from(&signing_key);
+        let encoded_point = verifying_key.to_encoded_point(false);
+        let x = encoded_point.x().expect("x coord");
+        let y = encoded_point.y().expect("y coord");
+
+        let bad_signing_key = P521SigningKey::random(&mut rng);
+        let bad_verifying_key = P521VerifyingKey::from(&bad_signing_key);
+        let bad_point = bad_verifying_key.to_encoded_point(false);
+        let bad_x = bad_point.x().expect("x coord");
+        let bad_y = bad_point.y().expect("y coord");
+
+        let jwks_json = json!({
+            "keys": [
+                {
+                    "kty": "EC",
+                    "crv": "P-521",
+                    "x": URL_SAFE_NO_PAD.encode(bad_x),
+                    "y": URL_SAFE_NO_PAD.encode(bad_y),
+                    "use": "sig",
+                    "kid": "bad-key",
+                    "alg": "ES512",
+                },
+                {
+                    "kty": "EC",
+                    "crv": "P-521",
+                    "x": URL_SAFE_NO_PAD.encode(x),
+                    "y": URL_SAFE_NO_PAD.encode(y),
+                    "use": "sig",
+                    "kid": "good-key",
+                    "alg": "ES512",
+                }
+            ]
+        });
+        let jwks = jwks_from_value(jwks_json).expect("jwks");
+
+        let header = json!({
+            "alg": "ES512",
+            "typ": "JWT",
+        });
+        let exp = jsonwebtoken::get_current_timestamp() + 3600;
+        let payload = json!({
+            "iss": "athenz",
+            "aud": "client",
+            "sub": "principal",
+            "exp": exp,
+        });
+
+        let header_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).expect("header json"));
+        let payload_b64 =
+            URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("payload json"));
+        let signing_input = format!("{}.{}", header_b64, payload_b64);
+        let signature: P521Signature = signing_key.sign(signing_input.as_bytes());
+        let signature_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
+        let token = format!("{}.{}", signing_input, signature_b64);
+
+        (token, jwks)
+    }
+
+    fn rsa_private_key_pem() -> &'static str {
+        static PEM: OnceLock<String> = OnceLock::new();
+        PEM.get_or_init(|| {
+            let mut rng = thread_rng();
+            let key = RsaPrivateKey::new(&mut rng, 2048).expect("private key");
+            key.to_pkcs1_pem(LineEnding::LF)
+                .expect("private key pem")
+                .to_string()
+        })
+        .as_str()
+    }
+
+    fn rs256_public_components() -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        let pem = rsa_private_key_pem();
+        let private_key = RsaPrivateKey::from_pkcs1_pem(pem).expect("private key");
+        let public_key = RsaPublicKey::from(&private_key);
+        let n = public_key.n().to_bytes_be();
+        let e = public_key.e().to_bytes_be();
+        let mut bad_n = n.clone();
+        if let Some(last) = bad_n.last_mut() {
+            *last ^= 0x01;
+        }
+        (n, e, bad_n)
+    }
+
+    fn rs256_token_without_kid() -> String {
+        let pem = rsa_private_key_pem();
+        let exp = jsonwebtoken::get_current_timestamp() + 3600;
+        let claims = json!({
+            "iss": "athenz",
+            "aud": "client",
+            "sub": "principal",
+            "exp": exp,
+        });
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = None;
+        encode(
+            &header,
+            &claims,
+            &EncodingKey::from_rsa_pem(pem.as_bytes()).expect("encoding key"),
+        )
+        .expect("token")
+    }
+
+    fn build_rs256_token_without_kid() -> (String, JwkSet) {
+        let (n, e, bad_n) = rs256_public_components();
+
+        let jwks_json = json!({
+            "keys": [
+                {
+                    "kty": "RSA",
+                    "kid": "bad-key",
+                    "alg": "RS256",
+                    "n": URL_SAFE_NO_PAD.encode(&bad_n),
+                    "e": URL_SAFE_NO_PAD.encode(&e),
+                },
+                {
+                    "kty": "RSA",
+                    "kid": "good-key",
+                    "alg": "RS256",
+                    "n": URL_SAFE_NO_PAD.encode(&n),
+                    "e": URL_SAFE_NO_PAD.encode(&e),
+                }
+            ]
+        });
+        let jwks = jwks_from_value(jwks_json).expect("jwks");
+
+        (rs256_token_without_kid(), jwks)
     }
 
     #[test]
@@ -764,6 +1026,25 @@ mod tests {
     }
 
     #[test]
+    fn jwt_es512_validates_without_kid_using_all_keys() {
+        let (token, jwks) = build_es512_token_without_kid();
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::athenz_default();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let data = validator.validate_access_token(&token).expect("validate");
+        assert_eq!(data.claims["sub"], "principal");
+        assert_eq!(data.header.alg, "ES512");
+    }
+
+    #[test]
     fn jwt_es512_rejected_when_rsa_only() {
         let (token, jwks) = build_es512_token();
         let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
@@ -782,6 +1063,172 @@ mod tests {
             .expect_err("should reject");
         match err {
             Error::UnsupportedAlg(alg) => assert_eq!(alg, "ES512"),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn jwt_rs256_validates_without_kid_using_all_keys() {
+        let (token, jwks) = build_rs256_token_without_kid();
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let data = validator.validate_access_token(&token).expect("validate");
+        assert_eq!(data.claims["sub"], "principal");
+    }
+
+    #[test]
+    fn jwt_rs256_kidless_fails_when_key_beyond_cap() {
+        let token = rs256_token_without_kid();
+        let (n, e, bad_n) = rs256_public_components();
+        let n_b64 = URL_SAFE_NO_PAD.encode(&n);
+        let bad_n_b64 = URL_SAFE_NO_PAD.encode(&bad_n);
+        let e_b64 = URL_SAFE_NO_PAD.encode(&e);
+
+        let mut keys = Vec::new();
+        for idx in 0..MAX_KIDLESS_JWKS_KEYS {
+            keys.push(json!({
+                "kty": "RSA",
+                "kid": format!("bad-{}", idx),
+                "alg": "RS256",
+                "n": bad_n_b64.clone(),
+                "e": e_b64.clone(),
+            }));
+        }
+        keys.push(json!({
+            "kty": "RSA",
+            "kid": "good-key",
+            "alg": "RS256",
+            "n": n_b64,
+            "e": e_b64,
+        }));
+
+        let jwks = jwks_from_value(json!({ "keys": keys })).expect("jwks");
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::Jwt(jwt_err) => assert_eq!(jwt_err.kind(), &ErrorKind::InvalidSignature),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn jwt_rs256_kidless_no_compatible_key() {
+        let token = rs256_token_without_kid();
+        let (_es_token, jwks) = build_es512_token_without_kid();
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        let expected = format!("{NO_COMPATIBLE_JWK_MESSAGE} RS256 (kid missing)");
+        match err {
+            Error::Crypto(message) => assert_eq!(message, expected),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn jwt_es512_kidless_fails_when_key_beyond_cap() {
+        let mut rng = thread_rng();
+        let signing_key = P521SigningKey::random(&mut rng);
+        let verifying_key = P521VerifyingKey::from(&signing_key);
+        let encoded_point = verifying_key.to_encoded_point(false);
+        let x = encoded_point.x().expect("x coord");
+        let y = encoded_point.y().expect("y coord");
+
+        let mut keys = Vec::new();
+        for idx in 0..MAX_KIDLESS_JWKS_KEYS {
+            let bad_signing_key = P521SigningKey::random(&mut rng);
+            let bad_verifying_key = P521VerifyingKey::from(&bad_signing_key);
+            let bad_point = bad_verifying_key.to_encoded_point(false);
+            let bad_x = bad_point.x().expect("x coord");
+            let bad_y = bad_point.y().expect("y coord");
+            keys.push(json!({
+                "kty": "EC",
+                "crv": "P-521",
+                "x": URL_SAFE_NO_PAD.encode(bad_x),
+                "y": URL_SAFE_NO_PAD.encode(bad_y),
+                "use": "sig",
+                "kid": format!("bad-{}", idx),
+                "alg": "ES512",
+            }));
+        }
+        keys.push(json!({
+            "kty": "EC",
+            "crv": "P-521",
+            "x": URL_SAFE_NO_PAD.encode(x),
+            "y": URL_SAFE_NO_PAD.encode(y),
+            "use": "sig",
+            "kid": "good-key",
+            "alg": "ES512",
+        }));
+
+        let jwks = jwks_from_value(json!({ "keys": keys })).expect("jwks");
+        let exp = jsonwebtoken::get_current_timestamp() + 3600;
+        let payload = json!({
+            "iss": "athenz",
+            "aud": "client",
+            "sub": "principal",
+            "exp": exp,
+        });
+        let header = json!({
+            "alg": "ES512",
+            "typ": "JWT",
+        });
+        let header_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).expect("header json"));
+        let payload_b64 =
+            URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("payload json"));
+        let signing_input = format!("{}.{}", header_b64, payload_b64);
+        let signature: P521Signature = signing_key.sign(signing_input.as_bytes());
+        let signature_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
+        let token = format!("{}.{}", signing_input, signature_b64);
+
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::athenz_default();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::Jwt(jwt_err) => assert_eq!(jwt_err.kind(), &ErrorKind::InvalidSignature),
             other => panic!("unexpected error: {:?}", other),
         }
     }

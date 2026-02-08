@@ -167,9 +167,8 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
         body.extend_from_slice(&buf[header_end..header_end + initial_take]);
     }
     let mut remaining = content_length.saturating_sub(initial_take);
-    let body_deadline = Instant::now() + MAX_READ_DURATION;
     while remaining > 0 {
-        let remaining_time = body_deadline.saturating_duration_since(Instant::now());
+        let remaining_time = deadline.saturating_duration_since(Instant::now());
         if remaining_time.is_zero() {
             break;
         }

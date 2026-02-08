@@ -72,6 +72,7 @@ async fn get_domain_list_applies_auth_header() {
         .expect("builder")
         .ntoken_auth("Athenz-Principal-Auth", "token")
         .expect("auth")
+        .follow_redirects(false)
         .build()
         .expect("build");
 
@@ -101,6 +102,7 @@ async fn get_domain_list_applies_ntoken_signer_auth() {
         .expect("builder")
         .ntoken_signer("Athenz-Principal-Auth", signer)
         .expect("auth")
+        .follow_redirects(false)
         .build()
         .expect("build");
 

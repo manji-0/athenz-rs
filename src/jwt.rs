@@ -385,10 +385,11 @@ fn decode_jwt_header(encoded: &str) -> Result<JwtHeader, Error> {
         .get("kid")
         .and_then(Value::as_str)
         .map(|s| s.to_string());
-    let typ = raw
-        .get("typ")
-        .and_then(Value::as_str)
-        .map(|s| s.to_string());
+    let typ = match raw.get("typ") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(value)) => Some(value.to_string()),
+        Some(_) => return Err(jwt_error(ErrorKind::InvalidToken)),
+    };
     Ok(JwtHeader {
         alg: alg.to_string(),
         kid,
@@ -807,10 +808,14 @@ mod tests {
     use std::sync::OnceLock;
 
     fn build_es512_token() -> (String, JwkSet) {
-        build_es512_token_with_typ(Some("JWT"))
+        build_es512_token_with_typ_value(Some(json!("JWT")))
     }
 
     fn build_es512_token_with_typ(typ: Option<&str>) -> (String, JwkSet) {
+        build_es512_token_with_typ_value(typ.map(|value| json!(value)))
+    }
+
+    fn build_es512_token_with_typ_value(typ: Option<Value>) -> (String, JwkSet) {
         let mut rng = thread_rng();
         let signing_key = P521SigningKey::random(&mut rng);
         let verifying_key = P521VerifyingKey::from(&signing_key);
@@ -837,7 +842,7 @@ mod tests {
             "kid": kid,
         });
         if let Some(typ) = typ {
-            header["typ"] = json!(typ);
+            header["typ"] = typ;
         }
         let exp = jsonwebtoken::get_current_timestamp() + 3600;
         let payload = json!({
@@ -1255,6 +1260,29 @@ mod tests {
     #[test]
     fn jwt_rejects_invalid_typ() {
         let (token, jwks) = build_es512_token_with_typ(Some("JAG"));
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::athenz_default();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::Jwt(err) => assert_eq!(err.kind(), &ErrorKind::InvalidToken),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn jwt_rejects_non_string_typ() {
+        let (token, jwks) = build_es512_token_with_typ_value(Some(json!(123)));
         let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,

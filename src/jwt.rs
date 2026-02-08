@@ -402,8 +402,10 @@ fn validate_jwt_typ(typ: Option<&str>) -> Result<(), Error> {
     let Some(typ) = typ else {
         return Ok(());
     };
-    let normalized = typ.to_ascii_lowercase();
-    if ATHENZ_ALLOWED_JWT_TYPES.contains(&normalized.as_str()) {
+    if ATHENZ_ALLOWED_JWT_TYPES
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(typ))
+    {
         return Ok(());
     }
     Err(jwt_error(ErrorKind::InvalidToken))

@@ -51,8 +51,8 @@ impl ZtsAsyncClientBuilder {
     }
 
     /// Set to true to disable HTTP redirects. Prefer `follow_redirects(false)` for clarity.
-    pub fn disable_redirect(mut self, disable_redirects: bool) -> Self {
-        self.disable_redirect = disable_redirects;
+    pub fn disable_redirect(mut self, disable_redirect: bool) -> Self {
+        self.disable_redirect = disable_redirect;
         self
     }
 

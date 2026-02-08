@@ -16,7 +16,9 @@ mod workloads;
 /// Async ZTS client builder.
 ///
 /// `base_url` should point to the ZTS v1 root (e.g., `https://zts.example/zts/v1`).
-/// Trailing slashes are allowed.
+/// Trailing slashes are allowed. Redirects default to disabled
+/// (`follow_redirects(false)`) to observe `Location` headers and avoid leaking
+/// auth on redirects; this differs from the sync client.
 pub struct ZtsAsyncClientBuilder {
     base_url: Url,
     timeout: Option<Duration>,

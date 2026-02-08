@@ -294,6 +294,32 @@ async fn issue_id_token_returns_location_on_redirect() {
 }
 
 #[tokio::test]
+async fn issue_id_token_ok_includes_location_header() {
+    let body = r#"{"version":1,"id_token":"abc","token_type":"Bearer","success":true,"expiration_time":123}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nLocation: https://example.com/cb\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, _rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let request = IdTokenRequest::new(
+        "client-id",
+        "https://example.com/redirect",
+        "openid",
+        "nonce",
+    );
+    let response = client.issue_id_token(&request).await.expect("id token");
+    assert!(response.response.is_some());
+    assert_eq!(response.location.as_deref(), Some("https://example.com/cb"));
+}
+
+#[tokio::test]
 async fn issue_id_token_redirect_requires_location() {
     let response = "HTTP/1.1 302 Found\r\n\r\n".to_string();
     let (base_url, _rx) = serve_once(response).await;

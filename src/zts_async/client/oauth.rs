@@ -40,10 +40,15 @@ impl ZtsAsyncClient {
         let status = resp.status();
         match status {
             StatusCode::OK => {
+                let location = resp
+                    .headers()
+                    .get(reqwest::header::LOCATION)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| v.to_string());
                 let response = resp.json::<OidcResponse>().await?;
                 Ok(IdTokenResponse {
                     response: Some(response),
-                    location: None,
+                    location,
                 })
             }
             _ if status.is_redirection() => {

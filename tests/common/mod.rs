@@ -97,8 +97,18 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
             incomplete_reason = Some("eof");
             break;
         }
-        buf.extend_from_slice(&chunk[..read]);
-        let start = buf.len().saturating_sub(read + 3);
+        let remaining_space = MAX_HEADER_BYTES.saturating_sub(buf.len());
+        let take = read.min(remaining_space);
+        if take == 0 {
+            incomplete_reason = Some("header_too_large");
+            break;
+        }
+        buf.extend_from_slice(&chunk[..take]);
+        if take < read {
+            incomplete_reason = Some("header_too_large");
+            break;
+        }
+        let start = buf.len().saturating_sub(take + 3);
         if let Some(pos) = find_header_end(&buf, start) {
             header_end = Some(pos);
             break;

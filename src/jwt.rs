@@ -489,10 +489,6 @@ impl JwtValidatorAsync {
             return Err(Error::UnsupportedAlg(header.alg.clone()));
         }
 
-        let jwks = self.jwks.fetch().await?;
-        let key = select_jwk(&jwks, header.kid.as_deref())?;
-        let decoding_key = DecodingKey::from_jwk(key)?;
-
         let mut validation = Validation::new(alg);
         validation.leeway = self.options.leeway;
         validation.validate_exp = self.options.validate_exp;
@@ -504,6 +500,28 @@ impl JwtValidatorAsync {
         }
         validation.validate_aud = !self.options.audience.is_empty();
 
+        let jwks = self.jwks.fetch().await?;
+        if header.kid.is_none() && jwks.keys.len() > 1 && ATHENZ_RSA_ALGS.contains(&alg) {
+            let keys = jwks.keys.iter().filter(|jwk| is_rs_jwk(jwk));
+            let result = validate_kidless_jwks(
+                keys,
+                &header.alg,
+                |jwk| {
+                    let decoding_key = DecodingKey::from_jwk(jwk).map_err(Error::from)?;
+                    let token_data =
+                        decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
+                    Ok(JwtTokenData {
+                        header: header.clone(),
+                        claims: token_data.claims,
+                    })
+                },
+                is_rs_key_error,
+            );
+            return result;
+        }
+
+        let key = select_jwk(&jwks, header.kid.as_deref())?;
+        let decoding_key = DecodingKey::from_jwk(key)?;
         let token_data = decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
         Ok(JwtTokenData {
             header,
@@ -530,7 +548,26 @@ impl JwtValidatorAsync {
         }
 
         let jwks = self.jwks.fetch().await?;
+        if header.kid.is_none() && jwks.keys.len() > 1 {
+            let keys = jwks.keys.iter().filter(|jwk| is_es512_jwk(jwk));
+            return validate_kidless_jwks(
+                keys,
+                &header.alg,
+                |jwk| self.validate_es512_with_key(parts, header, jwk),
+                is_es512_key_error,
+            );
+        }
+
         let key = select_jwk(&jwks, header.kid.as_deref())?;
+        self.validate_es512_with_key(parts, header, key)
+    }
+
+    fn validate_es512_with_key(
+        &self,
+        parts: &JwtParts<'_>,
+        header: &JwtHeader,
+        key: &jsonwebtoken::jwk::Jwk,
+    ) -> Result<JwtTokenData<Value>, Error> {
         let verifying_key = p521_verifying_key_from_jwk(key)?;
         let signature_bytes = base64_url_decode(parts.signature)?;
         let signature = P521Signature::from_slice(&signature_bytes)

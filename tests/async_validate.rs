@@ -8,13 +8,16 @@ use athenz_rs::{
 use base64::engine::general_purpose::{STANDARD as BASE64_STD, URL_SAFE_NO_PAD};
 use base64::Engine as _;
 use jsonwebtoken::jwk::JwkSet;
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use p521::ecdsa::{
     Signature as P521Signature, SigningKey as P521SigningKey, VerifyingKey as P521VerifyingKey,
 };
 use rand::thread_rng;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::pkcs1v15::SigningKey as RsaSigningKey;
+use rsa::traits::PublicKeyParts;
 use rsa::RsaPrivateKey;
+use rsa::RsaPublicKey;
 use serde_json::json;
 use sha2::Sha256;
 use signature::{SignatureEncoding, Signer};
@@ -109,6 +112,90 @@ async fn jwt_es512_async_validate_success() {
     assert_eq!(data.claims["iss"], "athenz");
     assert_eq!(data.claims["aud"], "client");
     assert_eq!(data.header.alg, "ES512");
+}
+
+#[tokio::test]
+async fn jwt_rs256_async_validate_success() {
+    let token = build_rs256_token(Some("good-key"));
+    let (n, e, _) = rs256_public_components();
+    let jwks = build_rs256_jwks(&n, &e, "good-key");
+    let provider = JwksProviderAsync::new("https://example.com/jwks")
+        .expect("provider")
+        .with_preloaded(jwks);
+
+    let mut options = JwtValidationOptions::athenz_default();
+    options.issuer = Some("athenz".to_string());
+    options.audience = vec!["client".to_string()];
+
+    let validator = JwtValidatorAsync::new(provider).with_options(options);
+    let data = validator
+        .validate_access_token(&token)
+        .await
+        .expect("validate");
+    assert_eq!(data.header.alg, "RS256");
+}
+
+#[tokio::test]
+async fn jwt_rs256_async_kidless_falls_back_to_matching_key() {
+    let token = build_rs256_token(None);
+    let (n, e, bad_n) = rs256_public_components();
+    let jwks = build_rs256_jwks_pair(&bad_n, &n, &e);
+    let provider = JwksProviderAsync::new("https://example.com/jwks")
+        .expect("provider")
+        .with_preloaded(jwks);
+
+    let mut options = JwtValidationOptions::athenz_default();
+    options.issuer = Some("athenz".to_string());
+    options.audience = vec!["client".to_string()];
+
+    let validator = JwtValidatorAsync::new(provider).with_options(options);
+    let data = validator
+        .validate_access_token(&token)
+        .await
+        .expect("validate");
+    assert_eq!(data.header.alg, "RS256");
+}
+
+#[tokio::test]
+async fn jwt_rs256_async_rejects_unknown_kid() {
+    let token = build_rs256_token(Some("missing"));
+    let (n, e, _) = rs256_public_components();
+    let jwks = build_rs256_jwks(&n, &e, "good-key");
+    let provider = JwksProviderAsync::new("https://example.com/jwks")
+        .expect("provider")
+        .with_preloaded(jwks);
+
+    let mut options = JwtValidationOptions::athenz_default();
+    options.issuer = Some("athenz".to_string());
+    options.audience = vec!["client".to_string()];
+
+    let validator = JwtValidatorAsync::new(provider).with_options(options);
+    let err = validator
+        .validate_access_token(&token)
+        .await
+        .expect_err("should fail");
+    let message = format!("{}", err);
+    assert!(message.contains("missing jwk"));
+}
+
+#[tokio::test]
+async fn jwt_rs256_async_reports_jwks_fetch_failure() {
+    let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, _rx) = serve_once(response).await;
+    let provider = JwksProviderAsync::new(format!("{}/jwks", base_url)).expect("provider");
+
+    let mut options = JwtValidationOptions::athenz_default();
+    options.issuer = Some("athenz".to_string());
+    options.audience = vec!["client".to_string()];
+
+    let validator = JwtValidatorAsync::new(provider).with_options(options);
+    let token = build_rs256_token(Some("good-key"));
+    let err = validator
+        .validate_access_token(&token)
+        .await
+        .expect_err("should fail");
+    let message = format!("{}", err);
+    assert!(message.contains("jwks fetch failed"));
 }
 
 #[tokio::test]
@@ -337,6 +424,71 @@ async fn policy_client_async_rejects_missing_zms_signature_for_signed_policy_dat
         .expect("request timeout")
         .expect("request");
     assert_eq!(req.path, "/zts/v1/domain/sys.auth/service/zts/publickey/v1");
+}
+
+fn rs256_public_components() -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    let private_key = RsaPrivateKey::from_pkcs1_pem(RSA_PRIVATE_KEY).expect("private key");
+    let public_key = RsaPublicKey::from(&private_key);
+    let n = public_key.n().to_bytes_be();
+    let e = public_key.e().to_bytes_be();
+    let mut bad_n = n.clone();
+    if let Some(last) = bad_n.last_mut() {
+        *last ^= 0x01;
+    }
+    (n, e, bad_n)
+}
+
+fn build_rs256_token(kid: Option<&str>) -> String {
+    let exp = jsonwebtoken::get_current_timestamp() + 3600;
+    let claims = json!({
+        "iss": "athenz",
+        "aud": "client",
+        "sub": "principal",
+        "exp": exp,
+    });
+    let mut header = Header::new(Algorithm::RS256);
+    header.kid = kid.map(|value| value.to_string());
+    encode(
+        &header,
+        &claims,
+        &EncodingKey::from_rsa_pem(RSA_PRIVATE_KEY.as_bytes()).expect("encoding key"),
+    )
+    .expect("token")
+}
+
+fn build_rs256_jwks(n: &[u8], e: &[u8], kid: &str) -> JwkSet {
+    let jwks_json = json!({
+        "keys": [{
+            "kty": "RSA",
+            "kid": kid,
+            "alg": "RS256",
+            "n": URL_SAFE_NO_PAD.encode(n),
+            "e": URL_SAFE_NO_PAD.encode(e),
+        }]
+    });
+    serde_json::from_value(jwks_json).expect("jwks")
+}
+
+fn build_rs256_jwks_pair(bad_n: &[u8], good_n: &[u8], e: &[u8]) -> JwkSet {
+    let jwks_json = json!({
+        "keys": [
+            {
+                "kty": "RSA",
+                "kid": "bad-key",
+                "alg": "RS256",
+                "n": URL_SAFE_NO_PAD.encode(bad_n),
+                "e": URL_SAFE_NO_PAD.encode(e),
+            },
+            {
+                "kty": "RSA",
+                "kid": "good-key",
+                "alg": "RS256",
+                "n": URL_SAFE_NO_PAD.encode(good_n),
+                "e": URL_SAFE_NO_PAD.encode(e),
+            }
+        ]
+    });
+    serde_json::from_value(jwks_json).expect("jwks")
 }
 
 fn build_es512_token() -> (String, JwkSet) {

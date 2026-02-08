@@ -1,4 +1,6 @@
 use crate::error::Error;
+#[cfg(feature = "async-validate")]
+use crate::error::MAX_ERROR_BODY_BYTES;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use jsonwebtoken::errors::ErrorKind;
@@ -7,6 +9,8 @@ use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use log::warn;
 use p521::ecdsa::{Signature as P521Signature, VerifyingKey as P521VerifyingKey};
 use reqwest::blocking::Client as HttpClient;
+#[cfg(feature = "async-validate")]
+use reqwest::Client as AsyncHttpClient;
 use serde_json::Value;
 use signature::Verifier as _;
 use std::collections::HashSet;
@@ -14,6 +18,10 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 use std::{fmt, str::FromStr};
+#[cfg(feature = "async-validate")]
+use tokio::sync::Mutex as AsyncMutex;
+#[cfg(feature = "async-validate")]
+use tokio::sync::RwLock as AsyncRwLock;
 use url::Url;
 
 /// Fixed allowlist for Athenz JWT validation (jsonwebtoken-supported subset).
@@ -28,6 +36,8 @@ const ATHENZ_RSA_ALGS: &[Algorithm] = &[Algorithm::RS256, Algorithm::RS384, Algo
 const ATHENZ_EC_ALGS: &[Algorithm] = &[Algorithm::ES256, Algorithm::ES384];
 const ATHENZ_ALLOWED_ALG_NAMES: &[&str] = &["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"];
 const ATHENZ_ALLOWED_JWT_TYPES: &[&str] = &["at+jwt", "jwt"];
+const ES512_DISABLED_MESSAGE: &str =
+    "ES512 is not enabled; configure JwtValidationOptions.allowed_algs to include ES256 and ES384";
 // Safety bound on how many kid-less JWKS keys we try when no `kid` is present in the JWT.
 // `10` was chosen to cover typical deployments where JWKS sets are small (O(1–10) active keys)
 // while preventing unbounded work on misconfigured or very large JWKS endpoints.
@@ -137,6 +147,112 @@ struct CachedJwks {
     expires_at: Instant,
 }
 
+#[cfg(feature = "async-validate")]
+#[derive(Debug)]
+pub struct JwksProviderAsync {
+    jwks_uri: Url,
+    http: AsyncHttpClient,
+    cache_ttl: Duration,
+    cache: AsyncRwLock<Option<CachedJwks>>,
+    fetch_lock: AsyncMutex<()>,
+}
+
+#[cfg(feature = "async-validate")]
+impl JwksProviderAsync {
+    pub fn new(jwks_uri: impl AsRef<str>) -> Result<Self, Error> {
+        let jwks_uri = Url::parse(jwks_uri.as_ref())?;
+        let http = AsyncHttpClient::builder()
+            .timeout(Duration::from_secs(10))
+            .build()?;
+        Ok(Self {
+            jwks_uri,
+            http,
+            cache_ttl: Duration::from_secs(300),
+            cache: AsyncRwLock::new(None),
+            fetch_lock: AsyncMutex::new(()),
+        })
+    }
+
+    pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
+        self.cache_ttl = ttl;
+        let cache = self.cache.into_inner();
+        self.cache = AsyncRwLock::new(cache.map(|mut cached| {
+            cached.expires_at = Instant::now() + self.cache_ttl;
+            cached
+        }));
+        self
+    }
+
+    pub fn with_preloaded(self, jwks: JwkSet) -> Self {
+        let cached = CachedJwks {
+            jwks,
+            expires_at: Instant::now() + self.cache_ttl,
+        };
+        let mut this = self;
+        this.cache = AsyncRwLock::new(Some(cached));
+        this
+    }
+
+    pub async fn fetch(&self) -> Result<JwkSet, Error> {
+        {
+            let cache = self.cache.read().await;
+            if let Some(cached) = cache.as_ref() {
+                if cached.expires_at > Instant::now() {
+                    return Ok(cached.jwks.clone());
+                }
+            }
+        }
+
+        let _guard = self.fetch_lock.lock().await;
+        {
+            let cache = self.cache.read().await;
+            if let Some(cached) = cache.as_ref() {
+                if cached.expires_at > Instant::now() {
+                    return Ok(cached.jwks.clone());
+                }
+            }
+        }
+
+        let mut resp = self.http.get(self.jwks_uri.clone()).send().await?;
+        let status = resp.status();
+        if !status.is_success() {
+            let mut body = Vec::new();
+            let mut remaining = MAX_ERROR_BODY_BYTES;
+            while let Some(chunk) = resp.chunk().await? {
+                if remaining == 0 {
+                    break;
+                }
+                let take = remaining.min(chunk.len());
+                body.extend_from_slice(&chunk[..take]);
+                remaining -= take;
+            }
+            let body_preview = sanitize_error_body(&body);
+            return Err(Error::Crypto(if body_preview.is_empty() {
+                format!(
+                    "jwks fetch failed: status {} body_len {}",
+                    status,
+                    body.len()
+                )
+            } else {
+                format!(
+                    "jwks fetch failed: status {} body_len {} body_preview {}",
+                    status,
+                    body.len(),
+                    body_preview
+                )
+            }));
+        }
+        let body = resp.bytes().await?;
+        let jwks = jwks_from_slice(&body)?;
+        let cached = CachedJwks {
+            jwks: jwks.clone(),
+            expires_at: Instant::now() + self.cache_ttl,
+        };
+        *self.cache.write().await = Some(cached);
+        Ok(jwks)
+    }
+}
+
 impl JwksProvider {
     pub fn new(jwks_uri: impl AsRef<str>) -> Result<Self, Error> {
         let jwks_uri = Url::parse(jwks_uri.as_ref())?;
@@ -150,6 +266,9 @@ impl JwksProvider {
 
     pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
         self.cache_ttl = ttl;
+        if let Some(cached) = self.cache.write().unwrap().as_mut() {
+            cached.expires_at = Instant::now() + self.cache_ttl;
+        }
         self
     }
 
@@ -228,6 +347,7 @@ impl JwtValidator {
         if !self.options.audience.is_empty() {
             validation.set_audience(&self.options.audience);
         }
+        validation.validate_aud = !self.options.audience.is_empty();
 
         let jwks = self.jwks.fetch()?;
         if header.kid.is_none() && jwks.keys.len() > 1 && ATHENZ_RSA_ALGS.contains(&alg) {
@@ -273,7 +393,7 @@ impl JwtValidator {
     ) -> Result<JwtTokenData<Value>, Error> {
         resolve_allowed_algs(&self.options)?;
         if !allows_es512(&self.options) {
-            return Err(Error::UnsupportedAlg("ES512".to_string()));
+            return Err(Error::UnsupportedAlg(ES512_DISABLED_MESSAGE.to_string()));
         }
 
         let jwks = self.jwks.fetch()?;
@@ -309,6 +429,7 @@ impl JwtValidator {
         let claims_bytes = base64_url_decode(parts.payload)?;
         let claims: Value = serde_json::from_slice(&claims_bytes).map_err(jwt_json_error)?;
 
+        // jsonwebtoken::Algorithm does not include ES512; Validation is used only for claims.
         let mut validation = Validation::new(Algorithm::RS256);
         validation.leeway = self.options.leeway;
         validation.validate_exp = self.options.validate_exp;
@@ -318,6 +439,158 @@ impl JwtValidator {
         if !self.options.audience.is_empty() {
             validation.set_audience(&self.options.audience);
         }
+        validation.validate_aud = !self.options.audience.is_empty();
+        validate_claims(&claims, &validation)?;
+
+        Ok(JwtTokenData {
+            header: header.clone(),
+            claims,
+        })
+    }
+}
+
+#[cfg(feature = "async-validate")]
+#[derive(Debug)]
+pub struct JwtValidatorAsync {
+    jwks: JwksProviderAsync,
+    options: JwtValidationOptions,
+}
+
+#[cfg(feature = "async-validate")]
+impl JwtValidatorAsync {
+    pub fn new(jwks: JwksProviderAsync) -> Self {
+        Self {
+            jwks,
+            options: JwtValidationOptions::default(),
+        }
+    }
+
+    pub fn with_options(mut self, options: JwtValidationOptions) -> Self {
+        self.options = options;
+        self
+    }
+
+    pub async fn validate(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
+        let parts = split_jwt(token)?;
+        let header = decode_jwt_header(parts.header)?;
+        let alg = header.alg.as_str();
+        if !ATHENZ_ALLOWED_ALG_NAMES.contains(&alg) {
+            return Err(Error::UnsupportedAlg(header.alg.clone()));
+        }
+
+        if alg == "ES512" {
+            return self.validate_es512(&parts, &header).await;
+        }
+
+        let alg =
+            Algorithm::from_str(alg).map_err(|_| Error::UnsupportedAlg(header.alg.clone()))?;
+        let allowed_algs = resolve_allowed_algs(&self.options)?;
+        if !allowed_algs.contains(&alg) {
+            return Err(Error::UnsupportedAlg(header.alg.clone()));
+        }
+
+        let mut validation = Validation::new(alg);
+        validation.leeway = self.options.leeway;
+        validation.validate_exp = self.options.validate_exp;
+        if let Some(ref issuer) = self.options.issuer {
+            validation.set_issuer(&[issuer.as_str()]);
+        }
+        if !self.options.audience.is_empty() {
+            validation.set_audience(&self.options.audience);
+        }
+        validation.validate_aud = !self.options.audience.is_empty();
+
+        let jwks = self.jwks.fetch().await?;
+        if header.kid.is_none() && jwks.keys.len() > 1 && ATHENZ_RSA_ALGS.contains(&alg) {
+            let keys = jwks.keys.iter().filter(|jwk| is_rs_jwk(jwk));
+            let result = validate_kidless_jwks(
+                keys,
+                &header.alg,
+                |jwk| {
+                    let decoding_key = DecodingKey::from_jwk(jwk).map_err(Error::from)?;
+                    let token_data =
+                        decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
+                    Ok(JwtTokenData {
+                        header: header.clone(),
+                        claims: token_data.claims,
+                    })
+                },
+                is_rs_key_error,
+            );
+            return result;
+        }
+
+        let key = select_jwk(&jwks, header.kid.as_deref())?;
+        let decoding_key = DecodingKey::from_jwk(key)?;
+        let token_data = decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
+        Ok(JwtTokenData {
+            header,
+            claims: token_data.claims,
+        })
+    }
+
+    pub async fn validate_access_token(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
+        self.validate(token).await
+    }
+
+    pub async fn validate_id_token(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
+        self.validate(token).await
+    }
+
+    async fn validate_es512(
+        &self,
+        parts: &JwtParts<'_>,
+        header: &JwtHeader,
+    ) -> Result<JwtTokenData<Value>, Error> {
+        resolve_allowed_algs(&self.options)?;
+        if !allows_es512(&self.options) {
+            return Err(Error::UnsupportedAlg(ES512_DISABLED_MESSAGE.to_string()));
+        }
+
+        let jwks = self.jwks.fetch().await?;
+        if header.kid.is_none() && jwks.keys.len() > 1 {
+            let keys = jwks.keys.iter().filter(|jwk| is_es512_jwk(jwk));
+            return validate_kidless_jwks(
+                keys,
+                &header.alg,
+                |jwk| self.validate_es512_with_key(parts, header, jwk),
+                is_es512_key_error,
+            );
+        }
+
+        let key = select_jwk(&jwks, header.kid.as_deref())?;
+        self.validate_es512_with_key(parts, header, key)
+    }
+
+    fn validate_es512_with_key(
+        &self,
+        parts: &JwtParts<'_>,
+        header: &JwtHeader,
+        key: &jsonwebtoken::jwk::Jwk,
+    ) -> Result<JwtTokenData<Value>, Error> {
+        let verifying_key = p521_verifying_key_from_jwk(key)?;
+        let signature_bytes = base64_url_decode(parts.signature)?;
+        let signature = P521Signature::from_slice(&signature_bytes)
+            .map_err(|_| jwt_error(ErrorKind::InvalidSignature))?;
+        let signing_input = format!("{}.{}", parts.header, parts.payload);
+        verifying_key
+            .verify(signing_input.as_bytes(), &signature)
+            .map_err(|_| jwt_error(ErrorKind::InvalidSignature))?;
+
+        let claims_bytes = base64_url_decode(parts.payload)?;
+        let claims: Value = serde_json::from_slice(&claims_bytes).map_err(jwt_json_error)?;
+
+        // jsonwebtoken::Algorithm does not include ES512; Validation is used only for claims.
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.leeway = self.options.leeway;
+        validation.validate_exp = self.options.validate_exp;
+        if let Some(ref issuer) = self.options.issuer {
+            validation.set_issuer(&[issuer.as_str()]);
+        }
+        if !self.options.audience.is_empty() {
+            validation.set_audience(&self.options.audience);
+        }
+        validation.validate_aud = !self.options.audience.is_empty();
         validate_claims(&claims, &validation)?;
 
         Ok(JwtTokenData {
@@ -342,9 +615,39 @@ fn resolve_allowed_algs(options: &JwtValidationOptions) -> Result<&[Algorithm], 
 }
 
 fn allows_es512(options: &JwtValidationOptions) -> bool {
-    ATHENZ_ALLOWED_ALGS
+    // ES512 isn't representable in jsonwebtoken::Algorithm; treat full EC allowlist as opt-in.
+    ATHENZ_EC_ALGS
         .iter()
         .all(|alg| options.allowed_algs.contains(alg))
+}
+
+#[cfg(feature = "async-validate")]
+fn sanitize_error_body(body: &[u8]) -> String {
+    let mut sanitized = String::new();
+    for &byte in body.iter().take(128) {
+        let ch = match byte {
+            b'\n' => '\\',
+            b'\r' => '\\',
+            b'\t' => '\\',
+            _ if byte.is_ascii_graphic() || byte == b' ' => byte as char,
+            _ => '.',
+        };
+        if ch == '\\' {
+            sanitized.push('\\');
+            sanitized.push(match byte {
+                b'\n' => 'n',
+                b'\r' => 'r',
+                b'\t' => 't',
+                _ => '\\',
+            });
+        } else {
+            sanitized.push(ch);
+        }
+    }
+    if body.len() > 128 {
+        sanitized.push_str("...");
+    }
+    sanitized
 }
 
 struct JwtParts<'a> {
@@ -1088,7 +1391,7 @@ mod tests {
             .validate_access_token(&token)
             .expect_err("should reject");
         match err {
-            Error::UnsupportedAlg(alg) => assert_eq!(alg, "ES512"),
+            Error::UnsupportedAlg(alg) => assert!(alg.contains("ES512 is not enabled")),
             other => panic!("unexpected error: {:?}", other),
         }
     }

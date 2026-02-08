@@ -4,6 +4,8 @@ use crate::models::{
     SignedPolicyData, SignedPolicyRequest,
 };
 use crate::zts::ZtsClient;
+#[cfg(feature = "async-validate")]
+use crate::zts_async::ZtsAsyncClient;
 use base64::engine::general_purpose::{STANDARD as BASE64_STD, URL_SAFE_NO_PAD};
 use base64::Engine as _;
 use log::warn;
@@ -100,6 +102,68 @@ impl PolicyClient {
 
     pub fn validate_jws_policy_data(&self, data: &JWSPolicyData) -> Result<PolicyData, Error> {
         validate_jws_policy_data(data, &self.zts, &self.config)
+    }
+}
+
+#[cfg(feature = "async-validate")]
+pub struct PolicyClientAsync {
+    zts: ZtsAsyncClient,
+    config: PolicyValidatorConfig,
+}
+
+#[cfg(feature = "async-validate")]
+impl PolicyClientAsync {
+    pub fn new(zts: ZtsAsyncClient) -> Self {
+        Self {
+            zts,
+            config: PolicyValidatorConfig::default(),
+        }
+    }
+
+    pub fn config_mut(&mut self) -> &mut PolicyValidatorConfig {
+        &mut self.config
+    }
+
+    pub async fn fetch_signed_policy_data(
+        &self,
+        domain: &str,
+        etag: Option<&str>,
+    ) -> Result<PolicyFetchResponse<DomainSignedPolicyData>, Error> {
+        let response = self.zts.get_domain_signed_policy_data(domain, etag).await?;
+        Ok(PolicyFetchResponse {
+            data: response.data,
+            etag: response.etag,
+        })
+    }
+
+    pub async fn fetch_jws_policy_data(
+        &self,
+        domain: &str,
+        request: &SignedPolicyRequest,
+        etag: Option<&str>,
+    ) -> Result<PolicyFetchResponse<JWSPolicyData>, Error> {
+        let response = self
+            .zts
+            .post_domain_signed_policy_data_jws(domain, request, etag)
+            .await?;
+        Ok(PolicyFetchResponse {
+            data: response.data,
+            etag: response.etag,
+        })
+    }
+
+    pub async fn validate_signed_policy_data(
+        &self,
+        data: &DomainSignedPolicyData,
+    ) -> Result<PolicyData, Error> {
+        validate_signed_policy_data_async(data, &self.zts, &self.config).await
+    }
+
+    pub async fn validate_jws_policy_data(
+        &self,
+        data: &JWSPolicyData,
+    ) -> Result<PolicyData, Error> {
+        validate_jws_policy_data_async(data, &self.zts, &self.config).await
     }
 }
 
@@ -480,20 +544,14 @@ fn validate_signed_policy_data(
     let signed_json = canonical_json(&serde_json::to_value(signed_policy)?);
     verify_ybase64_signature_sha256(&signed_json, &data.signature, &zts_key_pem)?;
 
-    if config.check_zms_signature {
-        let zms_signature = signed_policy.zms_signature.as_deref().unwrap_or("");
-        let zms_key_id = signed_policy.zms_key_id.as_deref().unwrap_or("");
-        if zms_signature.is_empty() || zms_key_id.is_empty() {
-            return Err(Error::Crypto("missing zms signature or key id".to_string()));
-        }
+    if let Some(inputs) = zms_signature_inputs(signed_policy, config)? {
         let zms_key_pem = get_public_key_pem(
             zts,
             &config.sys_auth_domain,
             &config.zms_service,
-            zms_key_id,
+            &inputs.key_id,
         )?;
-        let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
-        verify_ybase64_signature_sha256(&policy_json, zms_signature, &zms_key_pem)?;
+        verify_ybase64_signature_sha256(&inputs.policy_json, &inputs.signature, &zms_key_pem)?;
     }
 
     Ok(signed_policy.policy_data.clone())
@@ -520,30 +578,128 @@ fn validate_jws_policy_data(
         &zts_key_pem,
     )?;
 
-    let payload = URL_SAFE_NO_PAD
-        .decode(data.payload.as_bytes())
-        .map_err(|e| Error::Crypto(format!("jws payload decode error: {e}")))?;
-    let signed_policy: SignedPolicyData = serde_json::from_slice(&payload)?;
-
+    let signed_policy = decode_jws_payload(&data.payload)?;
     ensure_not_expired(&signed_policy.expires, config)?;
 
-    if config.check_zms_signature {
-        let zms_signature = signed_policy.zms_signature.as_deref().unwrap_or("");
-        let zms_key_id = signed_policy.zms_key_id.as_deref().unwrap_or("");
-        if zms_signature.is_empty() || zms_key_id.is_empty() {
-            return Err(Error::Crypto("missing zms signature or key id".to_string()));
-        }
+    if let Some(inputs) = zms_signature_inputs(&signed_policy, config)? {
         let zms_key_pem = get_public_key_pem(
             zts,
             &config.sys_auth_domain,
             &config.zms_service,
-            zms_key_id,
+            &inputs.key_id,
         )?;
-        let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
-        verify_ybase64_signature_sha256(&policy_json, zms_signature, &zms_key_pem)?;
+        verify_ybase64_signature_sha256(&inputs.policy_json, &inputs.signature, &zms_key_pem)?;
     }
 
     Ok(signed_policy.policy_data)
+}
+
+#[cfg(feature = "async-validate")]
+async fn validate_signed_policy_data_async(
+    data: &DomainSignedPolicyData,
+    zts: &ZtsAsyncClient,
+    config: &PolicyValidatorConfig,
+) -> Result<PolicyData, Error> {
+    let signed_policy = &data.signed_policy_data;
+
+    ensure_not_expired(&signed_policy.expires, config)?;
+
+    let zts_key_pem = get_public_key_pem_async(
+        zts,
+        &config.sys_auth_domain,
+        &config.zts_service,
+        &data.key_id,
+    )
+    .await?;
+    let signed_json = canonical_json(&serde_json::to_value(signed_policy)?);
+    verify_ybase64_signature_sha256(&signed_json, &data.signature, &zts_key_pem)?;
+
+    if let Some(inputs) = zms_signature_inputs(signed_policy, config)? {
+        let zms_key_pem = get_public_key_pem_async(
+            zts,
+            &config.sys_auth_domain,
+            &config.zms_service,
+            &inputs.key_id,
+        )
+        .await?;
+        verify_ybase64_signature_sha256(&inputs.policy_json, &inputs.signature, &zms_key_pem)?;
+    }
+
+    Ok(signed_policy.policy_data.clone())
+}
+
+#[cfg(feature = "async-validate")]
+async fn validate_jws_policy_data_async(
+    data: &JWSPolicyData,
+    zts: &ZtsAsyncClient,
+    config: &PolicyValidatorConfig,
+) -> Result<PolicyData, Error> {
+    let header = parse_jws_protected_header(&data.protected_header)?;
+    let zts_key_pem = get_public_key_pem_async(
+        zts,
+        &config.sys_auth_domain,
+        &config.zts_service,
+        &header.kid,
+    )
+    .await?;
+
+    verify_jws_signature(
+        &header.alg,
+        &data.protected_header,
+        &data.payload,
+        &data.signature,
+        &zts_key_pem,
+    )?;
+
+    let signed_policy = decode_jws_payload(&data.payload)?;
+    ensure_not_expired(&signed_policy.expires, config)?;
+
+    if let Some(inputs) = zms_signature_inputs(&signed_policy, config)? {
+        let zms_key_pem = get_public_key_pem_async(
+            zts,
+            &config.sys_auth_domain,
+            &config.zms_service,
+            &inputs.key_id,
+        )
+        .await?;
+        verify_ybase64_signature_sha256(&inputs.policy_json, &inputs.signature, &zms_key_pem)?;
+    }
+
+    Ok(signed_policy.policy_data)
+}
+
+fn decode_jws_payload(payload: &str) -> Result<SignedPolicyData, Error> {
+    let payload = URL_SAFE_NO_PAD
+        .decode(payload.as_bytes())
+        .map_err(|e| Error::Crypto(format!("jws payload decode error: {e}")))?;
+    let signed_policy: SignedPolicyData = serde_json::from_slice(&payload)?;
+    Ok(signed_policy)
+}
+
+struct ZmsSignatureInputs {
+    key_id: String,
+    signature: String,
+    policy_json: String,
+}
+
+fn zms_signature_inputs(
+    signed_policy: &SignedPolicyData,
+    config: &PolicyValidatorConfig,
+) -> Result<Option<ZmsSignatureInputs>, Error> {
+    if !config.check_zms_signature {
+        return Ok(None);
+    }
+    let zms_signature = signed_policy.zms_signature.as_deref().unwrap_or("");
+    let zms_key_id = signed_policy.zms_key_id.as_deref().unwrap_or("");
+    if zms_signature.is_empty() || zms_key_id.is_empty() {
+        return Err(Error::Crypto("missing zms signature or key id".to_string()));
+    }
+    let policy_json = canonical_json(&serde_json::to_value(&signed_policy.policy_data)?);
+    Ok(Some(ZmsSignatureInputs {
+        key_id: zms_key_id.to_string(),
+        signature: zms_signature.to_string(),
+        policy_json,
+    }))
 }
 
 fn ensure_not_expired(expires: &str, config: &PolicyValidatorConfig) -> Result<(), Error> {
@@ -580,6 +736,17 @@ fn get_public_key_pem(
     key_id: &str,
 ) -> Result<Vec<u8>, Error> {
     let entry: PublicKeyEntry = zts.get_public_key_entry(domain, service, key_id)?;
+    ybase64_decode(&entry.key)
+}
+
+#[cfg(feature = "async-validate")]
+async fn get_public_key_pem_async(
+    zts: &ZtsAsyncClient,
+    domain: &str,
+    service: &str,
+    key_id: &str,
+) -> Result<Vec<u8>, Error> {
+    let entry: PublicKeyEntry = zts.get_public_key_entry(domain, service, key_id).await?;
     ybase64_decode(&entry.key)
 }
 

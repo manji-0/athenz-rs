@@ -27,6 +27,9 @@ pub const ATHENZ_ALLOWED_ALGS: &[Algorithm] = &[
 const ATHENZ_RSA_ALGS: &[Algorithm] = &[Algorithm::RS256, Algorithm::RS384, Algorithm::RS512];
 const ATHENZ_EC_ALGS: &[Algorithm] = &[Algorithm::ES256, Algorithm::ES384];
 const ATHENZ_ALLOWED_ALG_NAMES: &[&str] = &["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"];
+// Safety bound on how many kid-less JWKS keys we try when no `kid` is present in the JWT.
+// `10` was chosen to cover typical deployments where JWKS sets are small (O(1–10) active keys)
+// while preventing unbounded work on misconfigured or very large JWKS endpoints.
 const MAX_KIDLESS_JWKS_KEYS: usize = 10;
 const SUPPORTED_JWK_ALGS: &[&str] = &[
     "HS256",
@@ -227,12 +230,14 @@ impl JwtValidator {
         if header.kid.is_none() && jwks.keys.len() > 1 {
             let mut decode_err = None;
             let mut key_err = None;
+            let mut candidates = 0usize;
             for jwk in jwks
                 .keys
                 .iter()
                 .filter(|jwk| is_rs_jwk(jwk))
                 .take(MAX_KIDLESS_JWKS_KEYS)
             {
+                candidates += 1;
                 let decoding_key = match DecodingKey::from_jwk(jwk) {
                     Ok(key) => key,
                     Err(err) => {
@@ -256,9 +261,12 @@ impl JwtValidator {
                     }
                 }
             }
+            if candidates == 0 {
+                return Err(Error::MissingJwk("no compatible key".to_string()));
+            }
             return Err(decode_err
                 .or(key_err)
-                .unwrap_or_else(|| Error::MissingJwk("kid required".to_string())));
+                .unwrap_or_else(|| Error::MissingJwk("no compatible key".to_string())));
         }
 
         let key = select_jwk(&jwks, header.kid.as_deref())?;
@@ -292,12 +300,14 @@ impl JwtValidator {
         if header.kid.is_none() && jwks.keys.len() > 1 {
             let mut decode_err = None;
             let mut key_err = None;
+            let mut candidates = 0usize;
             for jwk in jwks
                 .keys
                 .iter()
                 .filter(|jwk| is_es512_jwk(jwk))
                 .take(MAX_KIDLESS_JWKS_KEYS)
             {
+                candidates += 1;
                 match self.validate_es512_with_key(parts, header, jwk) {
                     Ok(data) => return Ok(data),
                     Err(err) => {
@@ -311,9 +321,12 @@ impl JwtValidator {
                     }
                 }
             }
+            if candidates == 0 {
+                return Err(Error::MissingJwk("no compatible key".to_string()));
+            }
             return Err(decode_err
                 .or(key_err)
-                .unwrap_or_else(|| jwt_error(ErrorKind::InvalidSignature)));
+                .unwrap_or_else(|| Error::MissingJwk("no compatible key".to_string())));
         }
 
         let key = select_jwk(&jwks, header.kid.as_deref())?;
@@ -752,11 +765,12 @@ mod tests {
     use jsonwebtoken::{encode, EncodingKey, Header};
     use p521::ecdsa::SigningKey as P521SigningKey;
     use rand::thread_rng;
-    use rsa::pkcs1::{EncodeRsaPrivateKey, LineEnding};
+    use rsa::pkcs1::{DecodeRsaPrivateKey, EncodeRsaPrivateKey, LineEnding};
     use rsa::traits::PublicKeyParts;
     use rsa::{RsaPrivateKey, RsaPublicKey};
     use serde_json::json;
     use signature::Signer;
+    use std::sync::OnceLock;
 
     fn build_es512_token() -> (String, JwkSet) {
         let mut rng = thread_rng();
@@ -865,9 +879,21 @@ mod tests {
         (token, jwks)
     }
 
+    fn rsa_private_key_pem() -> &'static str {
+        static PEM: OnceLock<String> = OnceLock::new();
+        PEM.get_or_init(|| {
+            let mut rng = thread_rng();
+            let key = RsaPrivateKey::new(&mut rng, 2048).expect("private key");
+            key.to_pkcs1_pem(LineEnding::LF)
+                .expect("private key pem")
+                .to_string()
+        })
+        .as_str()
+    }
+
     fn build_rs256_token_without_kid() -> (String, JwkSet) {
-        let mut rng = thread_rng();
-        let private_key = RsaPrivateKey::new(&mut rng, 2048).expect("private key");
+        let pem = rsa_private_key_pem();
+        let private_key = RsaPrivateKey::from_pkcs1_pem(pem).expect("private key");
         let public_key = RsaPublicKey::from(&private_key);
         let n = public_key.n().to_bytes_be();
         let e = public_key.e().to_bytes_be();
@@ -905,9 +931,6 @@ mod tests {
         });
         let mut header = Header::new(Algorithm::RS256);
         header.kid = None;
-        let pem = private_key
-            .to_pkcs1_pem(LineEnding::LF)
-            .expect("private key pem");
         let token = encode(
             &header,
             &claims,

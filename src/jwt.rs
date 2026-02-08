@@ -228,7 +228,7 @@ impl JwtValidator {
 
         let jwks = self.jwks.fetch()?;
         if header.kid.is_none() && jwks.keys.len() > 1 {
-            let mut decode_err = None;
+            let mut signature_err = None;
             let mut key_err = None;
             let mut candidates = 0usize;
             for jwk in jwks
@@ -255,8 +255,13 @@ impl JwtValidator {
                         });
                     }
                     Err(err) => {
-                        if decode_err.is_none() {
-                            decode_err = Some(Error::from(err));
+                        let err = Error::from(err);
+                        if is_signature_error(&err) {
+                            if signature_err.is_none() {
+                                signature_err = Some(err);
+                            }
+                        } else {
+                            return Err(err);
                         }
                     }
                 }
@@ -264,7 +269,7 @@ impl JwtValidator {
             if candidates == 0 {
                 return Err(Error::MissingJwk("no compatible key".to_string()));
             }
-            return Err(decode_err
+            return Err(signature_err
                 .or(key_err)
                 .unwrap_or_else(|| Error::MissingJwk("no compatible key".to_string())));
         }
@@ -298,7 +303,7 @@ impl JwtValidator {
 
         let jwks = self.jwks.fetch()?;
         if header.kid.is_none() && jwks.keys.len() > 1 {
-            let mut decode_err = None;
+            let mut signature_err = None;
             let mut key_err = None;
             let mut candidates = 0usize;
             for jwk in jwks
@@ -315,8 +320,12 @@ impl JwtValidator {
                             if key_err.is_none() {
                                 key_err = Some(err);
                             }
-                        } else if decode_err.is_none() {
-                            decode_err = Some(err);
+                        } else if is_signature_error(&err) {
+                            if signature_err.is_none() {
+                                signature_err = Some(err);
+                            }
+                        } else {
+                            return Err(err);
                         }
                     }
                 }
@@ -324,7 +333,7 @@ impl JwtValidator {
             if candidates == 0 {
                 return Err(Error::MissingJwk("no compatible key".to_string()));
             }
-            return Err(decode_err
+            return Err(signature_err
                 .or(key_err)
                 .unwrap_or_else(|| Error::MissingJwk("no compatible key".to_string())));
         }
@@ -470,6 +479,13 @@ fn is_es512_key_error(err: &Error) -> bool {
     match err {
         Error::UnsupportedAlg(_) => true,
         Error::Jwt(jwt_err) => matches!(jwt_err.kind(), ErrorKind::InvalidEcdsaKey),
+        _ => false,
+    }
+}
+
+fn is_signature_error(err: &Error) -> bool {
+    match err {
+        Error::Jwt(jwt_err) => matches!(jwt_err.kind(), ErrorKind::InvalidSignature),
         _ => false,
     }
 }
@@ -898,8 +914,8 @@ mod tests {
         let n = public_key.n().to_bytes_be();
         let e = public_key.e().to_bytes_be();
         let mut bad_n = n.clone();
-        if let Some(first) = bad_n.first_mut() {
-            *first ^= 0x01;
+        if let Some(last) = bad_n.last_mut() {
+            *last ^= 0x01;
         }
         (n, e, bad_n)
     }

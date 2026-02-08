@@ -132,6 +132,33 @@ impl NTokenBuilder {
         self
     }
 
+    pub fn set_version(&mut self, version: impl Into<String>) -> &mut Self {
+        self.version = version.into();
+        self
+    }
+
+    pub fn set_key_service(&mut self, key_service: impl Into<String>) -> &mut Self {
+        let mut key_service = key_service.into();
+        key_service.make_ascii_lowercase();
+        self.key_service = Some(key_service);
+        self
+    }
+
+    pub fn set_hostname(&mut self, hostname: impl Into<String>) -> &mut Self {
+        self.hostname = Some(hostname.into());
+        self
+    }
+
+    pub fn set_ip(&mut self, ip: impl Into<String>) -> &mut Self {
+        self.ip = Some(ip.into());
+        self
+    }
+
+    pub fn set_expiration(&mut self, expiration: Duration) -> &mut Self {
+        self.expiration = expiration;
+        self
+    }
+
     pub fn sign(&self, private_key_pem: &[u8]) -> Result<String, Error> {
         let key = load_private_key(private_key_pem)?;
         let (token, _) = sign_with_key(self, &key)?;
@@ -757,5 +784,27 @@ awIDAQAB
         assert_eq!(claims.name, "api");
         assert_eq!(claims.key_version, "v1");
         assert_eq!(claims.key_service.as_deref(), Some("zts"));
+    }
+
+    #[test]
+    fn ntoken_signer_builder_mut_updates_fields() {
+        let mut signer =
+            NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+        signer
+            .builder_mut()
+            .set_hostname("host.example")
+            .set_ip("127.0.0.1")
+            .set_key_service("ZTS")
+            .set_version("S2")
+            .set_expiration(Duration::from_secs(90));
+        let token = signer.sign_once().expect("token");
+        let validator =
+            NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+        let claims = validator.validate(&token).expect("validate");
+        assert_eq!(claims.hostname.as_deref(), Some("host.example"));
+        assert_eq!(claims.ip.as_deref(), Some("127.0.0.1"));
+        assert_eq!(claims.key_service.as_deref(), Some("zts"));
+        assert_eq!(claims.version, "S2");
+        assert_eq!(claims.expiry_time - claims.generation_time, 90);
     }
 }

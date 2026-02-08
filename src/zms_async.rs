@@ -552,12 +552,9 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "service", service])?;
         let mut req = self.http.put(url).json(detail);
         req = self.apply_auth(req)?;
-        req = self.apply_audit_headers(req, audit_ref, None);
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
         }
         let resp = req.send().await?;
         self.expect_no_content_or_json(resp).await
@@ -689,12 +686,9 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "group", group])?;
         let mut req = self.http.put(url).json(detail);
         req = self.apply_auth(req)?;
-        req = self.apply_audit_headers(req, audit_ref, None);
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
         }
         let resp = req.send().await?;
         self.expect_no_content_or_json(resp).await
@@ -746,12 +740,9 @@ impl ZmsAsyncClient {
         let url = self.build_url(&["domain", domain, "group", group, "member", member])?;
         let mut req = self.http.put(url).json(membership);
         req = self.apply_auth(req)?;
-        req = self.apply_audit_headers(req, audit_ref, None);
+        req = self.apply_audit_headers(req, audit_ref, resource_owner);
         if let Some(return_obj) = return_obj {
             req = req.header("Athenz-Return-Object", return_obj.to_string());
-        }
-        if let Some(resource_owner) = resource_owner {
-            req = req.header("Athenz-Resource-Owner", resource_owner);
         }
         let resp = req.send().await?;
         self.expect_no_content_or_json(resp).await

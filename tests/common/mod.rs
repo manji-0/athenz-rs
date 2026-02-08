@@ -83,7 +83,17 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
         }
     }
 
-    let header_end = header_end.unwrap_or(buf.len());
+    let header_end = match header_end {
+        Some(pos) => pos,
+        None => {
+            return CapturedRequest {
+                method: "<incomplete>".to_string(),
+                path: "<incomplete>".to_string(),
+                headers: Vec::new(),
+                query: HashMap::new(),
+            };
+        }
+    };
     let header_str = String::from_utf8_lossy(&buf[..header_end]);
     let mut lines = header_str.split("\r\n");
     let request_line = lines.next().unwrap_or("");

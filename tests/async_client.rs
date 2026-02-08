@@ -294,6 +294,32 @@ async fn issue_id_token_returns_location_on_redirect() {
 }
 
 #[tokio::test]
+async fn issue_id_token_redirect_requires_location() {
+    let response = "HTTP/1.1 302 Found\r\n\r\n".to_string();
+    let (base_url, _rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let request = IdTokenRequest::new(
+        "client-id",
+        "https://example.com/redirect",
+        "openid",
+        "nonce",
+    );
+    let err = client.issue_id_token(&request).await.expect_err("id token");
+    match err {
+        Error::Api(err) => {
+            assert_eq!(err.code, 302);
+            assert!(err.message.contains("missing location header for redirect"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn issue_id_token_rejects_when_redirects_enabled() {
     let client = ZtsAsyncClient::builder("https://example.com/zts/v1")
         .expect("builder")

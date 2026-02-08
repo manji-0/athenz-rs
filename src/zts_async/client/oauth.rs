@@ -1,5 +1,5 @@
 use super::ZtsAsyncClient;
-use crate::error::Error;
+use crate::error::{Error, ResourceError};
 use crate::models::{
     AccessTokenResponse, IntrospectResponse, JwkList, OAuthConfig, OidcResponse, OpenIdConfig,
     PublicKeyEntry,
@@ -51,10 +51,19 @@ impl ZtsAsyncClient {
                     .headers()
                     .get(reqwest::header::LOCATION)
                     .and_then(|v| v.to_str().ok())
-                    .map(|v| v.to_string());
+                    .map(|v| v.to_string())
+                    .ok_or_else(|| {
+                        Error::Api(ResourceError {
+                            code: status.as_u16() as i32,
+                            message: "missing location header for redirect".to_string(),
+                            description: None,
+                            error: None,
+                            request_id: None,
+                        })
+                    })?;
                 Ok(IdTokenResponse {
                     response: None,
-                    location,
+                    location: Some(location),
                 })
             }
             _ => self.parse_error(resp).await,

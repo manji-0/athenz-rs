@@ -232,6 +232,7 @@ impl JwtValidator {
             let keys = jwks.keys.iter().filter(|jwk| is_rs_jwk(jwk));
             let result = validate_kidless_jwks(
                 keys,
+                &header.alg,
                 |jwk| {
                     let decoding_key = DecodingKey::from_jwk(jwk).map_err(Error::from)?;
                     let token_data =
@@ -278,6 +279,7 @@ impl JwtValidator {
             let keys = jwks.keys.iter().filter(|jwk| is_es512_jwk(jwk));
             return validate_kidless_jwks(
                 keys,
+                &header.alg,
                 |jwk| self.validate_es512_with_key(parts, header, jwk),
                 is_es512_key_error,
             );
@@ -424,6 +426,7 @@ fn is_es512_key_error(err: &Error) -> bool {
     match err {
         Error::UnsupportedAlg(_) => true,
         Error::Jwt(jwt_err) => matches!(jwt_err.kind(), ErrorKind::InvalidEcdsaKey),
+        Error::Crypto(message) => message.starts_with("jwk coord decode error:"),
         _ => false,
     }
 }
@@ -448,12 +451,13 @@ fn is_signature_error(err: &Error) -> bool {
     }
 }
 
-fn kidless_no_compatible_jwk() -> Error {
-    Error::MissingJwk(NO_COMPATIBLE_JWK_MESSAGE.to_string())
+fn kidless_no_compatible_jwk(alg: &str) -> Error {
+    Error::MissingJwk(format!("{NO_COMPATIBLE_JWK_MESSAGE} {alg} (kid missing)"))
 }
 
 fn validate_kidless_jwks<'a, I, F, K>(
     keys: I,
+    alg: &str,
     mut try_key: F,
     mut is_key_error: K,
 ) -> Result<JwtTokenData<Value>, Error>
@@ -485,11 +489,11 @@ where
         }
     }
     if candidates == 0 {
-        return Err(kidless_no_compatible_jwk());
+        return Err(kidless_no_compatible_jwk(alg));
     }
     Err(signature_err
         .or(key_err)
-        .unwrap_or_else(kidless_no_compatible_jwk))
+        .unwrap_or_else(|| kidless_no_compatible_jwk(alg)))
 }
 
 fn is_rs_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> bool {
@@ -504,7 +508,10 @@ fn is_es512_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> bool {
 }
 
 fn decode_p521_coord(value: &str) -> Result<Vec<u8>, Error> {
-    let bytes = base64_url_decode(value)?;
+    let bytes = base64_url_decode(value).map_err(|err| match err {
+        Error::Crypto(message) => Error::Crypto(format!("jwk coord decode error: {message}")),
+        other => other,
+    })?;
     const P521_COORD_SIZE: usize = 66;
     if bytes.len() > P521_COORD_SIZE {
         return Err(jwt_error(ErrorKind::InvalidEcdsaKey));
@@ -1147,8 +1154,9 @@ mod tests {
         let err = validator
             .validate_access_token(&token)
             .expect_err("should reject");
+        let expected = format!("{NO_COMPATIBLE_JWK_MESSAGE} RS256 (kid missing)");
         match err {
-            Error::MissingJwk(message) => assert_eq!(message, NO_COMPATIBLE_JWK_MESSAGE),
+            Error::MissingJwk(message) => assert_eq!(message, expected),
             other => panic!("unexpected error: {:?}", other),
         }
     }

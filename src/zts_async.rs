@@ -44,6 +44,7 @@ impl ZtsAsyncClientBuilder {
         self
     }
 
+    /// Set to true to disable HTTP redirects.
     pub fn disable_redirect(mut self, disable: bool) -> Self {
         self.disable_redirect = disable;
         self
@@ -81,9 +82,9 @@ impl ZtsAsyncClientBuilder {
     ) -> Result<Self, Error> {
         // Async builder validates header inputs to avoid request-time failures.
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
-            .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("config error: invalid header name: {}", e)))?;
         let value = HeaderValue::from_str(token.as_ref())
-            .map_err(|e| Error::Crypto(format!("invalid header value: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("config error: invalid header value: {}", e)))?;
         self.auth = Some(AuthProvider::StaticHeader { header, value });
         Ok(self)
     }
@@ -95,7 +96,7 @@ impl ZtsAsyncClientBuilder {
     ) -> Result<Self, Error> {
         // Async builder validates header inputs to avoid request-time failures.
         let header = HeaderName::from_bytes(header.as_ref().as_bytes())
-            .map_err(|e| Error::Crypto(format!("invalid header name: {}", e)))?;
+            .map_err(|e| Error::Crypto(format!("config error: invalid header name: {}", e)))?;
         self.auth = Some(AuthProvider::NToken { header, signer });
         Ok(self)
     }
@@ -168,7 +169,7 @@ impl ZtsAsyncClient {
     pub async fn issue_id_token(&self, request: &IdTokenRequest) -> Result<IdTokenResponse, Error> {
         if !self.disable_redirect {
             return Err(Error::Crypto(
-                "issue_id_token requires disable_redirect(true) to observe Location header"
+                "config error: issue_id_token requires disable_redirect(true) to observe Location header"
                     .to_string(),
             ));
         }

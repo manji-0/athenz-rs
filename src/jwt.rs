@@ -344,7 +344,9 @@ impl JwtValidator {
         if let Some(ref issuer) = self.options.issuer {
             validation.set_issuer(&[issuer.as_str()]);
         }
-        if !self.options.audience.is_empty() {
+        if self.options.audience.is_empty() {
+            validation.validate_aud = false;
+        } else {
             validation.set_audience(&self.options.audience);
         }
         validation.validate_aud = !self.options.audience.is_empty();
@@ -436,7 +438,9 @@ impl JwtValidator {
         if let Some(ref issuer) = self.options.issuer {
             validation.set_issuer(&[issuer.as_str()]);
         }
-        if !self.options.audience.is_empty() {
+        if self.options.audience.is_empty() {
+            validation.validate_aud = false;
+        } else {
             validation.set_audience(&self.options.audience);
         }
         validation.validate_aud = !self.options.audience.is_empty();
@@ -1355,6 +1359,24 @@ mod tests {
     }
 
     #[test]
+    fn jwt_es512_allows_aud_when_audience_empty() {
+        let (token, jwks) = build_es512_token();
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::athenz_default();
+        options.issuer = Some("athenz".to_string());
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let data = validator.validate_access_token(&token).expect("validate");
+        assert_eq!(data.claims["aud"], "client");
+        assert_eq!(data.header.alg, "ES512");
+    }
+
+    #[test]
     fn jwt_es512_validates_without_kid_using_all_keys() {
         let (token, jwks) = build_es512_token_without_kid();
         let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
@@ -1408,6 +1430,23 @@ mod tests {
         let mut options = JwtValidationOptions::rsa_only();
         options.issuer = Some("athenz".to_string());
         options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let data = validator.validate_access_token(&token).expect("validate");
+        assert_eq!(data.claims["sub"], "principal");
+    }
+
+    #[test]
+    fn jwt_rs256_allows_aud_when_audience_empty() {
+        let (token, jwks) = build_rs256_token_without_kid();
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
 
         let validator = JwtValidator::new(jwks_provider).with_options(options);
         let data = validator.validate_access_token(&token).expect("validate");

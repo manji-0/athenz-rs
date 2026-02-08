@@ -1,12 +1,13 @@
 #![cfg(feature = "async-validate")]
 
 use athenz_rs::{
-    DomainSignedPolicyData, JWSPolicyData, JwksProviderAsync, JwtValidationOptions,
+    DomainSignedPolicyData, Error, JWSPolicyData, JwksProviderAsync, JwtValidationOptions,
     JwtValidatorAsync, NTokenSigner, NTokenValidatorAsync, NTokenValidatorConfig,
     PolicyClientAsync, PolicyData, SignedPolicyData, ZtsAsyncClient,
 };
 use base64::engine::general_purpose::{STANDARD as BASE64_STD, URL_SAFE_NO_PAD};
 use base64::Engine as _;
+use jsonwebtoken::errors::ErrorKind;
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use p521::ecdsa::{
@@ -133,6 +134,64 @@ async fn jwt_rs256_async_validate_success() {
         .await
         .expect("validate");
     assert_eq!(data.header.alg, "RS256");
+}
+
+#[tokio::test]
+async fn jwt_rs256_async_rejects_invalid_typ() {
+    let header = json!({
+        "alg": "RS256",
+        "kid": "good-key",
+        "typ": "JAG",
+    });
+    let token = build_rs256_token_with_header(header);
+    let (n, e, _) = rs256_public_components();
+    let jwks = build_rs256_jwks(&n, &e, "good-key");
+    let provider = JwksProviderAsync::new("https://example.com/jwks")
+        .expect("provider")
+        .with_preloaded(jwks);
+
+    let mut options = JwtValidationOptions::athenz_default();
+    options.issuer = Some("athenz".to_string());
+    options.audience = vec!["client".to_string()];
+
+    let validator = JwtValidatorAsync::new(provider).with_options(options);
+    let err = validator
+        .validate_access_token(&token)
+        .await
+        .expect_err("should reject");
+    match err {
+        Error::Jwt(err) => assert_eq!(err.kind(), &ErrorKind::InvalidToken),
+        other => panic!("unexpected error: {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn jwt_rs256_async_rejects_non_string_typ() {
+    let header = json!({
+        "alg": "RS256",
+        "kid": "good-key",
+        "typ": 123,
+    });
+    let token = build_rs256_token_with_header(header);
+    let (n, e, _) = rs256_public_components();
+    let jwks = build_rs256_jwks(&n, &e, "good-key");
+    let provider = JwksProviderAsync::new("https://example.com/jwks")
+        .expect("provider")
+        .with_preloaded(jwks);
+
+    let mut options = JwtValidationOptions::athenz_default();
+    options.issuer = Some("athenz".to_string());
+    options.audience = vec!["client".to_string()];
+
+    let validator = JwtValidatorAsync::new(provider).with_options(options);
+    let err = validator
+        .validate_access_token(&token)
+        .await
+        .expect_err("should reject");
+    match err {
+        Error::Jwt(err) => assert_eq!(err.kind(), &ErrorKind::InvalidToken),
+        other => panic!("unexpected error: {:?}", other),
+    }
 }
 
 #[tokio::test]
@@ -454,6 +513,25 @@ fn build_rs256_token(kid: Option<&str>) -> String {
         &EncodingKey::from_rsa_pem(RSA_PRIVATE_KEY.as_bytes()).expect("encoding key"),
     )
     .expect("token")
+}
+
+fn build_rs256_token_with_header(header: serde_json::Value) -> String {
+    let exp = jsonwebtoken::get_current_timestamp() + 3600;
+    let claims = json!({
+        "iss": "athenz",
+        "aud": "client",
+        "sub": "principal",
+        "exp": exp,
+    });
+    let header_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).expect("header json"));
+    let payload_b64 = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&claims).expect("payload json"));
+    let signing_input = format!("{}.{}", header_b64, payload_b64);
+
+    let private_key = RsaPrivateKey::from_pkcs1_pem(RSA_PRIVATE_KEY).expect("private key");
+    let signing_key = RsaSigningKey::<Sha256>::new(private_key);
+    let signature = signing_key.sign(signing_input.as_bytes());
+    let signature_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
+    format!("{}.{}", signing_input, signature_b64)
 }
 
 fn build_rs256_jwks(n: &[u8], e: &[u8], kid: &str) -> JwkSet {

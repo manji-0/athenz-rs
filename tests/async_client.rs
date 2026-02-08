@@ -294,6 +294,58 @@ async fn issue_id_token_returns_location_on_redirect() {
 }
 
 #[tokio::test]
+async fn issue_id_token_ok_includes_location_header() {
+    let body = r#"{"version":1,"id_token":"abc","token_type":"Bearer","success":true,"expiration_time":123}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nLocation: https://example.com/cb\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, _rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let request = IdTokenRequest::new(
+        "client-id",
+        "https://example.com/redirect",
+        "openid",
+        "nonce",
+    );
+    let response = client.issue_id_token(&request).await.expect("id token");
+    assert!(response.response.is_some());
+    assert_eq!(response.location.as_deref(), Some("https://example.com/cb"));
+}
+
+#[tokio::test]
+async fn issue_id_token_redirect_requires_location() {
+    let response = "HTTP/1.1 302 Found\r\n\r\n".to_string();
+    let (base_url, _rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let request = IdTokenRequest::new(
+        "client-id",
+        "https://example.com/redirect",
+        "openid",
+        "nonce",
+    );
+    let err = client.issue_id_token(&request).await.expect_err("id token");
+    match err {
+        Error::Api(err) => {
+            assert_eq!(err.code, 302);
+            assert!(err.message.contains("missing location header for redirect"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn issue_id_token_rejects_when_redirects_enabled() {
     let client = ZtsAsyncClient::builder("https://example.com/zts/v1")
         .expect("builder")
@@ -359,10 +411,10 @@ fn builder_rejects_redirects_with_auth() {
         .expect("builder")
         .ntoken_auth("Athenz-Principal-Auth", "token")
         .expect("auth");
-    let err = builder
-        .follow_redirects(true)
-        .build()
-        .expect_err("should reject redirects with auth");
+    let err = match builder.follow_redirects(true).build() {
+        Ok(_) => panic!("should reject redirects with auth"),
+        Err(err) => err,
+    };
     match err {
         Error::Crypto(message) => assert!(message.contains("follow_redirects(true)")),
         other => panic!("unexpected error: {other:?}"),

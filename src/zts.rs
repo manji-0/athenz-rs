@@ -306,7 +306,7 @@ impl IdTokenRequest {
             key_type: None,
             full_arn: None,
             expiry_time: None,
-            output: Some("json".to_string()),
+            output: Some("json".into()),
             role_in_aud_claim: None,
             all_scope_present: None,
         }

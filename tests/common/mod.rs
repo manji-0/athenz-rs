@@ -187,6 +187,12 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
         remaining = remaining.saturating_sub(take);
     }
 
+    if remaining > 0 {
+        panic!(
+            "read_request body incomplete: expected {content_length} bytes, got {} bytes",
+            content_length.saturating_sub(remaining)
+        );
+    }
     CapturedRequest {
         method,
         path,

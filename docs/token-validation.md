@@ -20,7 +20,9 @@ println!("claims: {}", data.claims);
 
 Note: audience validation is enforced when a token includes an `aud` claim. If you do not
 set `JwtValidationOptions.audience`, tokens with `aud` will fail with `InvalidAudience`.
-Configure the expected audiences when your tokens include `aud`.
+`JwtValidationOptions.audience` is a list of allowed audiences (e.g., `Vec<String>`); validation
+succeeds if the token's `aud` claim matches any of the configured values. Configure the expected
+audiences when your tokens include `aud`.
 
 ## Validation options
 

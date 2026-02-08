@@ -31,6 +31,7 @@ const ATHENZ_ALLOWED_ALG_NAMES: &[&str] = &["RS256", "RS384", "RS512", "ES256", 
 // `10` was chosen to cover typical deployments where JWKS sets are small (O(1–10) active keys)
 // while preventing unbounded work on misconfigured or very large JWKS endpoints.
 const MAX_KIDLESS_JWKS_KEYS: usize = 10;
+const NO_COMPATIBLE_JWK_MESSAGE: &str = "no compatible jwks key for alg";
 const SUPPORTED_JWK_ALGS: &[&str] = &[
     "HS256",
     "HS384",
@@ -227,51 +228,22 @@ impl JwtValidator {
         }
 
         let jwks = self.jwks.fetch()?;
-        if header.kid.is_none() && jwks.keys.len() > 1 {
-            let mut signature_err = None;
-            let mut key_err = None;
-            let mut candidates = 0usize;
-            for jwk in jwks
-                .keys
-                .iter()
-                .filter(|jwk| is_rs_jwk(jwk))
-                .take(MAX_KIDLESS_JWKS_KEYS)
-            {
-                candidates += 1;
-                let decoding_key = match DecodingKey::from_jwk(jwk) {
-                    Ok(key) => key,
-                    Err(err) => {
-                        if key_err.is_none() {
-                            key_err = Some(Error::from(err));
-                        }
-                        continue;
-                    }
-                };
-                match decode::<Value>(token, &decoding_key, &validation) {
-                    Ok(token_data) => {
-                        return Ok(JwtTokenData {
-                            header: header.clone(),
-                            claims: token_data.claims,
-                        });
-                    }
-                    Err(err) => {
-                        let err = Error::from(err);
-                        if is_signature_error(&err) {
-                            if signature_err.is_none() {
-                                signature_err = Some(err);
-                            }
-                        } else {
-                            return Err(err);
-                        }
-                    }
-                }
-            }
-            if candidates == 0 {
-                return Err(Error::MissingJwk("no compatible key".to_string()));
-            }
-            return Err(signature_err
-                .or(key_err)
-                .unwrap_or_else(|| Error::MissingJwk("no compatible key".to_string())));
+        if header.kid.is_none() && jwks.keys.len() > 1 && ATHENZ_RSA_ALGS.contains(&alg) {
+            let keys = jwks.keys.iter().filter(|jwk| is_rs_jwk(jwk));
+            let result = validate_kidless_jwks(
+                keys,
+                |jwk| {
+                    let decoding_key = DecodingKey::from_jwk(jwk).map_err(Error::from)?;
+                    let token_data =
+                        decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
+                    Ok(JwtTokenData {
+                        header: header.clone(),
+                        claims: token_data.claims,
+                    })
+                },
+                is_rs_key_error,
+            );
+            return result;
         }
 
         let key = select_jwk(&jwks, header.kid.as_deref())?;
@@ -303,39 +275,12 @@ impl JwtValidator {
 
         let jwks = self.jwks.fetch()?;
         if header.kid.is_none() && jwks.keys.len() > 1 {
-            let mut signature_err = None;
-            let mut key_err = None;
-            let mut candidates = 0usize;
-            for jwk in jwks
-                .keys
-                .iter()
-                .filter(|jwk| is_es512_jwk(jwk))
-                .take(MAX_KIDLESS_JWKS_KEYS)
-            {
-                candidates += 1;
-                match self.validate_es512_with_key(parts, header, jwk) {
-                    Ok(data) => return Ok(data),
-                    Err(err) => {
-                        if is_es512_key_error(&err) {
-                            if key_err.is_none() {
-                                key_err = Some(err);
-                            }
-                        } else if is_signature_error(&err) {
-                            if signature_err.is_none() {
-                                signature_err = Some(err);
-                            }
-                        } else {
-                            return Err(err);
-                        }
-                    }
-                }
-            }
-            if candidates == 0 {
-                return Err(Error::MissingJwk("no compatible key".to_string()));
-            }
-            return Err(signature_err
-                .or(key_err)
-                .unwrap_or_else(|| Error::MissingJwk("no compatible key".to_string())));
+            let keys = jwks.keys.iter().filter(|jwk| is_es512_jwk(jwk));
+            return validate_kidless_jwks(
+                keys,
+                |jwk| self.validate_es512_with_key(parts, header, jwk),
+                is_es512_key_error,
+            );
         }
 
         let key = select_jwk(&jwks, header.kid.as_deref())?;
@@ -483,11 +428,68 @@ fn is_es512_key_error(err: &Error) -> bool {
     }
 }
 
+fn is_rs_key_error(err: &Error) -> bool {
+    match err {
+        Error::Jwt(jwt_err) => matches!(
+            jwt_err.kind(),
+            ErrorKind::InvalidKeyFormat
+                | ErrorKind::InvalidAlgorithm
+                | ErrorKind::InvalidAlgorithmName
+                | ErrorKind::InvalidRsaKey(_)
+        ),
+        _ => false,
+    }
+}
+
 fn is_signature_error(err: &Error) -> bool {
     match err {
         Error::Jwt(jwt_err) => matches!(jwt_err.kind(), ErrorKind::InvalidSignature),
         _ => false,
     }
+}
+
+fn kidless_no_compatible_jwk() -> Error {
+    Error::MissingJwk(NO_COMPATIBLE_JWK_MESSAGE.to_string())
+}
+
+fn validate_kidless_jwks<'a, I, F, K>(
+    keys: I,
+    mut try_key: F,
+    mut is_key_error: K,
+) -> Result<JwtTokenData<Value>, Error>
+where
+    I: Iterator<Item = &'a jsonwebtoken::jwk::Jwk>,
+    F: FnMut(&'a jsonwebtoken::jwk::Jwk) -> Result<JwtTokenData<Value>, Error>,
+    K: FnMut(&Error) -> bool,
+{
+    let mut signature_err = None;
+    let mut key_err = None;
+    let mut candidates = 0usize;
+    for jwk in keys.take(MAX_KIDLESS_JWKS_KEYS) {
+        candidates += 1;
+        match try_key(jwk) {
+            Ok(data) => return Ok(data),
+            Err(err) => {
+                if is_key_error(&err) {
+                    if key_err.is_none() {
+                        key_err = Some(err);
+                    }
+                } else if is_signature_error(&err) {
+                    if signature_err.is_none() {
+                        signature_err = Some(err);
+                    }
+                } else {
+                    return Err(err);
+                }
+            }
+        }
+    }
+    if candidates == 0 {
+        return Err(kidless_no_compatible_jwk());
+    }
+    Err(signature_err
+        .or(key_err)
+        .unwrap_or_else(kidless_no_compatible_jwk))
 }
 
 fn is_rs_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> bool {
@@ -1146,7 +1148,7 @@ mod tests {
             .validate_access_token(&token)
             .expect_err("should reject");
         match err {
-            Error::MissingJwk(message) => assert_eq!(message, "no compatible key"),
+            Error::MissingJwk(message) => assert_eq!(message, NO_COMPATIBLE_JWK_MESSAGE),
             other => panic!("unexpected error: {:?}", other),
         }
     }

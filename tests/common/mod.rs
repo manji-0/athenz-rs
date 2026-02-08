@@ -73,21 +73,28 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
     let mut buf = Vec::new();
     let mut chunk = [0u8; 1024];
     let mut header_end = None;
+    let mut incomplete_reason: Option<&'static str> = None;
     let deadline = Instant::now() + MAX_READ_DURATION;
     loop {
         if buf.len() >= MAX_HEADER_BYTES {
+            incomplete_reason = Some("header_too_large");
             break;
         }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
+            incomplete_reason = Some("timeout");
             break;
         }
         let read = match timeout(remaining.min(READ_TIMEOUT), stream.read(&mut chunk)).await {
             Ok(Ok(read)) => read,
-            Ok(Err(_)) => break,
+            Ok(Err(_)) => {
+                incomplete_reason = Some("read_error");
+                break;
+            }
             Err(_) => continue,
         };
         if read == 0 {
+            incomplete_reason = Some("eof");
             break;
         }
         buf.extend_from_slice(&chunk[..read]);
@@ -101,9 +108,10 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
     let header_end = match header_end {
         Some(pos) => pos,
         None => {
+            let reason = incomplete_reason.unwrap_or("incomplete");
             return CapturedRequest {
                 method: "<incomplete>".to_string(),
-                path: "<incomplete>".to_string(),
+                path: format!("<{}>", reason),
                 headers: Vec::new(),
                 query: HashMap::new(),
             };

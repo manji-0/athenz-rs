@@ -293,6 +293,32 @@ async fn issue_id_token_returns_location_on_redirect() {
     assert_eq!(req.query_value("response_type"), Some("id_token"));
 }
 
+#[tokio::test]
+async fn issue_id_token_rejects_when_redirects_enabled() {
+    let client = ZtsAsyncClient::builder("https://example.com/zts/v1")
+        .expect("builder")
+        .follow_redirects(true)
+        .build()
+        .expect("build");
+
+    let request = IdTokenRequest::new(
+        "client-id",
+        "https://example.com/redirect",
+        "openid",
+        "nonce",
+    );
+    let err = client
+        .issue_id_token(&request)
+        .await
+        .expect_err("should reject");
+    match err {
+        Error::Crypto(message) => {
+            assert!(message.contains("issue_id_token requires follow_redirects(false)"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
 #[test]
 fn ntoken_auth_rejects_invalid_header_name() {
     let err = match ZtsAsyncClient::builder("https://example.com/zts/v1")

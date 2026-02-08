@@ -79,13 +79,11 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
     let deadline = Instant::now() + MAX_READ_DURATION;
     loop {
         if buf.len() >= MAX_HEADER_BYTES {
-            incomplete_reason = Some("header_too_large");
-            break;
+            panic!("request headers too large");
         }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
-            incomplete_reason = Some("timeout");
-            break;
+            panic!("timed out reading request headers");
         }
         let read = match timeout(remaining.min(READ_TIMEOUT), stream.read(&mut chunk)).await {
             Ok(Ok(read)) => read,
@@ -99,18 +97,16 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
         let remaining_space = MAX_HEADER_BYTES.saturating_sub(buf.len());
         let take = read.min(remaining_space);
         if take == 0 {
-            incomplete_reason = Some("header_too_large");
-            break;
+            panic!("request headers too large");
         }
         buf.extend_from_slice(&chunk[..take]);
-        if take < read {
-            incomplete_reason = Some("header_too_large");
-            break;
-        }
         let start = buf.len().saturating_sub(take + 3);
         if let Some(pos) = find_header_end(&buf, start) {
             header_end = Some(pos);
             break;
+        }
+        if take < read {
+            panic!("request headers too large");
         }
     }
 

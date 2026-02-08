@@ -20,10 +20,10 @@ println!("claims: {}", data.claims);
 
 Note: audience validation is enforced only when `JwtValidationOptions.audience` is non-empty.
 If the configured audience list is empty, `aud` is not validated. `JwtValidationOptions.audience`
-is a list of allowed audiences (e.g., `Vec<String>`); validation succeeds if the token's `aud`
-claim matches any of the configured values. Configure a non-empty audience list when you need
-strict `aud` checks. This controls only value validation; whether the `aud` claim must be present
-is configured separately (for example, via required-claims settings).
+is a list of required audiences (e.g., `Vec<String>`); validation succeeds if every configured
+audience value is present in the token's `aud` claim. Configure a non-empty audience list when you
+need strict `aud` checks. This controls only value validation; whether the `aud` claim must be
+present is configured separately (for example, via required-claims settings).
 
 ## Validation options
 

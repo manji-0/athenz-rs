@@ -1,4 +1,6 @@
 use crate::error::Error;
+#[cfg(feature = "async-validate")]
+use crate::error::MAX_ERROR_BODY_BYTES;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use jsonwebtoken::errors::ErrorKind;
@@ -18,9 +20,6 @@ use std::time::{Duration, Instant};
 use std::{fmt, str::FromStr};
 #[cfg(feature = "async-validate")]
 use tokio::sync::Mutex as AsyncMutex;
-
-#[cfg(feature = "async-validate")]
-const MAX_ERROR_BODY_BYTES: usize = 64 * 1024;
 #[cfg(feature = "async-validate")]
 use tokio::sync::RwLock as AsyncRwLock;
 use url::Url;

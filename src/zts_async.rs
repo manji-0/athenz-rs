@@ -1,4 +1,4 @@
-use crate::error::{Error, ResourceError};
+use crate::error::{Error, ResourceError, MAX_ERROR_BODY_BYTES};
 use crate::models::{
     AccessTokenResponse, CertificateAuthorityBundle, DomainSignedPolicyData,
     ExternalCredentialsRequest, ExternalCredentialsResponse, Info, InstanceIdentity,
@@ -12,8 +12,6 @@ use crate::zts::{AccessTokenRequest, ConditionalResponse, IdTokenRequest, IdToke
 use reqwest::{Certificate, Client as HttpClient, Identity, RequestBuilder, Response, StatusCode};
 use std::time::Duration;
 use url::Url;
-
-const MAX_ERROR_BODY_BYTES: usize = 64 * 1024;
 
 pub struct ZtsAsyncClientBuilder {
     base_url: Url,
@@ -533,10 +531,21 @@ impl ZtsAsyncClient {
             body.extend_from_slice(&chunk[..take]);
             remaining -= take;
         }
+        let body_text = String::from_utf8_lossy(&body).to_string();
+        let fallback_message = if body_text.trim().is_empty() {
+            let reason = status.canonical_reason().unwrap_or("");
+            if reason.is_empty() {
+                format!("http status {}", status.as_u16())
+            } else {
+                format!("http status {} {}", status.as_u16(), reason)
+            }
+        } else {
+            body_text.clone()
+        };
         let mut err =
             serde_json::from_slice::<ResourceError>(&body).unwrap_or_else(|_| ResourceError {
                 code: status.as_u16() as i32,
-                message: String::from_utf8_lossy(&body).to_string(),
+                message: fallback_message.clone(),
                 description: None,
                 error: None,
                 request_id: None,
@@ -544,8 +553,8 @@ impl ZtsAsyncClient {
         if err.code == 0 {
             err.code = status.as_u16() as i32;
         }
-        if err.message.is_empty() {
-            err.message = String::from_utf8_lossy(&body).to_string();
+        if err.message.trim().is_empty() {
+            err.message = fallback_message;
         }
         Err(Error::Api(err))
     }

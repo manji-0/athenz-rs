@@ -18,6 +18,9 @@ use std::time::{Duration, Instant};
 use std::{fmt, str::FromStr};
 #[cfg(feature = "async-validate")]
 use tokio::sync::Mutex as AsyncMutex;
+
+#[cfg(feature = "async-validate")]
+const MAX_ERROR_BODY_BYTES: usize = 64 * 1024;
 #[cfg(feature = "async-validate")]
 use tokio::sync::RwLock as AsyncRwLock;
 use url::Url;
@@ -212,10 +215,19 @@ impl JwksProviderAsync {
             }
         }
 
-        let resp = self.http.get(self.jwks_uri.clone()).send().await?;
+        let mut resp = self.http.get(self.jwks_uri.clone()).send().await?;
         let status = resp.status();
-        let body = resp.bytes().await?;
         if !status.is_success() {
+            let mut body = Vec::new();
+            let mut remaining = MAX_ERROR_BODY_BYTES;
+            while let Some(chunk) = resp.chunk().await? {
+                if remaining == 0 {
+                    break;
+                }
+                let take = remaining.min(chunk.len());
+                body.extend_from_slice(&chunk[..take]);
+                remaining -= take;
+            }
             let body_preview = sanitize_error_body(&body);
             return Err(Error::Crypto(if body_preview.is_empty() {
                 format!(
@@ -232,6 +244,7 @@ impl JwksProviderAsync {
                 )
             }));
         }
+        let body = resp.bytes().await?;
         let jwks = jwks_from_slice(&body)?;
         let cached = CachedJwks {
             jwks: jwks.clone(),
@@ -339,6 +352,7 @@ impl JwtValidator {
         if !self.options.audience.is_empty() {
             validation.set_audience(&self.options.audience);
         }
+        validation.validate_aud = !self.options.audience.is_empty();
 
         let jwks = self.jwks.fetch()?;
         if header.kid.is_none() && jwks.keys.len() > 1 && ATHENZ_RSA_ALGS.contains(&alg) {
@@ -430,6 +444,7 @@ impl JwtValidator {
         if !self.options.audience.is_empty() {
             validation.set_audience(&self.options.audience);
         }
+        validation.validate_aud = !self.options.audience.is_empty();
         validate_claims(&claims, &validation)?;
 
         Ok(JwtTokenData {
@@ -492,6 +507,7 @@ impl JwtValidatorAsync {
         if !self.options.audience.is_empty() {
             validation.set_audience(&self.options.audience);
         }
+        validation.validate_aud = !self.options.audience.is_empty();
 
         let token_data = decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
         Ok(JwtTokenData {
@@ -542,6 +558,7 @@ impl JwtValidatorAsync {
         if !self.options.audience.is_empty() {
             validation.set_audience(&self.options.audience);
         }
+        validation.validate_aud = !self.options.audience.is_empty();
         validate_claims(&claims, &validation)?;
 
         Ok(JwtTokenData {

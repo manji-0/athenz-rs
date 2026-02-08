@@ -910,6 +910,8 @@ mod tests {
         let req = AccessTokenRequest::new("sports", vec!["*".to_string()]);
         let scope = req.scope();
         assert_eq!(scope, "sports:role.*");
+        let form = req.to_form();
+        assert!(form.contains("scope=sports%3Arole.*") || form.contains("scope=sports%3Arole.%2A"));
     }
 
     #[test]

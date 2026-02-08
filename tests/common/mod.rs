@@ -8,6 +8,7 @@ use tokio::time::timeout;
 const READ_TIMEOUT: Duration = Duration::from_millis(500);
 const MAX_READ_DURATION: Duration = Duration::from_secs(6);
 const MAX_HEADER_BYTES: usize = 64 * 1024;
+const MAX_BODY_BYTES: usize = 64 * 1024;
 
 pub struct CapturedRequest {
     pub method: String,
@@ -88,10 +89,7 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
         }
         let read = match timeout(remaining.min(READ_TIMEOUT), stream.read(&mut chunk)).await {
             Ok(Ok(read)) => read,
-            Ok(Err(_)) => {
-                incomplete_reason = Some("read_error");
-                break;
-            }
+            Ok(Err(e)) => panic!("read_request I/O error: {e}"),
             Err(_) => continue,
         };
         if read == 0 {
@@ -159,6 +157,12 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
             headers.push((name.to_string(), value.to_string()));
         }
     }
+    if content_length > MAX_BODY_BYTES {
+        panic!(
+            "request body too large: {} > {} bytes",
+            content_length, MAX_BODY_BYTES
+        );
+    }
 
     let body_read = buf.len().saturating_sub(header_end);
     let mut body = Vec::new();
@@ -174,7 +178,7 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> CapturedRequest {
         }
         let read = match timeout(remaining_time.min(READ_TIMEOUT), stream.read(&mut chunk)).await {
             Ok(Ok(read)) => read,
-            Ok(Err(_)) => break,
+            Ok(Err(e)) => panic!("read_request body I/O error: {e}"),
             Err(_) => continue,
         };
         if read == 0 {

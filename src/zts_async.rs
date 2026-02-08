@@ -45,6 +45,9 @@ impl ZtsAsyncClientBuilder {
     }
 
     /// Control whether HTTP redirects should be followed.
+    ///
+    /// If auth headers are configured, enabling redirects is rejected to avoid
+    /// leaking credentials to redirected hosts.
     pub fn follow_redirects(mut self, follow_redirects: bool) -> Self {
         self.disable_redirect = !follow_redirects;
         self
@@ -108,6 +111,12 @@ impl ZtsAsyncClientBuilder {
     }
 
     pub fn build(self) -> Result<ZtsAsyncClient, Error> {
+        if self.auth.is_some() && !self.disable_redirect {
+            return Err(Error::Crypto(
+                "config error: follow_redirects(true) is not allowed when auth is configured"
+                    .to_string(),
+            ));
+        }
         let mut builder = HttpClient::builder();
         if let Some(timeout) = self.timeout {
             builder = builder.timeout(timeout);

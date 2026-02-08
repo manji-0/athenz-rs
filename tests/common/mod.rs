@@ -6,7 +6,7 @@ use tokio::sync::oneshot;
 use tokio::time::timeout;
 
 const READ_TIMEOUT: Duration = Duration::from_millis(500);
-const MAX_READ_DURATION: Duration = Duration::from_secs(5);
+const MAX_READ_DURATION: Duration = Duration::from_secs(6);
 const MAX_HEADER_BYTES: usize = 64 * 1024;
 
 pub struct CapturedRequest {

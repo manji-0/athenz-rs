@@ -891,7 +891,7 @@ mod tests {
         .as_str()
     }
 
-    fn build_rs256_token_without_kid() -> (String, JwkSet) {
+    fn rs256_public_components() -> (Vec<u8>, Vec<u8>, Vec<u8>) {
         let pem = rsa_private_key_pem();
         let private_key = RsaPrivateKey::from_pkcs1_pem(pem).expect("private key");
         let public_key = RsaPublicKey::from(&private_key);
@@ -901,6 +901,30 @@ mod tests {
         if let Some(first) = bad_n.first_mut() {
             *first ^= 0x01;
         }
+        (n, e, bad_n)
+    }
+
+    fn rs256_token_without_kid() -> String {
+        let pem = rsa_private_key_pem();
+        let exp = jsonwebtoken::get_current_timestamp() + 3600;
+        let claims = json!({
+            "iss": "athenz",
+            "aud": "client",
+            "sub": "principal",
+            "exp": exp,
+        });
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = None;
+        encode(
+            &header,
+            &claims,
+            &EncodingKey::from_rsa_pem(pem.as_bytes()).expect("encoding key"),
+        )
+        .expect("token")
+    }
+
+    fn build_rs256_token_without_kid() -> (String, JwkSet) {
+        let (n, e, bad_n) = rs256_public_components();
 
         let jwks_json = json!({
             "keys": [
@@ -922,23 +946,7 @@ mod tests {
         });
         let jwks = jwks_from_value(jwks_json).expect("jwks");
 
-        let exp = jsonwebtoken::get_current_timestamp() + 3600;
-        let claims = json!({
-            "iss": "athenz",
-            "aud": "client",
-            "sub": "principal",
-            "exp": exp,
-        });
-        let mut header = Header::new(Algorithm::RS256);
-        header.kid = None;
-        let token = encode(
-            &header,
-            &claims,
-            &EncodingKey::from_rsa_pem(pem.as_bytes()).expect("encoding key"),
-        )
-        .expect("token");
-
-        (token, jwks)
+        (rs256_token_without_kid(), jwks)
     }
 
     #[test]
@@ -1054,6 +1062,77 @@ mod tests {
         let validator = JwtValidator::new(jwks_provider).with_options(options);
         let data = validator.validate_access_token(&token).expect("validate");
         assert_eq!(data.claims["sub"], "principal");
+    }
+
+    #[test]
+    fn jwt_rs256_kidless_fails_when_key_beyond_cap() {
+        let token = rs256_token_without_kid();
+        let (n, e, bad_n) = rs256_public_components();
+        let n_b64 = URL_SAFE_NO_PAD.encode(&n);
+        let bad_n_b64 = URL_SAFE_NO_PAD.encode(&bad_n);
+        let e_b64 = URL_SAFE_NO_PAD.encode(&e);
+
+        let mut keys = Vec::new();
+        for idx in 0..MAX_KIDLESS_JWKS_KEYS {
+            keys.push(json!({
+                "kty": "RSA",
+                "kid": format!("bad-{}", idx),
+                "alg": "RS256",
+                "n": bad_n_b64.clone(),
+                "e": e_b64.clone(),
+            }));
+        }
+        keys.push(json!({
+            "kty": "RSA",
+            "kid": "good-key",
+            "alg": "RS256",
+            "n": n_b64,
+            "e": e_b64,
+        }));
+
+        let jwks = jwks_from_value(json!({ "keys": keys })).expect("jwks");
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::Jwt(jwt_err) => assert_eq!(jwt_err.kind(), &ErrorKind::InvalidSignature),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn jwt_rs256_kidless_no_compatible_key() {
+        let token = rs256_token_without_kid();
+        let (_es_token, jwks) = build_es512_token_without_kid();
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::MissingJwk(message) => assert_eq!(message, "no compatible key"),
+            other => panic!("unexpected error: {:?}", other),
+        }
     }
 
     fn jwks_from_value(value: Value) -> Result<JwkSet, Error> {

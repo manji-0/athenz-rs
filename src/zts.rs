@@ -131,7 +131,7 @@ impl AccessTokenRequest {
             return raw_scope.clone();
         }
         let mut scopes = Vec::new();
-        if self.roles.is_empty() || self.roles.iter().any(|r| r == "*") {
+        if self.roles.is_empty() {
             scopes.push(format!("{}:domain", self.domain));
         } else {
             scopes.extend(
@@ -900,9 +900,16 @@ mod tests {
 
     #[test]
     fn access_token_scope_domain_only() {
-        let req = AccessTokenRequest::new("sports", vec!["*".to_string()]);
+        let req = AccessTokenRequest::new("sports", Vec::new());
         let form = req.to_form();
         assert!(form.contains("scope=sports%3Adomain"));
+    }
+
+    #[test]
+    fn access_token_scope_wildcard_role() {
+        let req = AccessTokenRequest::new("sports", vec!["*".to_string()]);
+        let scope = req.scope();
+        assert_eq!(scope, "sports:role.*");
     }
 
     #[test]

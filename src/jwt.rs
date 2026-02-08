@@ -1303,6 +1303,15 @@ mod tests {
         (rs256_token_without_kid(), jwks)
     }
 
+    fn jwks_provider_with_cached(jwks: JwkSet) -> JwksProvider {
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+        });
+        jwks_provider
+    }
+
     #[test]
     fn jwks_sanitize_report_removes_unsupported_alg() {
         let jwks_json = json!({
@@ -1361,11 +1370,7 @@ mod tests {
     #[test]
     fn jwt_es512_allows_aud_when_audience_empty() {
         let (token, jwks) = build_es512_token();
-        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
-        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
-            jwks,
-            expires_at: Instant::now() + Duration::from_secs(60),
-        });
+        let jwks_provider = jwks_provider_with_cached(jwks);
 
         let mut options = JwtValidationOptions::athenz_default();
         options.issuer = Some("athenz".to_string());
@@ -1439,17 +1444,14 @@ mod tests {
     #[test]
     fn jwt_rs256_allows_aud_when_audience_empty() {
         let (token, jwks) = build_rs256_token_without_kid();
-        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
-        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
-            jwks,
-            expires_at: Instant::now() + Duration::from_secs(60),
-        });
+        let jwks_provider = jwks_provider_with_cached(jwks);
 
         let mut options = JwtValidationOptions::rsa_only();
         options.issuer = Some("athenz".to_string());
 
         let validator = JwtValidator::new(jwks_provider).with_options(options);
         let data = validator.validate_access_token(&token).expect("validate");
+        assert_eq!(data.claims["aud"], "client");
         assert_eq!(data.claims["sub"], "principal");
     }
 

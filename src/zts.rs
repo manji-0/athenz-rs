@@ -306,7 +306,7 @@ impl IdTokenRequest {
             key_type: None,
             full_arn: None,
             expiry_time: None,
-            output: None,
+            output: Some("json".to_string()),
             role_in_aud_claim: None,
             all_scope_present: None,
         }
@@ -955,6 +955,18 @@ mod tests {
             .build();
         let scope = req.scope();
         assert_eq!(scope, "custom:scope");
+    }
+
+    #[test]
+    fn id_token_query_defaults_output_to_json() {
+        let req = IdTokenRequest::new(
+            "sports.api",
+            "https://example.com/callback",
+            "openid",
+            "nonce-123",
+        );
+        let query = req.to_query();
+        assert!(query.contains("output=json"));
     }
 
     #[test]

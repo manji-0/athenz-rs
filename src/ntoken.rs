@@ -725,7 +725,7 @@ async fn get_cached_verifier_async(
 
     let mut locks = fetch_locks.lock().await;
     if let Some(existing) = locks.get(src) {
-        if Arc::ptr_eq(existing, &fetch_lock) {
+        if Arc::ptr_eq(existing, &fetch_lock) && Arc::strong_count(existing) == 2 {
             locks.remove(src);
         }
     }

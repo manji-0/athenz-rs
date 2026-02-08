@@ -227,11 +227,21 @@ impl JwksProviderAsync {
                 body.extend_from_slice(&chunk[..take]);
                 remaining -= take;
             }
-            return Err(Error::Crypto(format!(
-                "jwks fetch failed: status {} body_len {}",
-                status,
-                body.len()
-            )));
+            let body_preview = sanitize_error_body(&body);
+            return Err(Error::Crypto(if body_preview.is_empty() {
+                format!(
+                    "jwks fetch failed: status {} body_len {}",
+                    status,
+                    body.len()
+                )
+            } else {
+                format!(
+                    "jwks fetch failed: status {} body_len {} body_preview {}",
+                    status,
+                    body.len(),
+                    body_preview
+                )
+            }));
         }
         let body = resp.bytes().await?;
         let jwks = jwks_from_slice(&body)?;
@@ -576,6 +586,35 @@ fn allows_es512(options: &JwtValidationOptions) -> bool {
     ATHENZ_EC_ALGS
         .iter()
         .all(|alg| options.allowed_algs.contains(alg))
+}
+
+#[cfg(feature = "async-validate")]
+fn sanitize_error_body(body: &[u8]) -> String {
+    let mut sanitized = String::new();
+    for &byte in body.iter().take(128) {
+        let ch = match byte {
+            b'\n' => '\\',
+            b'\r' => '\\',
+            b'\t' => '\\',
+            _ if byte.is_ascii_graphic() || byte == b' ' => byte as char,
+            _ => '.',
+        };
+        if ch == '\\' {
+            sanitized.push('\\');
+            sanitized.push(match byte {
+                b'\n' => 'n',
+                b'\r' => 'r',
+                b'\t' => 't',
+                _ => '\\',
+            });
+        } else {
+            sanitized.push(ch);
+        }
+    }
+    if body.len() > 128 {
+        sanitized.push_str("...");
+    }
+    sanitized
 }
 
 struct JwtParts<'a> {

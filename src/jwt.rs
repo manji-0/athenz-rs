@@ -227,21 +227,11 @@ impl JwksProviderAsync {
                 body.extend_from_slice(&chunk[..take]);
                 remaining -= take;
             }
-            let body_preview = sanitize_error_body(&body);
-            return Err(Error::Crypto(if body_preview.is_empty() {
-                format!(
-                    "jwks fetch failed: status {} body_len {}",
-                    status,
-                    body.len()
-                )
-            } else {
-                format!(
-                    "jwks fetch failed: status {} body_len {} body_preview {}",
-                    status,
-                    body.len(),
-                    body_preview
-                )
-            }));
+            return Err(Error::Crypto(format!(
+                "jwks fetch failed: status {} body_len {}",
+                status,
+                body.len()
+            )));
         }
         let body = resp.bytes().await?;
         let jwks = jwks_from_slice(&body)?;
@@ -586,19 +576,6 @@ fn allows_es512(options: &JwtValidationOptions) -> bool {
     ATHENZ_EC_ALGS
         .iter()
         .all(|alg| options.allowed_algs.contains(alg))
-}
-
-#[cfg(feature = "async-validate")]
-fn sanitize_error_body(body: &[u8]) -> String {
-    let mut sanitized = String::from_utf8_lossy(body)
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t");
-    if sanitized.len() > 256 {
-        sanitized.truncate(256);
-        sanitized.push_str("...");
-    }
-    sanitized
 }
 
 struct JwtParts<'a> {

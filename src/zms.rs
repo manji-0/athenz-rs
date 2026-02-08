@@ -30,7 +30,7 @@ pub struct DomainListOptions {
 }
 
 impl DomainListOptions {
-    fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if let Some(limit) = self.limit {
             pairs.push(("limit", limit.to_string()));
@@ -85,7 +85,7 @@ pub struct RoleListOptions {
 }
 
 impl RoleListOptions {
-    fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if let Some(limit) = self.limit {
             pairs.push(("limit", limit.to_string()));
@@ -105,7 +105,7 @@ pub struct RolesQueryOptions {
 }
 
 impl RolesQueryOptions {
-    fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if let Some(members) = self.members {
             pairs.push(("members", members.to_string()));
@@ -128,7 +128,7 @@ pub struct RoleGetOptions {
 }
 
 impl RoleGetOptions {
-    fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if let Some(audit_log) = self.audit_log {
             pairs.push(("auditLog", audit_log.to_string()));
@@ -150,7 +150,7 @@ pub struct PolicyListOptions {
 }
 
 impl PolicyListOptions {
-    fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if let Some(limit) = self.limit {
             pairs.push(("limit", limit.to_string()));
@@ -171,7 +171,7 @@ pub struct PoliciesQueryOptions {
 }
 
 impl PoliciesQueryOptions {
-    fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if let Some(assertions) = self.assertions {
             pairs.push(("assertions", assertions.to_string()));
@@ -196,7 +196,7 @@ pub struct ServiceListOptions {
 }
 
 impl ServiceListOptions {
-    fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if let Some(limit) = self.limit {
             pairs.push(("limit", limit.to_string()));
@@ -217,7 +217,7 @@ pub struct ServiceIdentitiesQueryOptions {
 }
 
 impl ServiceIdentitiesQueryOptions {
-    fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if let Some(public_keys) = self.public_keys {
             pairs.push(("publickeys", public_keys.to_string()));
@@ -243,7 +243,7 @@ pub struct GroupsQueryOptions {
 }
 
 impl GroupsQueryOptions {
-    fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if let Some(members) = self.members {
             pairs.push(("members", members.to_string()));
@@ -265,7 +265,7 @@ pub struct GroupGetOptions {
 }
 
 impl GroupGetOptions {
-    fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
         let mut pairs = Vec::new();
         if let Some(audit_log) = self.audit_log {
             pairs.push(("auditLog", audit_log.to_string()));
@@ -372,6 +372,7 @@ impl ZmsClientBuilder {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum AuthProvider {
     StaticHeader {
         header: String,

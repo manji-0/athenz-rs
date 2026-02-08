@@ -177,6 +177,7 @@ impl JwtValidatorAsync {
     pub async fn validate(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
         let parts = split_jwt(token)?;
         let header = decode_jwt_header(parts.header)?;
+        validate_jwt_typ(header.typ.as_deref())?;
         let alg = header.alg.as_str();
         if !ATHENZ_ALLOWED_ALG_NAMES.contains(&alg) {
             return Err(Error::UnsupportedAlg(header.alg.clone()));

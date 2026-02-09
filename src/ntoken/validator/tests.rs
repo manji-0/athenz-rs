@@ -70,6 +70,59 @@ fn ntoken_builder_lowercases_fields() {
 }
 
 #[test]
+fn ntoken_validate_user_version_requires_user_domain() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_version("U1");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let err = validator.validate(&token).expect_err("domain mismatch");
+    assert!(err
+        .to_string()
+        .contains("user version requires domain 'user'"));
+}
+
+#[test]
+fn ntoken_validate_user_domain_requires_user_version() {
+    let signer =
+        NTokenSigner::new("user", "alice", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let err = validator.validate(&token).expect_err("version mismatch");
+    assert!(err
+        .to_string()
+        .contains("domain 'user' requires user version"));
+}
+
+#[test]
+fn ntoken_validate_user_version_and_domain_ok() {
+    let mut signer =
+        NTokenSigner::new("user", "alice", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_version("U1");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let claims = validator.validate(&token).expect("validate");
+    assert_eq!(claims.version, "U1");
+    assert_eq!(claims.domain, "user");
+}
+
+#[test]
+fn ntoken_validate_user_version_case_insensitive() {
+    let mut signer =
+        NTokenSigner::new("user", "alice", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_version("u1");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let claims = validator.validate(&token).expect("validate");
+    assert_eq!(claims.version, "u1");
+    assert_eq!(claims.domain, "user");
+}
+
+#[test]
 fn ntoken_signer_builder_mut_updates_fields() {
     let mut signer =
         NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");

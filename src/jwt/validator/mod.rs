@@ -32,12 +32,12 @@ where
     F: FnOnce() -> Result<JwkSet, Error>,
 {
     if let Some(kid) = kid {
-        if let Some(index) = jwks
+        if jwks
             .keys
             .iter()
-            .position(|key| key.common.key_id.as_deref() == Some(kid))
+            .any(|key| key.common.key_id.as_deref() == Some(kid))
         {
-            return Ok(&jwks.keys[index]);
+            return select_jwk(jwks, Some(kid));
         }
         *jwks = refresh()?;
         return select_jwk(jwks, Some(kid));
@@ -56,12 +56,12 @@ where
     Fut: Future<Output = Result<JwkSet, Error>>,
 {
     if let Some(kid) = kid {
-        if let Some(index) = jwks
+        if jwks
             .keys
             .iter()
-            .position(|key| key.common.key_id.as_deref() == Some(kid))
+            .any(|key| key.common.key_id.as_deref() == Some(kid))
         {
-            return Ok(&jwks.keys[index]);
+            return select_jwk(jwks, Some(kid));
         }
         *jwks = refresh().await?;
         return select_jwk(jwks, Some(kid));

@@ -103,12 +103,11 @@ pub(crate) fn build_url(
 pub(crate) fn parse_error_from_body(
     status: StatusCode,
     body: &[u8],
-    fallback_message: Option<String>,
+    fallback_override: Option<String>,
     trim_empty: bool,
 ) -> Error {
-    let body_text = String::from_utf8_lossy(body).to_string();
     let default_fallback = fallback_message(status, body);
-    let fallback = fallback_message.unwrap_or_else(|| default_fallback.clone());
+    let fallback = fallback_override.unwrap_or_else(|| default_fallback.clone());
     let mut err = serde_json::from_slice::<ResourceError>(body).unwrap_or_else(|_| ResourceError {
         code: status.as_u16() as i32,
         message: fallback.clone(),

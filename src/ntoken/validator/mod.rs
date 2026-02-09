@@ -309,8 +309,10 @@ fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> R
     if let Some(expected) = options.hostname() {
         match claims.hostname.as_deref() {
             Some(actual) if hostname_matches(expected, actual) => {}
-            Some(_actual) => {
-                return Err(Error::Crypto("ntoken hostname mismatch".to_string()));
+            Some(actual) => {
+                return Err(Error::Crypto(format!(
+                    "ntoken hostname mismatch: expected {expected}, got {actual}"
+                )));
             }
             None => return Err(Error::Crypto("ntoken missing hostname".to_string())),
         }
@@ -319,8 +321,10 @@ fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> R
     if let Some(expected) = options.ip() {
         match claims.ip.as_deref() {
             Some(actual) if ip_matches(expected, actual) => {}
-            Some(_actual) => {
-                return Err(Error::Crypto("ntoken ip mismatch".to_string()));
+            Some(actual) => {
+                return Err(Error::Crypto(format!(
+                    "ntoken ip mismatch: expected {expected}, got {actual}"
+                )));
             }
             None => return Err(Error::Crypto("ntoken missing ip".to_string())),
         }

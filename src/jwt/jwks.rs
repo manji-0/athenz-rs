@@ -7,7 +7,7 @@ use reqwest::blocking::Client as HttpClient;
 #[cfg(feature = "async-validate")]
 use reqwest::Client as AsyncHttpClient;
 use serde_json::Value;
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 use std::time::{Duration, Instant};
 #[cfg(feature = "async-validate")]
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
@@ -16,18 +16,28 @@ use url::Url;
 use super::constants::SUPPORTED_JWK_ALGS;
 use super::types::{JwksSanitizeReport, RemovedAlg, RemovedAlgReason};
 
+const MIN_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
+
 #[derive(Debug)]
 pub struct JwksProvider {
     jwks_uri: Url,
     http: HttpClient,
     cache_ttl: Duration,
     cache: RwLock<Option<CachedJwks>>,
+    fetch_lock: Mutex<()>,
 }
 
 #[derive(Debug, Clone)]
 struct CachedJwks {
     jwks: JwkSet,
     expires_at: Instant,
+    fetched_at: Instant,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FetchSource {
+    Cache,
+    Remote,
 }
 
 #[cfg(feature = "async-validate")]
@@ -60,16 +70,20 @@ impl JwksProviderAsync {
         self.cache_ttl = ttl;
         let cache = self.cache.into_inner();
         self.cache = AsyncRwLock::new(cache.map(|mut cached| {
-            cached.expires_at = Instant::now() + self.cache_ttl;
+            let now = Instant::now();
+            cached.expires_at = now + self.cache_ttl;
+            cached.fetched_at = now;
             cached
         }));
         self
     }
 
     pub fn with_preloaded(self, jwks: JwkSet) -> Self {
+        let now = Instant::now();
         let cached = CachedJwks {
             jwks,
-            expires_at: Instant::now() + self.cache_ttl,
+            expires_at: now + self.cache_ttl,
+            fetched_at: now,
         };
         let mut this = self;
         this.cache = AsyncRwLock::new(Some(cached));
@@ -77,11 +91,16 @@ impl JwksProviderAsync {
     }
 
     pub async fn fetch(&self) -> Result<JwkSet, Error> {
+        let (jwks, _source) = self.fetch_with_source().await?;
+        Ok(jwks)
+    }
+
+    pub(crate) async fn fetch_with_source(&self) -> Result<(JwkSet, FetchSource), Error> {
         {
             let cache = self.cache.read().await;
             if let Some(cached) = cache.as_ref() {
                 if cached.expires_at > Instant::now() {
-                    return Ok(cached.jwks.clone());
+                    return Ok((cached.jwks.clone(), FetchSource::Cache));
                 }
             }
         }
@@ -91,16 +110,27 @@ impl JwksProviderAsync {
             let cache = self.cache.read().await;
             if let Some(cached) = cache.as_ref() {
                 if cached.expires_at > Instant::now() {
-                    return Ok(cached.jwks.clone());
+                    return Ok((cached.jwks.clone(), FetchSource::Cache));
                 }
             }
         }
-
-        self.fetch_remote().await
+        let jwks = self.fetch_remote().await?;
+        Ok((jwks, FetchSource::Remote))
     }
 
     pub async fn fetch_fresh(&self) -> Result<JwkSet, Error> {
+        let now = Instant::now();
+        if let Some(cached) = self.cache.read().await.as_ref() {
+            if cached.fetched_at + MIN_REFRESH_INTERVAL > now {
+                return Ok(cached.jwks.clone());
+            }
+        }
         let _guard = self.fetch_lock.lock().await;
+        if let Some(cached) = self.cache.read().await.as_ref() {
+            if cached.fetched_at + MIN_REFRESH_INTERVAL > now {
+                return Ok(cached.jwks.clone());
+            }
+        }
         self.fetch_remote().await
     }
 
@@ -136,9 +166,11 @@ impl JwksProviderAsync {
         }
         let body = resp.bytes().await?;
         let jwks = jwks_from_slice(&body)?;
+        let now = Instant::now();
         let cached = CachedJwks {
             jwks: jwks.clone(),
-            expires_at: Instant::now() + self.cache_ttl,
+            expires_at: now + self.cache_ttl,
+            fetched_at: now,
         };
         *self.cache.write().await = Some(cached);
         Ok(jwks)
@@ -153,46 +185,78 @@ impl JwksProvider {
             http: HttpClient::new(),
             cache_ttl: Duration::from_secs(300),
             cache: RwLock::new(None),
+            fetch_lock: Mutex::new(()),
         })
     }
 
     pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
         self.cache_ttl = ttl;
         if let Some(cached) = self.cache.write().unwrap().as_mut() {
-            cached.expires_at = Instant::now() + self.cache_ttl;
+            let now = Instant::now();
+            cached.expires_at = now + self.cache_ttl;
+            cached.fetched_at = now;
         }
         self
     }
 
     pub fn with_preloaded(self, jwks: JwkSet) -> Self {
+        let now = Instant::now();
         let cached = CachedJwks {
             jwks,
-            expires_at: Instant::now() + self.cache_ttl,
+            expires_at: now + self.cache_ttl,
+            fetched_at: now,
         };
         *self.cache.write().unwrap() = Some(cached);
         self
     }
 
     pub fn fetch(&self) -> Result<JwkSet, Error> {
+        let (jwks, _source) = self.fetch_with_source()?;
+        Ok(jwks)
+    }
+
+    pub(crate) fn fetch_with_source(&self) -> Result<(JwkSet, FetchSource), Error> {
         if let Some(cached) = self.cache.read().unwrap().as_ref() {
             if cached.expires_at > Instant::now() {
-                return Ok(cached.jwks.clone());
+                return Ok((cached.jwks.clone(), FetchSource::Cache));
             }
         }
 
-        self.fetch_remote()
+        let _guard = self.fetch_lock.lock().unwrap();
+        if let Some(cached) = self.cache.read().unwrap().as_ref() {
+            if cached.expires_at > Instant::now() {
+                return Ok((cached.jwks.clone(), FetchSource::Cache));
+            }
+        }
+
+        let jwks = self.fetch_remote()?;
+        Ok((jwks, FetchSource::Remote))
     }
 
     pub fn fetch_fresh(&self) -> Result<JwkSet, Error> {
+        let now = Instant::now();
+        if let Some(cached) = self.cache.read().unwrap().as_ref() {
+            if cached.fetched_at + MIN_REFRESH_INTERVAL > now {
+                return Ok(cached.jwks.clone());
+            }
+        }
+        let _guard = self.fetch_lock.lock().unwrap();
+        if let Some(cached) = self.cache.read().unwrap().as_ref() {
+            if cached.fetched_at + MIN_REFRESH_INTERVAL > now {
+                return Ok(cached.jwks.clone());
+            }
+        }
         self.fetch_remote()
     }
 
     fn fetch_remote(&self) -> Result<JwkSet, Error> {
         let body = self.http.get(self.jwks_uri.clone()).send()?.bytes()?;
         let jwks = jwks_from_slice(&body)?;
+        let now = Instant::now();
         let cached = CachedJwks {
             jwks: jwks.clone(),
-            expires_at: Instant::now() + self.cache_ttl,
+            expires_at: now + self.cache_ttl,
+            fetched_at: now,
         };
         *self.cache.write().unwrap() = Some(cached);
         Ok(jwks)
@@ -312,9 +376,10 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::mpsc::{self, Sender};
     use std::sync::{Arc, OnceLock};
     use std::thread;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     fn build_es512_token() -> (String, JwkSet) {
         build_es512_token_with_typ_value(Some(json!("JWT")))
@@ -492,15 +557,18 @@ mod tests {
 
     fn serve_jwks_sequence(
         bodies: Vec<String>,
-    ) -> (String, Arc<AtomicUsize>, thread::JoinHandle<()>) {
+    ) -> (String, Arc<AtomicUsize>, Sender<()>, thread::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
         listener.set_nonblocking(true).expect("nonblocking");
         let addr = listener.local_addr().expect("addr");
         let count = Arc::new(AtomicUsize::new(0));
         let count_thread = Arc::clone(&count);
+        let (shutdown_tx, shutdown_rx) = mpsc::channel();
         let handle = thread::spawn(move || {
-            let deadline = Instant::now() + Duration::from_secs(2);
-            while count_thread.load(Ordering::SeqCst) < bodies.len() && Instant::now() < deadline {
+            while count_thread.load(Ordering::SeqCst) < bodies.len() {
+                if shutdown_rx.try_recv().is_ok() {
+                    break;
+                }
                 match listener.accept() {
                     Ok((mut stream, _)) => {
                         let idx = count_thread.fetch_add(1, Ordering::SeqCst);
@@ -524,7 +592,7 @@ mod tests {
                 }
             }
         });
-        (format!("http://{}", addr), count, handle)
+        (format!("http://{}", addr), count, shutdown_tx, handle)
     }
 
     fn rs256_token_without_kid() -> String {
@@ -577,6 +645,7 @@ mod tests {
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,
             expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
         });
         jwks_provider
     }
@@ -623,6 +692,7 @@ mod tests {
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,
             expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
         });
 
         let mut options = JwtValidationOptions::athenz_default();
@@ -657,6 +727,7 @@ mod tests {
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,
             expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
         });
 
         let mut options = JwtValidationOptions::athenz_default();
@@ -676,6 +747,7 @@ mod tests {
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,
             expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
         });
 
         let mut options = JwtValidationOptions::rsa_only();
@@ -699,6 +771,7 @@ mod tests {
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,
             expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
         });
 
         let mut options = JwtValidationOptions::rsa_only();
@@ -755,6 +828,7 @@ mod tests {
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,
             expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
         });
 
         let mut options = JwtValidationOptions::rsa_only();
@@ -779,6 +853,7 @@ mod tests {
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,
             expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
         });
 
         let mut options = JwtValidationOptions::rsa_only();
@@ -810,12 +885,14 @@ mod tests {
             }]
         }))
         .expect("jwks");
-        let bodies = vec![
-            serde_json::to_string(&missing_jwks).expect("jwks"),
-            serde_json::to_string(&jwks).expect("jwks"),
-        ];
-        let (base_url, count, handle) = serve_jwks_sequence(bodies);
-        let jwks_provider = JwksProvider::new(format!("{}/jwks", base_url)).expect("provider");
+        let bodies = vec![serde_json::to_string(&jwks).expect("jwks")];
+        let (base_url, count, shutdown, handle) = serve_jwks_sequence(bodies);
+        let jwks_provider = JwksProvider::new(format!("{}/jwks", base_url))
+            .expect("provider")
+            .with_preloaded(missing_jwks);
+        if let Some(cached) = jwks_provider.cache.write().unwrap().as_mut() {
+            cached.fetched_at = Instant::now() - MIN_REFRESH_INTERVAL - Duration::from_millis(1);
+        }
 
         let mut options = JwtValidationOptions::rsa_only();
         options.issuer = Some("athenz".to_string());
@@ -824,8 +901,9 @@ mod tests {
         let validator = JwtValidator::new(jwks_provider).with_options(options);
         let data = validator.validate_access_token(&token).expect("validate");
         assert_eq!(data.header.kid.as_deref(), Some("good-key"));
+        let _ = shutdown.send(());
         handle.join().expect("server");
-        assert!(count.load(Ordering::SeqCst) >= 2);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
     }
 
     #[cfg(feature = "async-validate")]
@@ -843,12 +921,14 @@ mod tests {
             }]
         }))
         .expect("jwks");
-        let bodies = vec![
-            serde_json::to_string(&missing_jwks).expect("jwks"),
-            serde_json::to_string(&jwks).expect("jwks"),
-        ];
-        let (base_url, count, handle) = serve_jwks_sequence(bodies);
-        let jwks_provider = JwksProviderAsync::new(format!("{}/jwks", base_url)).expect("provider");
+        let bodies = vec![serde_json::to_string(&jwks).expect("jwks")];
+        let (base_url, count, shutdown, handle) = serve_jwks_sequence(bodies);
+        let jwks_provider = JwksProviderAsync::new(format!("{}/jwks", base_url))
+            .expect("provider")
+            .with_preloaded(missing_jwks);
+        if let Some(cached) = jwks_provider.cache.write().await.as_mut() {
+            cached.fetched_at = Instant::now() - MIN_REFRESH_INTERVAL - Duration::from_millis(1);
+        }
 
         let mut options = JwtValidationOptions::rsa_only();
         options.issuer = Some("athenz".to_string());
@@ -860,8 +940,9 @@ mod tests {
             .await
             .expect("validate");
         assert_eq!(data.header.kid.as_deref(), Some("good-key"));
+        let _ = shutdown.send(());
         handle.join().expect("server");
-        assert!(count.load(Ordering::SeqCst) >= 2);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
     }
 
     #[test]
@@ -924,6 +1005,7 @@ mod tests {
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,
             expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
         });
 
         let mut options = JwtValidationOptions::athenz_default();
@@ -947,6 +1029,7 @@ mod tests {
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,
             expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
         });
 
         let mut options = JwtValidationOptions::athenz_default();
@@ -970,6 +1053,7 @@ mod tests {
         *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
             jwks,
             expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
         });
 
         let mut options = JwtValidationOptions::athenz_default();

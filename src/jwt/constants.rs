@@ -15,7 +15,7 @@ pub(super) const ATHENZ_ALLOWED_ALG_NAMES: &[&str] =
     &["RS256", "RS384", "RS512", "ES256", "ES384", "ES512"];
 pub(super) const ATHENZ_ALLOWED_JWT_TYPES: &[&str] = &["at+jwt", "jwt"];
 pub(super) const ES512_DISABLED_MESSAGE: &str =
-    "ES512 is not enabled; configure JwtValidationOptions.allowed_algs to include ES256 and ES384";
+    "ES512 is not enabled; configure JwtValidationOptions.allow_es512";
 // Safety bound on how many kid-less JWKS keys we try when no `kid` is present in the JWT.
 // `10` was chosen to cover typical deployments where JWKS sets are small (O(1–10) active keys)
 // while preventing unbounded work on misconfigured or very large JWKS endpoints.

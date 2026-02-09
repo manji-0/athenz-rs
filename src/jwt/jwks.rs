@@ -769,7 +769,7 @@ mod tests {
             fetched_at: Instant::now(),
         });
 
-        let mut options = JwtValidationOptions::athenz_default();
+        let mut options = JwtValidationOptions::athenz_default().with_es512();
         options.issuer = Some("athenz".to_string());
         options.audience = vec!["client".to_string()];
 
@@ -785,7 +785,7 @@ mod tests {
         let (token, jwks) = build_es512_token();
         let jwks_provider = jwks_provider_with_seeded_cache(jwks);
 
-        let mut options = JwtValidationOptions::athenz_default();
+        let mut options = JwtValidationOptions::athenz_default().with_es512();
         options.issuer = Some("athenz".to_string());
 
         let validator = JwtValidator::new(jwks_provider).with_options(options);
@@ -804,7 +804,7 @@ mod tests {
             fetched_at: Instant::now(),
         });
 
-        let mut options = JwtValidationOptions::athenz_default();
+        let mut options = JwtValidationOptions::athenz_default().with_es512();
         options.issuer = Some("athenz".to_string());
         options.audience = vec!["client".to_string()];
 
@@ -825,6 +825,30 @@ mod tests {
         });
 
         let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::UnsupportedAlg(alg) => assert!(alg.contains("ES512 is not enabled")),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn jwt_es512_rejected_by_default() {
+        let (token, jwks) = build_es512_token();
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
+        });
+
+        let mut options = JwtValidationOptions::athenz_default();
         options.issuer = Some("athenz".to_string());
         options.audience = vec!["client".to_string()];
 
@@ -1082,7 +1106,7 @@ mod tests {
             fetched_at: Instant::now(),
         });
 
-        let mut options = JwtValidationOptions::athenz_default();
+        let mut options = JwtValidationOptions::athenz_default().with_es512();
         options.issuer = Some("athenz".to_string());
         options.audience = vec!["client".to_string()];
 
@@ -1106,7 +1130,7 @@ mod tests {
             fetched_at: Instant::now(),
         });
 
-        let mut options = JwtValidationOptions::athenz_default();
+        let mut options = JwtValidationOptions::athenz_default().with_es512();
         options.issuer = Some("athenz".to_string());
         options.audience = vec!["client".to_string()];
 
@@ -1130,7 +1154,7 @@ mod tests {
             fetched_at: Instant::now(),
         });
 
-        let mut options = JwtValidationOptions::athenz_default();
+        let mut options = JwtValidationOptions::athenz_default().with_es512();
         options.issuer = Some("athenz".to_string());
         options.audience = vec!["client".to_string()];
 

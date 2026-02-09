@@ -11,8 +11,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use super::super::constants::{
-    ATHENZ_ALLOWED_ALGS, ATHENZ_ALLOWED_JWT_TYPES, ATHENZ_EC_ALGS, MAX_KIDLESS_JWKS_KEYS,
-    NO_COMPATIBLE_JWK_MESSAGE,
+    ATHENZ_ALLOWED_ALGS, ATHENZ_ALLOWED_JWT_TYPES, MAX_KIDLESS_JWKS_KEYS, NO_COMPATIBLE_JWK_MESSAGE,
 };
 use super::super::types::{JwtHeader, JwtTokenData, JwtValidationOptions};
 
@@ -46,10 +45,7 @@ pub(super) fn apply_validation_options(
 }
 
 pub(super) fn allows_es512(options: &JwtValidationOptions) -> bool {
-    // ES512 isn't representable in jsonwebtoken::Algorithm; treat full EC allowlist as opt-in.
-    ATHENZ_EC_ALGS
-        .iter()
-        .all(|alg| options.allowed_algs.contains(alg))
+    options.allow_es512
 }
 
 pub(super) struct JwtParts<'a> {

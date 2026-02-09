@@ -101,7 +101,7 @@ async fn jwt_es512_async_validate_success() {
         .expect("provider")
         .with_preloaded(jwks);
 
-    let mut options = JwtValidationOptions::athenz_default();
+    let mut options = JwtValidationOptions::athenz_default().with_es512();
     options.issuer = Some("athenz".to_string());
     options.audience = vec!["client".to_string()];
 

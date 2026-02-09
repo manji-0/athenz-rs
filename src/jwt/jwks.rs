@@ -1,6 +1,4 @@
-use crate::error::Error;
-#[cfg(feature = "async-validate")]
-use crate::error::MAX_ERROR_BODY_BYTES;
+use crate::error::{read_body_with_limit, Error, MAX_ERROR_BODY_BYTES};
 use jsonwebtoken::jwk::JwkSet;
 use log::warn;
 use reqwest::blocking::Client as HttpClient;
@@ -16,12 +14,14 @@ use url::Url;
 use super::constants::SUPPORTED_JWK_ALGS;
 use super::types::{JwksSanitizeReport, RemovedAlg, RemovedAlgReason};
 
+const DEFAULT_JWKS_TIMEOUT: Duration = Duration::from_secs(10);
 const MIN_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug)]
 pub struct JwksProvider {
     jwks_uri: Url,
     http: HttpClient,
+    timeout: Option<Duration>,
     cache_ttl: Duration,
     cache: RwLock<Option<CachedJwks>>,
     fetch_lock: Mutex<()>,
@@ -45,6 +45,7 @@ pub(crate) enum FetchSource {
 pub struct JwksProviderAsync {
     jwks_uri: Url,
     http: AsyncHttpClient,
+    timeout: Option<Duration>,
     cache_ttl: Duration,
     cache: AsyncRwLock<Option<CachedJwks>>,
     fetch_lock: AsyncMutex<()>,
@@ -54,16 +55,30 @@ pub struct JwksProviderAsync {
 impl JwksProviderAsync {
     pub fn new(jwks_uri: impl AsRef<str>) -> Result<Self, Error> {
         let jwks_uri = Url::parse(jwks_uri.as_ref())?;
-        let http = AsyncHttpClient::builder()
-            .timeout(Duration::from_secs(10))
-            .build()?;
+        let http = AsyncHttpClient::builder().build()?;
         Ok(Self {
             jwks_uri,
             http,
+            timeout: Some(DEFAULT_JWKS_TIMEOUT),
             cache_ttl: Duration::from_secs(300),
             cache: AsyncRwLock::new(None),
             fetch_lock: AsyncMutex::new(()),
         })
+    }
+
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn with_http_client(mut self, http: AsyncHttpClient) -> Self {
+        self.http = http;
+        self
+    }
+
+    pub fn without_timeout(mut self) -> Self {
+        self.timeout = None;
+        self
     }
 
     pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
@@ -135,7 +150,11 @@ impl JwksProviderAsync {
     }
 
     async fn fetch_remote(&self) -> Result<JwkSet, Error> {
-        let mut resp = self.http.get(self.jwks_uri.clone()).send().await?;
+        let mut req = self.http.get(self.jwks_uri.clone());
+        if let Some(timeout) = self.timeout {
+            req = req.timeout(timeout);
+        }
+        let mut resp = req.send().await?;
         let status = resp.status();
         if !status.is_success() {
             let mut body = Vec::new();
@@ -149,15 +168,18 @@ impl JwksProviderAsync {
                 remaining -= take;
             }
             let body_preview = sanitize_error_body(&body);
+            let redacted = redact_jwks_uri(&self.jwks_uri);
             return Err(Error::Crypto(if body_preview.is_empty() {
                 format!(
-                    "jwks fetch failed: status {} body_len {}",
+                    "jwks fetch failed: uri {} status {} body_read_len {}",
+                    redacted,
                     status,
                     body.len()
                 )
             } else {
                 format!(
-                    "jwks fetch failed: status {} body_len {} body_preview {}",
+                    "jwks fetch failed: uri {} status {} body_read_len {} body_preview {}",
+                    redacted,
                     status,
                     body.len(),
                     body_preview
@@ -180,13 +202,30 @@ impl JwksProviderAsync {
 impl JwksProvider {
     pub fn new(jwks_uri: impl AsRef<str>) -> Result<Self, Error> {
         let jwks_uri = Url::parse(jwks_uri.as_ref())?;
+        let http = HttpClient::builder().build()?;
         Ok(Self {
             jwks_uri,
-            http: HttpClient::new(),
+            http,
+            timeout: Some(DEFAULT_JWKS_TIMEOUT),
             cache_ttl: Duration::from_secs(300),
             cache: RwLock::new(None),
             fetch_lock: Mutex::new(()),
         })
+    }
+
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn with_http_client(mut self, http: HttpClient) -> Self {
+        self.http = http;
+        self
+    }
+
+    pub fn without_timeout(mut self) -> Self {
+        self.timeout = None;
+        self
     }
 
     pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
@@ -250,7 +289,34 @@ impl JwksProvider {
     }
 
     fn fetch_remote(&self) -> Result<JwkSet, Error> {
-        let body = self.http.get(self.jwks_uri.clone()).send()?.bytes()?;
+        let mut req = self.http.get(self.jwks_uri.clone());
+        if let Some(timeout) = self.timeout {
+            req = req.timeout(timeout);
+        }
+        let mut resp = req.send()?;
+        let status = resp.status();
+        if !status.is_success() {
+            let body = read_body_with_limit(&mut resp, MAX_ERROR_BODY_BYTES)?;
+            let body_preview = sanitize_error_body(&body);
+            let redacted = redact_jwks_uri(&self.jwks_uri);
+            return Err(Error::Crypto(if body_preview.is_empty() {
+                format!(
+                    "jwks fetch failed: uri {} status {} body_read_len {}",
+                    redacted,
+                    status,
+                    body.len()
+                )
+            } else {
+                format!(
+                    "jwks fetch failed: uri {} status {} body_read_len {} body_preview {}",
+                    redacted,
+                    status,
+                    body.len(),
+                    body_preview
+                )
+            }));
+        }
+        let body = resp.bytes()?;
         let jwks = jwks_from_slice(&body)?;
         let now = Instant::now();
         let cached = CachedJwks {
@@ -263,7 +329,6 @@ impl JwksProvider {
     }
 }
 
-#[cfg(feature = "async-validate")]
 fn sanitize_error_body(body: &[u8]) -> String {
     let mut sanitized = String::new();
     for &byte in body.iter().take(128) {
@@ -290,6 +355,15 @@ fn sanitize_error_body(body: &[u8]) -> String {
         sanitized.push_str("...");
     }
     sanitized
+}
+
+fn redact_jwks_uri(uri: &Url) -> String {
+    let mut redacted = uri.clone();
+    let _ = redacted.set_username("");
+    let _ = redacted.set_password(None);
+    redacted.set_query(None);
+    redacted.set_fragment(None);
+    redacted.to_string()
 }
 
 pub fn jwks_from_slice(body: &[u8]) -> Result<JwkSet, Error> {

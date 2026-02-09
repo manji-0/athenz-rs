@@ -11,7 +11,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use super::super::constants::{
-    ATHENZ_ALLOWED_ALGS, ATHENZ_ALLOWED_JWT_TYPES, MAX_KIDLESS_JWKS_KEYS, NO_COMPATIBLE_JWK_MESSAGE,
+    ATHENZ_ALLOWED_ALGS, ATHENZ_ALLOWED_JWT_TYPES, ATHENZ_EC_ALGS, MAX_KIDLESS_JWKS_KEYS,
+    NO_COMPATIBLE_JWK_MESSAGE,
 };
 use super::super::types::{JwtHeader, JwtTokenData, JwtValidationOptions};
 
@@ -45,7 +46,12 @@ pub(super) fn apply_validation_options(
 }
 
 pub(super) fn allows_es512(options: &JwtValidationOptions) -> bool {
-    options.allow_es512
+    if !options.allow_es512 {
+        return false;
+    }
+    ATHENZ_EC_ALGS
+        .iter()
+        .all(|alg| options.allowed_algs.contains(alg))
 }
 
 pub(super) struct JwtParts<'a> {

@@ -430,7 +430,9 @@ fn sanitize_jwks(value: &mut Value) -> Vec<RemovedAlg> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::jwt::constants::{MAX_KIDLESS_JWKS_KEYS, NO_COMPATIBLE_JWK_MESSAGE};
+    use crate::jwt::constants::{
+        ES512_DISABLED_MESSAGE, MAX_KIDLESS_JWKS_KEYS, NO_COMPATIBLE_JWK_MESSAGE,
+    };
     #[cfg(feature = "async-validate")]
     use crate::jwt::{JwksProviderAsync, JwtValidatorAsync};
     use crate::jwt::{JwtValidationOptions, JwtValidator};
@@ -833,7 +835,7 @@ mod tests {
             .validate_access_token(&token)
             .expect_err("should reject");
         match err {
-            Error::UnsupportedAlg(alg) => assert!(alg.contains("ES512 is not enabled")),
+            Error::UnsupportedAlg(alg) => assert_eq!(alg, ES512_DISABLED_MESSAGE),
             other => panic!("unexpected error: {:?}", other),
         }
     }
@@ -857,7 +859,7 @@ mod tests {
             .validate_access_token(&token)
             .expect_err("should reject");
         match err {
-            Error::UnsupportedAlg(alg) => assert!(alg.contains("ES512 is not enabled")),
+            Error::UnsupportedAlg(alg) => assert_eq!(alg, ES512_DISABLED_MESSAGE),
             other => panic!("unexpected error: {:?}", other),
         }
     }

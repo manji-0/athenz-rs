@@ -72,6 +72,11 @@ impl JwtValidationOptions {
 
     pub fn with_es512(mut self) -> Self {
         self.allow_es512 = true;
+        for alg in ATHENZ_EC_ALGS {
+            if !self.allowed_algs.contains(alg) {
+                self.allowed_algs.push(*alg);
+            }
+        }
         self
     }
 }

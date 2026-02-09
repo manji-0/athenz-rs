@@ -180,9 +180,18 @@ impl NTokenValidator {
     }
 
     pub fn validate(&self, token: &str) -> Result<NToken, Error> {
-        self.validate_with_options(token, &NTokenValidationOptions::default())
+        let options = NTokenValidationOptions::default();
+        self.validate_with_options(token, &options)
     }
 
+    /// Validate an NToken using additional host validation options.
+    ///
+    /// When `options.hostname` is set, the token must contain a hostname and it
+    /// must match the configured value (case-insensitive ASCII, ignoring trailing
+    /// dot(s)). When `options.ip` is set, the token must contain an IP and it must
+    /// match the configured value (parsed `IpAddr` equality when possible,
+    /// otherwise string equality). If an expected value is set but the token is
+    /// missing the corresponding claim, validation fails.
     pub fn validate_with_options(
         &self,
         token: &str,
@@ -253,6 +262,14 @@ impl NTokenValidatorAsync {
         self.validate_with_options(token, &options).await
     }
 
+    /// Validate an NToken using additional host validation options.
+    ///
+    /// When `options.hostname` is set, the token must contain a hostname and it
+    /// must match the configured value (case-insensitive ASCII, ignoring trailing
+    /// dot(s)). When `options.ip` is set, the token must contain an IP and it must
+    /// match the configured value (parsed `IpAddr` equality when possible,
+    /// otherwise string equality). If an expected value is set but the token is
+    /// missing the corresponding claim, validation fails.
     pub async fn validate_with_options(
         &self,
         token: &str,

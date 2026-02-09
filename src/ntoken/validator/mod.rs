@@ -91,7 +91,7 @@ pub struct NTokenValidatorConfig {
 
 /// Options controlling additional host checks when validating an [`NToken`].
 ///
-/// Hostname comparison is case-insensitive (ASCII) and ignores a trailing dot.
+/// Hostname comparison is case-insensitive (ASCII) and ignores any trailing dot(s).
 /// IP comparison parses both values as `IpAddr` when possible and compares the
 /// parsed addresses; if parsing fails, it falls back to string equality.
 #[derive(Debug, Clone, Default)]
@@ -292,10 +292,8 @@ fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> R
     if let Some(expected) = options.hostname() {
         match claims.hostname.as_deref() {
             Some(actual) if hostname_matches(expected, actual) => {}
-            Some(actual) => {
-                return Err(Error::Crypto(format!(
-                    "ntoken hostname mismatch: expected {expected}, got {actual}"
-                )));
+            Some(_actual) => {
+                return Err(Error::Crypto("ntoken hostname mismatch".to_string()));
             }
             None => return Err(Error::Crypto("ntoken missing hostname".to_string())),
         }
@@ -304,10 +302,8 @@ fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> R
     if let Some(expected) = options.ip() {
         match claims.ip.as_deref() {
             Some(actual) if ip_matches(expected, actual) => {}
-            Some(actual) => {
-                return Err(Error::Crypto(format!(
-                    "ntoken ip mismatch: expected {expected}, got {actual}"
-                )));
+            Some(_actual) => {
+                return Err(Error::Crypto("ntoken ip mismatch".to_string()));
             }
             None => return Err(Error::Crypto("ntoken missing ip".to_string())),
         }
@@ -317,14 +313,9 @@ fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> R
 }
 
 fn hostname_matches(expected: &str, actual: &str) -> bool {
-    normalize_hostname(expected) == normalize_hostname(actual)
-}
-
-fn normalize_hostname(value: &str) -> String {
-    let trimmed = value.trim_end_matches('.');
-    let mut normalized = trimmed.to_string();
-    normalized.make_ascii_lowercase();
-    normalized
+    let expected = expected.trim_end_matches('.');
+    let actual = actual.trim_end_matches('.');
+    expected.eq_ignore_ascii_case(actual)
 }
 
 fn ip_matches(expected: &str, actual: &str) -> bool {

@@ -47,8 +47,9 @@ let _ = validator.validate_id_token(token)?;
 # }
 ```
 
-The default algorithm allowlist is RS256/RS384/RS512/ES256/ES384/ES512.
-ES512 (P-521) is verified internally (not via jsonwebtoken).
+The default algorithm allowlist is RS256/RS384/RS512/ES256/ES384.
+ES512 (P-521) is verified internally (not via jsonwebtoken) and is disabled by default.
+Enable it explicitly via `JwtValidationOptions.allow_es512` with EC algorithms in `allowed_algs` (or use `.with_es512()`).
 
 ## JWKS sanitize report
 

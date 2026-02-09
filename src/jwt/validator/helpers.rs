@@ -46,7 +46,9 @@ pub(super) fn apply_validation_options(
 }
 
 pub(super) fn allows_es512(options: &JwtValidationOptions) -> bool {
-    // ES512 isn't representable in jsonwebtoken::Algorithm; treat full EC allowlist as opt-in.
+    if !options.allow_es512 {
+        return false;
+    }
     ATHENZ_EC_ALGS
         .iter()
         .all(|alg| options.allowed_algs.contains(alg))

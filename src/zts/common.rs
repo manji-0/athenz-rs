@@ -1,4 +1,4 @@
-use crate::error::{Error, ResourceError};
+use crate::error::{fallback_message, Error, ResourceError};
 use crate::ntoken::NTokenSigner;
 use reqwest::blocking::RequestBuilder as BlockingRequestBuilder;
 use reqwest::RequestBuilder as AsyncRequestBuilder;
@@ -107,11 +107,11 @@ pub(crate) fn parse_error_from_body(
     trim_empty: bool,
 ) -> Error {
     let body_text = String::from_utf8_lossy(body).to_string();
+    let default_fallback = fallback_message(status, body);
+    let fallback = fallback_message.unwrap_or_else(|| default_fallback.clone());
     let mut err = serde_json::from_slice::<ResourceError>(body).unwrap_or_else(|_| ResourceError {
         code: status.as_u16() as i32,
-        message: fallback_message
-            .clone()
-            .unwrap_or_else(|| body_text.clone()),
+        message: fallback.clone(),
         description: None,
         error: None,
         request_id: None,
@@ -125,11 +125,7 @@ pub(crate) fn parse_error_from_body(
         err.message.is_empty()
     };
     if is_empty {
-        if let Some(fallback) = fallback_message {
-            err.message = fallback;
-        } else {
-            err.message = body_text;
-        }
+        err.message = fallback;
     }
     Error::Api(err)
 }

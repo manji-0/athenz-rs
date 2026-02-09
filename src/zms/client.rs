@@ -1,4 +1,4 @@
-use crate::error::Error;
+use crate::error::{read_body_with_limit, Error, MAX_ERROR_BODY_BYTES};
 use crate::ntoken::NTokenSigner;
 use reqwest::blocking::{Client as HttpClient, RequestBuilder, Response};
 use reqwest::{Certificate, Identity, StatusCode};
@@ -156,9 +156,9 @@ impl ZmsClient {
         }
     }
 
-    fn parse_error<T>(&self, resp: Response) -> Result<T, Error> {
+    fn parse_error<T>(&self, mut resp: Response) -> Result<T, Error> {
         let status = resp.status();
-        let body = resp.bytes()?;
+        let body = read_body_with_limit(&mut resp, MAX_ERROR_BODY_BYTES)?;
         Err(common::parse_error_from_body(status, &body, false))
     }
 }

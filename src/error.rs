@@ -1,8 +1,62 @@
+use reqwest::blocking::Response as BlockingResponse;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::io;
 
-#[cfg(any(feature = "async-client", feature = "async-validate"))]
 pub(crate) const MAX_ERROR_BODY_BYTES: usize = 64 * 1024;
+
+pub(crate) fn fallback_message(status: StatusCode, body: &[u8]) -> String {
+    let body_text = String::from_utf8_lossy(body);
+    if body_text.trim().is_empty() {
+        let reason = status.canonical_reason().unwrap_or("");
+        if reason.is_empty() {
+            format!("http status {}", status.as_u16())
+        } else {
+            format!("http status {} {}", status.as_u16(), reason)
+        }
+    } else {
+        body_text.to_string()
+    }
+}
+
+pub(crate) fn read_body_with_limit(
+    resp: &mut BlockingResponse,
+    limit: usize,
+) -> Result<Vec<u8>, reqwest::Error> {
+    struct BodyCapture {
+        buf: Vec<u8>,
+        remaining: usize,
+    }
+
+    impl BodyCapture {
+        fn new(limit: usize) -> Self {
+            Self {
+                buf: Vec::new(),
+                remaining: limit,
+            }
+        }
+    }
+
+    impl io::Write for BodyCapture {
+        fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+            if self.remaining > 0 {
+                let take = self.remaining.min(data.len());
+                self.buf.extend_from_slice(&data[..take]);
+                self.remaining -= take;
+            }
+            Ok(data.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let mut capture = BodyCapture::new(limit);
+    resp.copy_to(&mut capture)?;
+    Ok(capture.buf)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "camelCase")]

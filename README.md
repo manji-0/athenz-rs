@@ -83,7 +83,7 @@ println!("claims: {}", data.claims);
 ## Notes and Behavior
 
 - ZTS base URL should include the `/zts/v1` path.
-- JWT validation allowlist defaults to RS256/RS384/RS512/ES256/ES384. ES512 (P-521) is verified internally and must be explicitly enabled via `JwtValidationOptions.allow_es512` (or `.with_es512()`).
+- JWT validation allowlist defaults to RS256/RS384/RS512/ES256/ES384. ES512 (P-521) is verified internally and must be explicitly enabled via `JwtValidationOptions.allow_es512` with EC algorithms in `allowed_algs` (or use `.with_es512()`).
 - EC private keys must be in PKCS#8 (`PRIVATE KEY`) format; SEC1 (`EC PRIVATE KEY`) is not supported.
 - `PolicyStore` lowercases action/resource and ignores `case_sensitive`/`conditions` (ZPE behavior).
 

@@ -15,7 +15,7 @@ Not currently. The clients are synchronous and use `reqwest::blocking`.
 
 The default allowlist is RS256/RS384/RS512/ES256/ES384.
 ES512 (P-521) is verified internally (not via `jsonwebtoken`) and is disabled by default.
-Enable it via `JwtValidationOptions.allow_es512` (or `.with_es512()`).
+Enable it via `JwtValidationOptions.allow_es512` with EC algorithms in `allowed_algs` (or use `.with_es512()`).
 
 ## What key formats are supported?
 

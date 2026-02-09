@@ -43,6 +43,7 @@ pub struct JwtValidationOptions {
     pub leeway: u64,
     pub validate_exp: bool,
     pub allowed_algs: Vec<Algorithm>,
+    /// When true, ES512 validation is permitted (requires EC algorithms in `allowed_algs`).
     pub allow_es512: bool,
 }
 
@@ -71,6 +72,7 @@ impl JwtValidationOptions {
     }
 
     pub fn with_es512(mut self) -> Self {
+        // ES512 verification relies on EC allowlist checks for ES256/ES384.
         self.allow_es512 = true;
         for alg in ATHENZ_EC_ALGS {
             if !self.allowed_algs.contains(alg) {

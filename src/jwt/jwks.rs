@@ -865,6 +865,31 @@ mod tests {
     }
 
     #[test]
+    fn jwt_es512_rejected_without_ec_allowlist() {
+        let (token, jwks) = build_es512_token();
+        let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");
+        *jwks_provider.cache.write().unwrap() = Some(CachedJwks {
+            jwks,
+            expires_at: Instant::now() + Duration::from_secs(60),
+            fetched_at: Instant::now(),
+        });
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.allow_es512 = true;
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::UnsupportedAlg(alg) => assert_eq!(alg, ES512_DISABLED_MESSAGE),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
     fn jwt_rs256_validates_without_kid_using_all_keys() {
         let (token, jwks) = build_rs256_token_without_kid();
         let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");

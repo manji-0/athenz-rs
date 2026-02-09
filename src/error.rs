@@ -22,6 +22,10 @@ pub(crate) fn fallback_message(status: StatusCode, body: &[u8]) -> String {
     }
 }
 
+/// Read and drain the response body while capturing up to `limit` bytes.
+///
+/// Draining preserves connection reuse in the underlying HTTP client; the cap
+/// is on memory retained, not total bytes read.
 pub(crate) fn read_body_with_limit(
     resp: &mut BlockingResponse,
     limit: usize,
@@ -61,6 +65,9 @@ pub(crate) fn read_body_with_limit(
 }
 
 #[cfg(feature = "async-client")]
+/// Read and drain the async response body while capturing up to `limit` bytes.
+///
+/// Draining preserves connection reuse; the cap limits stored bytes only.
 pub(crate) async fn read_body_with_limit_async(
     resp: &mut AsyncResponse,
     limit: usize,

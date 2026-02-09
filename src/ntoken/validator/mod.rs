@@ -89,6 +89,24 @@ pub struct NTokenValidatorConfig {
     pub zts_service: String,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct NTokenValidationOptions {
+    pub hostname: Option<String>,
+    pub ip: Option<String>,
+}
+
+impl NTokenValidationOptions {
+    pub fn with_hostname(mut self, hostname: impl Into<String>) -> Self {
+        self.hostname = Some(hostname.into());
+        self
+    }
+
+    pub fn with_ip(mut self, ip: impl Into<String>) -> Self {
+        self.ip = Some(ip.into());
+        self
+    }
+}
+
 impl Default for NTokenValidatorConfig {
     fn default() -> Self {
         Self {
@@ -144,6 +162,14 @@ impl NTokenValidator {
     }
 
     pub fn validate(&self, token: &str) -> Result<NToken, Error> {
+        self.validate_with_options(token, &NTokenValidationOptions::default())
+    }
+
+    pub fn validate_with_options(
+        &self,
+        token: &str,
+        options: &NTokenValidationOptions,
+    ) -> Result<NToken, Error> {
         let (claims, unsigned, signature) = parse_unverified(token)?;
         match self {
             NTokenValidator::Static(verifier) => {
@@ -151,6 +177,7 @@ impl NTokenValidator {
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
+                validate_ip_hostname(&claims, options)?;
                 Ok(claims)
             }
             NTokenValidator::Zts {
@@ -164,6 +191,7 @@ impl NTokenValidator {
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
+                validate_ip_hostname(&claims, options)?;
                 Ok(claims)
             }
         }
@@ -203,6 +231,15 @@ impl NTokenValidatorAsync {
     }
 
     pub async fn validate(&self, token: &str) -> Result<NToken, Error> {
+        let options = NTokenValidationOptions::default();
+        self.validate_with_options(token, &options).await
+    }
+
+    pub async fn validate_with_options(
+        &self,
+        token: &str,
+        options: &NTokenValidationOptions,
+    ) -> Result<NToken, Error> {
         let (claims, unsigned, signature) = parse_unverified(token)?;
         match self {
             NTokenValidatorAsync::Static(verifier) => {
@@ -210,6 +247,7 @@ impl NTokenValidatorAsync {
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
+                validate_ip_hostname(&claims, options)?;
                 Ok(claims)
             }
             NTokenValidatorAsync::Zts {
@@ -225,8 +263,37 @@ impl NTokenValidatorAsync {
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
+                validate_ip_hostname(&claims, options)?;
                 Ok(claims)
             }
         }
     }
+}
+
+fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> Result<(), Error> {
+    if let Some(expected) = options.hostname.as_deref() {
+        match claims.hostname.as_deref() {
+            Some(actual) if actual == expected => {}
+            Some(actual) => {
+                return Err(Error::Crypto(format!(
+                    "ntoken hostname mismatch: expected {expected}, got {actual}"
+                )));
+            }
+            None => return Err(Error::Crypto("ntoken missing hostname".to_string())),
+        }
+    }
+
+    if let Some(expected) = options.ip.as_deref() {
+        match claims.ip.as_deref() {
+            Some(actual) if actual == expected => {}
+            Some(actual) => {
+                return Err(Error::Crypto(format!(
+                    "ntoken ip mismatch: expected {expected}, got {actual}"
+                )));
+            }
+            None => return Err(Error::Crypto("ntoken missing ip".to_string())),
+        }
+    }
+
+    Ok(())
 }

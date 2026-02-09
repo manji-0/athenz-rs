@@ -1,4 +1,6 @@
 use super::NTokenValidator;
+use crate::ntoken::keys::load_private_key;
+use crate::ntoken::token::{sign_with_key_at, unix_time_now};
 use crate::ntoken::{NTokenBuilder, NTokenSigner, NTokenValidationOptions};
 use std::time::Duration;
 
@@ -197,4 +199,76 @@ fn ntoken_validate_with_ip_normalization() {
         .validate_with_options(&token, &options)
         .expect("validate");
     assert_eq!(claims.ip.as_deref(), Some("2001:0db8:0:0:0:0:0:1"));
+}
+
+#[test]
+fn ntoken_validate_rejects_future_generation_time() {
+    let builder = NTokenBuilder::new("sports", "api", "v1");
+    let key = load_private_key(RSA_PRIVATE_KEY.as_bytes()).expect("private key");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default();
+    let now = unix_time_now();
+    let offset = i64::try_from(options.allowed_offset().as_secs()).unwrap();
+    let generation_time = now + offset + 60;
+    let expiry_time = generation_time + 60;
+    let token = sign_with_key_at(&builder, &key, generation_time, expiry_time).expect("token");
+    let err = validator
+        .validate_with_options(&token, &options)
+        .expect_err("future generation time");
+    assert!(err.to_string().contains("future timestamp"));
+}
+
+#[test]
+fn ntoken_validate_rejects_expiry_too_far_in_future() {
+    let options = NTokenValidationOptions::default();
+    let builder = NTokenBuilder::new("sports", "api", "v1");
+    let key = load_private_key(RSA_PRIVATE_KEY.as_bytes()).expect("private key");
+    let now = unix_time_now();
+    let max = i64::try_from(options.max_expiry().as_secs()).unwrap();
+    let offset = i64::try_from(options.allowed_offset().as_secs()).unwrap();
+    let generation_time = now;
+    let expiry_time = now + max + offset + 60;
+    let token = sign_with_key_at(&builder, &key, generation_time, expiry_time).expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let err = validator
+        .validate_with_options(&token, &options)
+        .expect_err("expiry too far");
+    assert!(err.to_string().contains("expires too far"));
+}
+
+#[test]
+fn ntoken_validate_allows_generation_time_at_allowed_offset() {
+    let options = NTokenValidationOptions::default();
+    let builder = NTokenBuilder::new("sports", "api", "v1");
+    let key = load_private_key(RSA_PRIVATE_KEY.as_bytes()).expect("private key");
+    let now = unix_time_now();
+    let offset = i64::try_from(options.allowed_offset().as_secs()).unwrap();
+    let generation_time = now + offset;
+    let expiry_time = generation_time + 60;
+    let token = sign_with_key_at(&builder, &key, generation_time, expiry_time).expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    validator
+        .validate_with_options(&token, &options)
+        .expect("generation time within offset");
+}
+
+#[test]
+fn ntoken_validate_allows_expiry_at_max_bound() {
+    let options = NTokenValidationOptions::default();
+    let builder = NTokenBuilder::new("sports", "api", "v1");
+    let key = load_private_key(RSA_PRIVATE_KEY.as_bytes()).expect("private key");
+    let now = unix_time_now();
+    let max = i64::try_from(options.max_expiry().as_secs()).unwrap();
+    let offset = i64::try_from(options.allowed_offset().as_secs()).unwrap();
+    let generation_time = now;
+    let expiry_time = now + max + offset;
+    let token = sign_with_key_at(&builder, &key, generation_time, expiry_time).expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    validator
+        .validate_with_options(&token, &options)
+        .expect("expiry at max bound");
 }

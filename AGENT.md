@@ -33,3 +33,8 @@ Examples:
 - For each issue, create a separate worktree based on the up-to-date `main`
   and do all changes there, for example:
   `git worktree add ../ISSUE-123 -b codex/ISSUE-123-update-docs origin/main`.
+
+## Prek checks (mandatory)
+
+- Run Prek checks before pushing or opening a PR:
+  `prek run --all-files`

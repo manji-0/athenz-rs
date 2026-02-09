@@ -179,9 +179,28 @@ pub(super) fn sign_with_key(
 ) -> Result<(String, i64), Error> {
     let now = unix_time_now();
     let expiry = now + builder.expiration.as_secs() as i64;
+    let token = sign_with_key_at_internal(builder, key, now, expiry)?;
+    Ok((token, expiry))
+}
+
+#[cfg(test)]
+pub(super) fn sign_with_key_at(
+    builder: &NTokenBuilder,
+    key: &PrivateKey,
+    now: i64,
+    expiry: i64,
+) -> Result<String, Error> {
+    sign_with_key_at_internal(builder, key, now, expiry)
+}
+
+fn sign_with_key_at_internal(
+    builder: &NTokenBuilder,
+    key: &PrivateKey,
+    now: i64,
+    expiry: i64,
+) -> Result<String, Error> {
     let salt = random_salt()?;
     let unsigned = builder.unsigned_token(now, expiry, &salt);
-
     let signature = match key {
         PrivateKey::Rsa(rsa_key) => {
             let signing_key = RsaSigningKey::<Sha256>::new(rsa_key.clone());
@@ -202,8 +221,7 @@ pub(super) fn sign_with_key(
         }
     };
     let signature = ybase64_encode(&signature);
-
-    Ok((format!("{unsigned};{TAG_SIGNATURE}={signature}"), expiry))
+    Ok(format!("{unsigned};{TAG_SIGNATURE}={signature}"))
 }
 
 pub(super) fn unix_time_now() -> i64 {

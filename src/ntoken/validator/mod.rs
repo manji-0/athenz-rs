@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 
 use super::keys::{load_public_key, PublicKey};
-use super::token::NToken;
+use super::token::{unix_time_now, NToken};
 
 mod helpers;
 #[cfg(test)]
@@ -89,16 +89,23 @@ pub struct NTokenValidatorConfig {
     pub zts_service: String,
 }
 
-/// Options controlling additional host checks when validating an [`NToken`].
+const DEFAULT_ALLOWED_OFFSET: Duration = Duration::from_secs(300);
+const DEFAULT_MAX_EXPIRY: Duration = Duration::from_secs(60 * 60 * 24 * 30);
+
+/// Options controlling additional validation checks when validating an [`NToken`].
 ///
 /// Hostname comparison is case-insensitive (ASCII) and ignores any trailing dot(s).
 /// IP comparison parses both values as `IpAddr` when possible and compares the
 /// parsed addresses; if parsing fails, it falls back to string equality.
-#[derive(Debug, Clone, Default)]
+/// The default allowed offset is 300 seconds, and the default max expiry is 30 days
+/// from the current time.
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct NTokenValidationOptions {
     hostname: Option<String>,
     ip: Option<String>,
+    allowed_offset: Duration,
+    max_expiry: Duration,
 }
 
 impl NTokenValidationOptions {
@@ -112,6 +119,16 @@ impl NTokenValidationOptions {
         self.ip.as_deref()
     }
 
+    /// Returns the allowed clock offset when validating token timestamps.
+    pub fn allowed_offset(&self) -> Duration {
+        self.allowed_offset
+    }
+
+    /// Returns the maximum allowed expiry window for a token.
+    pub fn max_expiry(&self) -> Duration {
+        self.max_expiry
+    }
+
     /// Set the expected hostname to be matched against the token.
     pub fn with_hostname(mut self, hostname: impl Into<String>) -> Self {
         self.hostname = Some(hostname.into());
@@ -122,6 +139,29 @@ impl NTokenValidationOptions {
     pub fn with_ip(mut self, ip: impl Into<String>) -> Self {
         self.ip = Some(ip.into());
         self
+    }
+
+    /// Set the allowed clock offset when validating token timestamps.
+    pub fn with_allowed_offset(mut self, allowed_offset: Duration) -> Self {
+        self.allowed_offset = allowed_offset;
+        self
+    }
+
+    /// Set the maximum allowed expiry window for a token.
+    pub fn with_max_expiry(mut self, max_expiry: Duration) -> Self {
+        self.max_expiry = max_expiry;
+        self
+    }
+}
+
+impl Default for NTokenValidationOptions {
+    fn default() -> Self {
+        Self {
+            hostname: None,
+            ip: None,
+            allowed_offset: DEFAULT_ALLOWED_OFFSET,
+            max_expiry: DEFAULT_MAX_EXPIRY,
+        }
     }
 }
 
@@ -184,7 +224,7 @@ impl NTokenValidator {
         self.validate_with_options(token, &options)
     }
 
-    /// Validate an NToken using additional host validation options.
+    /// Validate an NToken using additional validation options.
     ///
     /// When `options.hostname` is set, the token must contain a hostname and it
     /// must match the configured value (case-insensitive ASCII, ignoring trailing
@@ -192,6 +232,11 @@ impl NTokenValidator {
     /// match the configured value (parsed `IpAddr` equality when possible,
     /// otherwise string equality). If an expected value is set but the token is
     /// missing the corresponding claim, validation fails.
+    ///
+    /// Timestamps are also validated: the generation time cannot be in the
+    /// future beyond the allowed offset, and the expiry time cannot exceed the
+    /// configured maximum window. The allowed offset is not applied to the
+    /// expiration check itself (`expiry_time < now`).
     pub fn validate_with_options(
         &self,
         token: &str,
@@ -201,6 +246,7 @@ impl NTokenValidator {
         match self {
             NTokenValidator::Static(verifier) => {
                 verifier.verify(&unsigned, &signature)?;
+                validate_time_bounds(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
@@ -215,6 +261,7 @@ impl NTokenValidator {
                 let src = key_source_from_claims(&claims, config);
                 let verifier = get_cached_verifier(cache, http, config, &src)?;
                 verifier.verify(&unsigned, &signature)?;
+                validate_time_bounds(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
@@ -262,7 +309,7 @@ impl NTokenValidatorAsync {
         self.validate_with_options(token, &options).await
     }
 
-    /// Validate an NToken using additional host validation options.
+    /// Validate an NToken using additional validation options.
     ///
     /// When `options.hostname` is set, the token must contain a hostname and it
     /// must match the configured value (case-insensitive ASCII, ignoring trailing
@@ -270,6 +317,11 @@ impl NTokenValidatorAsync {
     /// match the configured value (parsed `IpAddr` equality when possible,
     /// otherwise string equality). If an expected value is set but the token is
     /// missing the corresponding claim, validation fails.
+    ///
+    /// Timestamps are also validated: the generation time cannot be in the
+    /// future beyond the allowed offset, and the expiry time cannot exceed the
+    /// configured maximum window. The allowed offset is not applied to the
+    /// expiration check itself (`expiry_time < now`).
     pub async fn validate_with_options(
         &self,
         token: &str,
@@ -279,6 +331,7 @@ impl NTokenValidatorAsync {
         match self {
             NTokenValidatorAsync::Static(verifier) => {
                 verifier.verify(&unsigned, &signature)?;
+                validate_time_bounds(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
@@ -295,6 +348,7 @@ impl NTokenValidatorAsync {
                 let verifier =
                     get_cached_verifier_async(cache, fetch_locks, http, config, &src).await?;
                 verifier.verify(&unsigned, &signature)?;
+                validate_time_bounds(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
@@ -331,6 +385,37 @@ fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> R
     }
 
     Ok(())
+}
+
+fn validate_time_bounds(claims: &NToken, options: &NTokenValidationOptions) -> Result<(), Error> {
+    let now = unix_time_now();
+    let allowed_offset = duration_to_i64(options.allowed_offset);
+
+    // generation_time is required by parsing, but keep a defensive guard for
+    // manually constructed claims.
+    if claims.generation_time != 0 && claims.generation_time.saturating_sub(allowed_offset) > now {
+        return Err(Error::Crypto(format!(
+            "ntoken has future timestamp: generation_time={} now={} allowed_offset={}",
+            claims.generation_time, now, allowed_offset
+        )));
+    }
+
+    let max_expiry = duration_to_i64(options.max_expiry);
+    let latest_expiry = now
+        .saturating_add(max_expiry)
+        .saturating_add(allowed_offset);
+    if claims.expiry_time > latest_expiry {
+        return Err(Error::Crypto(format!(
+            "ntoken expires too far in the future: expiry_time={} now={} max_expiry={} allowed_offset={}",
+            claims.expiry_time, now, max_expiry, allowed_offset
+        )));
+    }
+
+    Ok(())
+}
+
+fn duration_to_i64(duration: Duration) -> i64 {
+    i64::try_from(duration.as_secs()).unwrap_or(i64::MAX)
 }
 
 fn hostname_matches(expected: &str, actual: &str) -> bool {

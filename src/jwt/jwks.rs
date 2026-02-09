@@ -96,6 +96,15 @@ impl JwksProviderAsync {
             }
         }
 
+        self.fetch_remote().await
+    }
+
+    pub async fn fetch_fresh(&self) -> Result<JwkSet, Error> {
+        let _guard = self.fetch_lock.lock().await;
+        self.fetch_remote().await
+    }
+
+    async fn fetch_remote(&self) -> Result<JwkSet, Error> {
         let mut resp = self.http.get(self.jwks_uri.clone()).send().await?;
         let status = resp.status();
         if !status.is_success() {
@@ -171,6 +180,14 @@ impl JwksProvider {
             }
         }
 
+        self.fetch_remote()
+    }
+
+    pub fn fetch_fresh(&self) -> Result<JwkSet, Error> {
+        self.fetch_remote()
+    }
+
+    fn fetch_remote(&self) -> Result<JwkSet, Error> {
         let body = self.http.get(self.jwks_uri.clone()).send()?.bytes()?;
         let jwks = jwks_from_slice(&body)?;
         let cached = CachedJwks {
@@ -276,6 +293,8 @@ fn sanitize_jwks(value: &mut Value) -> Vec<RemovedAlg> {
 mod tests {
     use super::*;
     use crate::jwt::constants::{MAX_KIDLESS_JWKS_KEYS, NO_COMPATIBLE_JWK_MESSAGE};
+    #[cfg(feature = "async-validate")]
+    use crate::jwt::{JwksProviderAsync, JwtValidatorAsync};
     use crate::jwt::{JwtValidationOptions, JwtValidator};
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine as _;
@@ -290,7 +309,12 @@ mod tests {
     use rsa::{RsaPrivateKey, RsaPublicKey};
     use serde_json::{json, Value};
     use signature::Signer;
-    use std::sync::OnceLock;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, OnceLock};
+    use std::thread;
+    use std::time::{Duration, Instant};
 
     fn build_es512_token() -> (String, JwkSet) {
         build_es512_token_with_typ_value(Some(json!("JWT")))
@@ -432,6 +456,75 @@ mod tests {
             *last ^= 0x01;
         }
         (n, e, bad_n)
+    }
+
+    fn build_rs256_token_with_kid(kid: &str) -> (String, JwkSet) {
+        let pem = rsa_private_key_pem();
+        let exp = jsonwebtoken::get_current_timestamp() + 3600;
+        let claims = json!({
+            "iss": "athenz",
+            "aud": "client",
+            "sub": "principal",
+            "exp": exp,
+        });
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(kid.to_string());
+        let token = encode(
+            &header,
+            &claims,
+            &EncodingKey::from_rsa_pem(pem.as_bytes()).expect("encoding key"),
+        )
+        .expect("token");
+
+        let (n, e, _) = rs256_public_components();
+        let jwks_json = json!({
+            "keys": [{
+                "kty": "RSA",
+                "kid": kid,
+                "alg": "RS256",
+                "n": URL_SAFE_NO_PAD.encode(&n),
+                "e": URL_SAFE_NO_PAD.encode(&e),
+            }]
+        });
+        let jwks = jwks_from_value(jwks_json).expect("jwks");
+        (token, jwks)
+    }
+
+    fn serve_jwks_sequence(
+        bodies: Vec<String>,
+    ) -> (String, Arc<AtomicUsize>, thread::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        listener.set_nonblocking(true).expect("nonblocking");
+        let addr = listener.local_addr().expect("addr");
+        let count = Arc::new(AtomicUsize::new(0));
+        let count_thread = Arc::clone(&count);
+        let handle = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while count_thread.load(Ordering::SeqCst) < bodies.len() && Instant::now() < deadline {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let idx = count_thread.fetch_add(1, Ordering::SeqCst);
+                        let body = bodies
+                            .get(idx)
+                            .unwrap_or_else(|| bodies.last().expect("body"));
+                        let mut buf = [0u8; 1024];
+                        let _ = stream.read(&mut buf);
+                        let response = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.as_bytes().len(),
+                            body
+                        );
+                        let _ = stream.write_all(response.as_bytes());
+                        let _ = stream.flush();
+                    }
+                    Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        (format!("http://{}", addr), count, handle)
     }
 
     fn rs256_token_without_kid() -> String {
@@ -701,6 +794,74 @@ mod tests {
             Error::Crypto(message) => assert_eq!(message, expected),
             other => panic!("unexpected error: {:?}", other),
         }
+    }
+
+    #[test]
+    fn jwt_rs256_refetches_when_kid_missing() {
+        let (token, jwks) = build_rs256_token_with_kid("good-key");
+        let (n, e, _) = rs256_public_components();
+        let missing_jwks = jwks_from_value(json!({
+            "keys": [{
+                "kty": "RSA",
+                "kid": "other-key",
+                "alg": "RS256",
+                "n": URL_SAFE_NO_PAD.encode(&n),
+                "e": URL_SAFE_NO_PAD.encode(&e),
+            }]
+        }))
+        .expect("jwks");
+        let bodies = vec![
+            serde_json::to_string(&missing_jwks).expect("jwks"),
+            serde_json::to_string(&jwks).expect("jwks"),
+        ];
+        let (base_url, count, handle) = serve_jwks_sequence(bodies);
+        let jwks_provider = JwksProvider::new(format!("{}/jwks", base_url)).expect("provider");
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let data = validator.validate_access_token(&token).expect("validate");
+        assert_eq!(data.header.kid.as_deref(), Some("good-key"));
+        handle.join().expect("server");
+        assert!(count.load(Ordering::SeqCst) >= 2);
+    }
+
+    #[cfg(feature = "async-validate")]
+    #[tokio::test]
+    async fn jwt_rs256_refetches_when_kid_missing_async() {
+        let (token, jwks) = build_rs256_token_with_kid("good-key");
+        let (n, e, _) = rs256_public_components();
+        let missing_jwks = jwks_from_value(json!({
+            "keys": [{
+                "kty": "RSA",
+                "kid": "other-key",
+                "alg": "RS256",
+                "n": URL_SAFE_NO_PAD.encode(&n),
+                "e": URL_SAFE_NO_PAD.encode(&e),
+            }]
+        }))
+        .expect("jwks");
+        let bodies = vec![
+            serde_json::to_string(&missing_jwks).expect("jwks"),
+            serde_json::to_string(&jwks).expect("jwks"),
+        ];
+        let (base_url, count, handle) = serve_jwks_sequence(bodies);
+        let jwks_provider = JwksProviderAsync::new(format!("{}/jwks", base_url)).expect("provider");
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidatorAsync::new(jwks_provider).with_options(options);
+        let data = validator
+            .validate_access_token(&token)
+            .await
+            .expect("validate");
+        assert_eq!(data.header.kid.as_deref(), Some("good-key"));
+        handle.join().expect("server");
+        assert!(count.load(Ordering::SeqCst) >= 2);
     }
 
     #[test]

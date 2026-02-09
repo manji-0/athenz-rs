@@ -168,3 +168,33 @@ fn ntoken_validate_with_ip_missing() {
         .expect_err("missing ip");
     assert!(err.to_string().contains("missing ip"));
 }
+
+#[test]
+fn ntoken_validate_with_hostname_normalization() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_hostname("Host.Example.");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default().with_hostname("host.example");
+    let claims = validator
+        .validate_with_options(&token, &options)
+        .expect("validate");
+    assert_eq!(claims.hostname.as_deref(), Some("Host.Example."));
+}
+
+#[test]
+fn ntoken_validate_with_ip_normalization() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_ip("2001:0db8:0:0:0:0:0:1");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default().with_ip("2001:db8::1");
+    let claims = validator
+        .validate_with_options(&token, &options)
+        .expect("validate");
+    assert_eq!(claims.ip.as_deref(), Some("2001:0db8:0:0:0:0:0:1"));
+}

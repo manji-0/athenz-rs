@@ -89,18 +89,36 @@ pub struct NTokenValidatorConfig {
     pub zts_service: String,
 }
 
+/// Options controlling additional host checks when validating an [`NToken`].
+///
+/// Hostname comparison is case-insensitive (ASCII) and ignores a trailing dot.
+/// IP comparison parses both values as `IpAddr` when possible and compares the
+/// parsed addresses; if parsing fails, it falls back to string equality.
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub struct NTokenValidationOptions {
-    pub hostname: Option<String>,
-    pub ip: Option<String>,
+    hostname: Option<String>,
+    ip: Option<String>,
 }
 
 impl NTokenValidationOptions {
+    /// Returns the configured hostname, if any.
+    pub fn hostname(&self) -> Option<&str> {
+        self.hostname.as_deref()
+    }
+
+    /// Returns the configured IP address, if any.
+    pub fn ip(&self) -> Option<&str> {
+        self.ip.as_deref()
+    }
+
+    /// Set the expected hostname to be matched against the token.
     pub fn with_hostname(mut self, hostname: impl Into<String>) -> Self {
         self.hostname = Some(hostname.into());
         self
     }
 
+    /// Set the expected IP address to be matched against the token.
     pub fn with_ip(mut self, ip: impl Into<String>) -> Self {
         self.ip = Some(ip.into());
         self
@@ -271,9 +289,9 @@ impl NTokenValidatorAsync {
 }
 
 fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> Result<(), Error> {
-    if let Some(expected) = options.hostname.as_deref() {
+    if let Some(expected) = options.hostname() {
         match claims.hostname.as_deref() {
-            Some(actual) if actual == expected => {}
+            Some(actual) if hostname_matches(expected, actual) => {}
             Some(actual) => {
                 return Err(Error::Crypto(format!(
                     "ntoken hostname mismatch: expected {expected}, got {actual}"
@@ -283,9 +301,9 @@ fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> R
         }
     }
 
-    if let Some(expected) = options.ip.as_deref() {
+    if let Some(expected) = options.ip() {
         match claims.ip.as_deref() {
-            Some(actual) if actual == expected => {}
+            Some(actual) if ip_matches(expected, actual) => {}
             Some(actual) => {
                 return Err(Error::Crypto(format!(
                     "ntoken ip mismatch: expected {expected}, got {actual}"
@@ -296,4 +314,24 @@ fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> R
     }
 
     Ok(())
+}
+
+fn hostname_matches(expected: &str, actual: &str) -> bool {
+    normalize_hostname(expected) == normalize_hostname(actual)
+}
+
+fn normalize_hostname(value: &str) -> String {
+    let trimmed = value.trim_end_matches('.');
+    let mut normalized = trimmed.to_string();
+    normalized.make_ascii_lowercase();
+    normalized
+}
+
+fn ip_matches(expected: &str, actual: &str) -> bool {
+    use std::net::IpAddr;
+
+    match (expected.parse::<IpAddr>(), actual.parse::<IpAddr>()) {
+        (Ok(expected), Ok(actual)) => expected == actual,
+        _ => expected == actual,
+    }
 }

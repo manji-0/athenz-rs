@@ -128,11 +128,10 @@ pub(crate) fn parse_error_from_body(
     body: &[u8],
     fallback_to_status: bool,
 ) -> Error {
-    let body_text = String::from_utf8_lossy(body).to_string();
     let fallback = if fallback_to_status {
         fallback_message(status, body)
     } else {
-        body_text.clone()
+        String::from_utf8_lossy(body).to_string()
     };
     let mut err = serde_json::from_slice::<ResourceError>(body).unwrap_or_else(|_| ResourceError {
         code: status.as_u16() as i32,

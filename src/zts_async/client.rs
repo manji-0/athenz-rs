@@ -1,4 +1,4 @@
-use crate::error::{fallback_message, Error, MAX_ERROR_BODY_BYTES};
+use crate::error::{read_body_with_limit_async, Error, MAX_ERROR_BODY_BYTES};
 use crate::ntoken::NTokenSigner;
 use crate::zts::{common, ConditionalResponse};
 use reqwest::header::{HeaderName, HeaderValue};
@@ -250,21 +250,7 @@ impl ZtsAsyncClient {
 
     async fn parse_error<T>(&self, mut resp: Response) -> Result<T, Error> {
         let status = resp.status();
-        let mut body = Vec::new();
-        let mut remaining = MAX_ERROR_BODY_BYTES;
-        while let Some(chunk) = resp.chunk().await? {
-            if remaining > 0 {
-                let take = remaining.min(chunk.len());
-                body.extend_from_slice(&chunk[..take]);
-                remaining -= take;
-            }
-        }
-        let fallback = fallback_message(status, &body);
-        Err(common::parse_error_from_body(
-            status,
-            &body,
-            Some(fallback),
-            true,
-        ))
+        let body = read_body_with_limit_async(&mut resp, MAX_ERROR_BODY_BYTES).await?;
+        Err(common::parse_error_from_body(status, &body, None, true))
     }
 }

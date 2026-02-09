@@ -106,8 +106,10 @@ pub(crate) fn parse_error_from_body(
     fallback_override: Option<String>,
     trim_empty: bool,
 ) -> Error {
-    let default_fallback = fallback_message(status, body);
-    let fallback = fallback_override.unwrap_or_else(|| default_fallback.clone());
+    let fallback = match fallback_override {
+        Some(value) => value,
+        None => fallback_message(status, body),
+    };
     let mut err = serde_json::from_slice::<ResourceError>(body).unwrap_or_else(|_| ResourceError {
         code: status.as_u16() as i32,
         message: fallback.clone(),

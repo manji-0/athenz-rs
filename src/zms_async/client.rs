@@ -1,4 +1,4 @@
-use crate::error::{Error, MAX_ERROR_BODY_BYTES};
+use crate::error::{read_body_with_limit_async, Error, MAX_ERROR_BODY_BYTES};
 use crate::ntoken::NTokenSigner;
 use crate::zms::common;
 use reqwest::header::{HeaderName, HeaderValue};
@@ -223,15 +223,7 @@ impl ZmsAsyncClient {
 
     async fn parse_error<T>(&self, mut resp: Response) -> Result<T, Error> {
         let status = resp.status();
-        let mut body = Vec::new();
-        let mut remaining = MAX_ERROR_BODY_BYTES;
-        while let Some(chunk) = resp.chunk().await? {
-            if remaining > 0 {
-                let take = remaining.min(chunk.len());
-                body.extend_from_slice(&chunk[..take]);
-                remaining -= take;
-            }
-        }
+        let body = read_body_with_limit_async(&mut resp, MAX_ERROR_BODY_BYTES).await?;
         Err(common::parse_error_from_body(status, &body, true))
     }
 }

@@ -1,4 +1,6 @@
 use reqwest::blocking::Response as BlockingResponse;
+#[cfg(feature = "async-client")]
+use reqwest::Response as AsyncResponse;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -56,6 +58,23 @@ pub(crate) fn read_body_with_limit(
     let mut capture = BodyCapture::new(limit);
     resp.copy_to(&mut capture)?;
     Ok(capture.buf)
+}
+
+#[cfg(feature = "async-client")]
+pub(crate) async fn read_body_with_limit_async(
+    resp: &mut AsyncResponse,
+    limit: usize,
+) -> Result<Vec<u8>, reqwest::Error> {
+    let mut body = Vec::new();
+    let mut remaining = limit;
+    while let Some(chunk) = resp.chunk().await? {
+        if remaining > 0 {
+            let take = remaining.min(chunk.len());
+            body.extend_from_slice(&chunk[..take]);
+            remaining -= take;
+        }
+    }
+    Ok(body)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

@@ -42,7 +42,8 @@ pub use models::{
 #[cfg(feature = "async-validate")]
 pub use ntoken::NTokenValidatorAsync;
 pub use ntoken::{
-    NToken, NTokenBuilder, NTokenClaims, NTokenSigner, NTokenValidator, NTokenValidatorConfig,
+    NToken, NTokenBuilder, NTokenClaims, NTokenSigner, NTokenValidationOptions, NTokenValidator,
+    NTokenValidatorConfig,
 };
 
 pub use zts::{

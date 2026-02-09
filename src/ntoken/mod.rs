@@ -9,4 +9,4 @@ pub use token::{NToken, NTokenBuilder, NTokenClaims};
 pub use validator::NTokenValidatorAsync;
 #[allow(unused_imports)]
 pub use validator::NTokenVerifier;
-pub use validator::{NTokenValidator, NTokenValidatorConfig};
+pub use validator::{NTokenValidationOptions, NTokenValidator, NTokenValidatorConfig};

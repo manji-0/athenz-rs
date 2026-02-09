@@ -89,6 +89,42 @@ pub struct NTokenValidatorConfig {
     pub zts_service: String,
 }
 
+/// Options controlling additional host checks when validating an [`NToken`].
+///
+/// Hostname comparison is case-insensitive (ASCII) and ignores any trailing dot(s).
+/// IP comparison parses both values as `IpAddr` when possible and compares the
+/// parsed addresses; if parsing fails, it falls back to string equality.
+#[derive(Debug, Clone, Default)]
+#[non_exhaustive]
+pub struct NTokenValidationOptions {
+    hostname: Option<String>,
+    ip: Option<String>,
+}
+
+impl NTokenValidationOptions {
+    /// Returns the configured hostname, if any.
+    pub fn hostname(&self) -> Option<&str> {
+        self.hostname.as_deref()
+    }
+
+    /// Returns the configured IP address, if any.
+    pub fn ip(&self) -> Option<&str> {
+        self.ip.as_deref()
+    }
+
+    /// Set the expected hostname to be matched against the token.
+    pub fn with_hostname(mut self, hostname: impl Into<String>) -> Self {
+        self.hostname = Some(hostname.into());
+        self
+    }
+
+    /// Set the expected IP address to be matched against the token.
+    pub fn with_ip(mut self, ip: impl Into<String>) -> Self {
+        self.ip = Some(ip.into());
+        self
+    }
+}
+
 impl Default for NTokenValidatorConfig {
     fn default() -> Self {
         Self {
@@ -144,6 +180,23 @@ impl NTokenValidator {
     }
 
     pub fn validate(&self, token: &str) -> Result<NToken, Error> {
+        let options = NTokenValidationOptions::default();
+        self.validate_with_options(token, &options)
+    }
+
+    /// Validate an NToken using additional host validation options.
+    ///
+    /// When `options.hostname` is set, the token must contain a hostname and it
+    /// must match the configured value (case-insensitive ASCII, ignoring trailing
+    /// dot(s)). When `options.ip` is set, the token must contain an IP and it must
+    /// match the configured value (parsed `IpAddr` equality when possible,
+    /// otherwise string equality). If an expected value is set but the token is
+    /// missing the corresponding claim, validation fails.
+    pub fn validate_with_options(
+        &self,
+        token: &str,
+        options: &NTokenValidationOptions,
+    ) -> Result<NToken, Error> {
         let (claims, unsigned, signature) = parse_unverified(token)?;
         match self {
             NTokenValidator::Static(verifier) => {
@@ -151,6 +204,7 @@ impl NTokenValidator {
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
+                validate_ip_hostname(&claims, options)?;
                 Ok(claims)
             }
             NTokenValidator::Zts {
@@ -164,6 +218,7 @@ impl NTokenValidator {
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
+                validate_ip_hostname(&claims, options)?;
                 Ok(claims)
             }
         }
@@ -203,6 +258,23 @@ impl NTokenValidatorAsync {
     }
 
     pub async fn validate(&self, token: &str) -> Result<NToken, Error> {
+        let options = NTokenValidationOptions::default();
+        self.validate_with_options(token, &options).await
+    }
+
+    /// Validate an NToken using additional host validation options.
+    ///
+    /// When `options.hostname` is set, the token must contain a hostname and it
+    /// must match the configured value (case-insensitive ASCII, ignoring trailing
+    /// dot(s)). When `options.ip` is set, the token must contain an IP and it must
+    /// match the configured value (parsed `IpAddr` equality when possible,
+    /// otherwise string equality). If an expected value is set but the token is
+    /// missing the corresponding claim, validation fails.
+    pub async fn validate_with_options(
+        &self,
+        token: &str,
+        options: &NTokenValidationOptions,
+    ) -> Result<NToken, Error> {
         let (claims, unsigned, signature) = parse_unverified(token)?;
         match self {
             NTokenValidatorAsync::Static(verifier) => {
@@ -210,6 +282,7 @@ impl NTokenValidatorAsync {
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
+                validate_ip_hostname(&claims, options)?;
                 Ok(claims)
             }
             NTokenValidatorAsync::Zts {
@@ -225,8 +298,52 @@ impl NTokenValidatorAsync {
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
+                validate_ip_hostname(&claims, options)?;
                 Ok(claims)
             }
         }
+    }
+}
+
+fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> Result<(), Error> {
+    if let Some(expected) = options.hostname() {
+        match claims.hostname.as_deref() {
+            Some(actual) if hostname_matches(expected, actual) => {}
+            Some(actual) => {
+                return Err(Error::Crypto(format!(
+                    "ntoken hostname mismatch: expected {expected}, got {actual}"
+                )));
+            }
+            None => return Err(Error::Crypto("ntoken missing hostname".to_string())),
+        }
+    }
+
+    if let Some(expected) = options.ip() {
+        match claims.ip.as_deref() {
+            Some(actual) if ip_matches(expected, actual) => {}
+            Some(actual) => {
+                return Err(Error::Crypto(format!(
+                    "ntoken ip mismatch: expected {expected}, got {actual}"
+                )));
+            }
+            None => return Err(Error::Crypto("ntoken missing ip".to_string())),
+        }
+    }
+
+    Ok(())
+}
+
+fn hostname_matches(expected: &str, actual: &str) -> bool {
+    let expected = expected.trim_end_matches('.');
+    let actual = actual.trim_end_matches('.');
+    expected.eq_ignore_ascii_case(actual)
+}
+
+fn ip_matches(expected: &str, actual: &str) -> bool {
+    use std::net::IpAddr;
+
+    match (expected.parse::<IpAddr>(), actual.parse::<IpAddr>()) {
+        (Ok(expected), Ok(actual)) => expected == actual,
+        _ => expected == actual,
     }
 }

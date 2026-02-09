@@ -1,5 +1,5 @@
 use super::NTokenValidator;
-use crate::ntoken::{NTokenBuilder, NTokenSigner};
+use crate::ntoken::{NTokenBuilder, NTokenSigner, NTokenValidationOptions};
 use std::time::Duration;
 
 const RSA_PRIVATE_KEY: &str = r#"-----BEGIN RSA PRIVATE KEY-----
@@ -87,4 +87,114 @@ fn ntoken_signer_builder_mut_updates_fields() {
     assert_eq!(claims.key_service.as_deref(), Some("zts"));
     assert_eq!(claims.version, "S2");
     assert_eq!(claims.expiry_time - claims.generation_time, 90);
+}
+
+#[test]
+fn ntoken_validate_with_ip_hostname_options() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer
+        .builder_mut()
+        .set_hostname("host.example")
+        .set_ip("127.0.0.1");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default()
+        .with_hostname("host.example")
+        .with_ip("127.0.0.1");
+    let claims = validator
+        .validate_with_options(&token, &options)
+        .expect("validate");
+    assert_eq!(claims.hostname.as_deref(), Some("host.example"));
+    assert_eq!(claims.ip.as_deref(), Some("127.0.0.1"));
+}
+
+#[test]
+fn ntoken_validate_with_hostname_missing() {
+    let signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default().with_hostname("host.example");
+    let err = validator
+        .validate_with_options(&token, &options)
+        .expect_err("missing hostname");
+    assert!(err.to_string().contains("missing hostname"));
+}
+
+#[test]
+fn ntoken_validate_with_ip_mismatch() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_ip("127.0.0.1");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default().with_ip("127.0.0.2");
+    let err = validator
+        .validate_with_options(&token, &options)
+        .expect_err("ip mismatch");
+    assert!(err.to_string().contains("ip mismatch"));
+}
+
+#[test]
+fn ntoken_validate_with_hostname_mismatch() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_hostname("host.example");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default().with_hostname("other.example");
+    let err = validator
+        .validate_with_options(&token, &options)
+        .expect_err("hostname mismatch");
+    assert!(err.to_string().contains("hostname mismatch"));
+}
+
+#[test]
+fn ntoken_validate_with_ip_missing() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_hostname("host.example");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default().with_ip("127.0.0.1");
+    let err = validator
+        .validate_with_options(&token, &options)
+        .expect_err("missing ip");
+    assert!(err.to_string().contains("missing ip"));
+}
+
+#[test]
+fn ntoken_validate_with_hostname_normalization() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_hostname("Host.Example.");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default().with_hostname("host.example");
+    let claims = validator
+        .validate_with_options(&token, &options)
+        .expect("validate");
+    assert_eq!(claims.hostname.as_deref(), Some("Host.Example."));
+}
+
+#[test]
+fn ntoken_validate_with_ip_normalization() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_ip("2001:0db8:0:0:0:0:0:1");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default().with_ip("2001:db8::1");
+    let claims = validator
+        .validate_with_options(&token, &options)
+        .expect("validate");
+    assert_eq!(claims.ip.as_deref(), Some("2001:0db8:0:0:0:0:0:1"));
 }

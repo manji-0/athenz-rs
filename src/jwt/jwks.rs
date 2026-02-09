@@ -66,13 +66,18 @@ impl JwksProviderAsync {
         })
     }
 
-    pub fn with_timeout(mut self, timeout: Duration) -> Result<Self, Error> {
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
-        Ok(self)
+        self
     }
 
     pub fn with_http_client(mut self, http: AsyncHttpClient) -> Self {
         self.http = http;
+        self
+    }
+
+    pub fn without_timeout(mut self) -> Self {
+        self.timeout = None;
         self
     }
 
@@ -163,17 +168,18 @@ impl JwksProviderAsync {
                 remaining -= take;
             }
             let body_preview = sanitize_error_body(&body);
+            let redacted = redact_jwks_uri(&self.jwks_uri);
             return Err(Error::Crypto(if body_preview.is_empty() {
                 format!(
                     "jwks fetch failed: uri {} status {} body_read_len {}",
-                    self.jwks_uri,
+                    redacted,
                     status,
                     body.len()
                 )
             } else {
                 format!(
                     "jwks fetch failed: uri {} status {} body_read_len {} body_preview {}",
-                    self.jwks_uri,
+                    redacted,
                     status,
                     body.len(),
                     body_preview
@@ -207,13 +213,18 @@ impl JwksProvider {
         })
     }
 
-    pub fn with_timeout(mut self, timeout: Duration) -> Result<Self, Error> {
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
-        Ok(self)
+        self
     }
 
     pub fn with_http_client(mut self, http: HttpClient) -> Self {
         self.http = http;
+        self
+    }
+
+    pub fn without_timeout(mut self) -> Self {
+        self.timeout = None;
         self
     }
 
@@ -287,17 +298,18 @@ impl JwksProvider {
         if !status.is_success() {
             let body = read_body_with_limit(&mut resp, MAX_ERROR_BODY_BYTES)?;
             let body_preview = sanitize_error_body(&body);
+            let redacted = redact_jwks_uri(&self.jwks_uri);
             return Err(Error::Crypto(if body_preview.is_empty() {
                 format!(
                     "jwks fetch failed: uri {} status {} body_read_len {}",
-                    self.jwks_uri,
+                    redacted,
                     status,
                     body.len()
                 )
             } else {
                 format!(
                     "jwks fetch failed: uri {} status {} body_read_len {} body_preview {}",
-                    self.jwks_uri,
+                    redacted,
                     status,
                     body.len(),
                     body_preview
@@ -343,6 +355,15 @@ fn sanitize_error_body(body: &[u8]) -> String {
         sanitized.push_str("...");
     }
     sanitized
+}
+
+fn redact_jwks_uri(uri: &Url) -> String {
+    let mut redacted = uri.clone();
+    let _ = redacted.set_username("");
+    let _ = redacted.set_password(None);
+    redacted.set_query(None);
+    redacted.set_fragment(None);
+    redacted.to_string()
 }
 
 pub fn jwks_from_slice(body: &[u8]) -> Result<JwkSet, Error> {

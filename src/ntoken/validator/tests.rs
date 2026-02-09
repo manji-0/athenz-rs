@@ -138,3 +138,33 @@ fn ntoken_validate_with_ip_mismatch() {
         .expect_err("ip mismatch");
     assert!(err.to_string().contains("ip mismatch"));
 }
+
+#[test]
+fn ntoken_validate_with_hostname_mismatch() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_hostname("host.example");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default().with_hostname("other.example");
+    let err = validator
+        .validate_with_options(&token, &options)
+        .expect_err("hostname mismatch");
+    assert!(err.to_string().contains("hostname mismatch"));
+}
+
+#[test]
+fn ntoken_validate_with_ip_missing() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_hostname("host.example");
+    let token = signer.sign_once().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let options = NTokenValidationOptions::default().with_ip("127.0.0.1");
+    let err = validator
+        .validate_with_options(&token, &options)
+        .expect_err("missing ip");
+    assert!(err.to_string().contains("missing ip"));
+}

@@ -1,4 +1,7 @@
-use crate::models::{Assertion, AssertionEffect, PolicyData};
+use crate::models::{
+    Assertion, AssertionConditionData, AssertionConditionOperator, AssertionConditions,
+    AssertionEffect, PolicyData,
+};
 use log::warn;
 use regex::Regex;
 use std::collections::HashMap;
@@ -223,18 +226,29 @@ struct AssertionEntry {
     action: Match,
     resource: Match,
     _policy_name: String,
+    conditions: Option<AssertionConditions>,
 }
 
 impl AssertionEntry {
     fn from_assertion(assertion: Assertion, policy_name: &str, domain: &str) -> Self {
-        let mut role = strip_domain_prefix_if_matches(&assertion.role, domain);
+        let Assertion {
+            role,
+            resource,
+            action,
+            id,
+            conditions,
+            ..
+        } = assertion;
+        if let Some(ref conditions) = conditions {
+            validate_assertion_conditions(conditions, policy_name, id, &role, &action, &resource);
+        }
+        let mut role = strip_domain_prefix_if_matches(&role, domain);
         if let Some(stripped) = role.strip_prefix("role.") {
             role = stripped.to_string();
         }
         let role_has_wildcard = contains_match_char(&role);
-        let action = Match::from_pattern(&assertion.action.to_lowercase(), "action", policy_name);
-        let resource_value =
-            strip_domain_prefix_if_matches(&assertion.resource.to_lowercase(), domain);
+        let action = Match::from_pattern(&action.to_lowercase(), "action", policy_name);
+        let resource_value = strip_domain_prefix_if_matches(&resource.to_lowercase(), domain);
         let resource = Match::from_pattern(&resource_value, "resource", policy_name);
         Self {
             role,
@@ -242,7 +256,15 @@ impl AssertionEntry {
             action,
             resource,
             _policy_name: policy_name.to_string(),
+            conditions,
         }
+    }
+
+    fn conditions_match(&self) -> bool {
+        let Some(conditions) = &self.conditions else {
+            return true;
+        };
+        assertion_conditions_match(conditions)
     }
 }
 
@@ -293,8 +315,14 @@ impl Match {
     }
 }
 
+const ENFORCEMENT_STATE_KEY: &str = "enforcementState";
+const ENFORCEMENT_STATE_ENFORCE: &str = "ENFORCE";
+
 fn match_assertions(asserts: &[AssertionEntry], action: &str, resource: &str) -> bool {
     for assertion in asserts {
+        if !assertion.conditions_match() {
+            continue;
+        }
         if !assertion.action.matches(action) {
             continue;
         }
@@ -304,6 +332,91 @@ fn match_assertions(asserts: &[AssertionEntry], action: &str, resource: &str) ->
         return true;
     }
     false
+}
+
+// Matching semantics:
+// - empty list => non-match (explicit conditions block must contain at least one map)
+// - list => OR across maps
+// - map => AND across keys
+// - empty maps are skipped
+fn assertion_conditions_match(conditions: &AssertionConditions) -> bool {
+    if conditions.conditions_list.is_empty() {
+        return false;
+    }
+
+    for condition in &conditions.conditions_list {
+        if condition.conditions_map.is_empty() {
+            continue;
+        }
+        if condition_map_matches(&condition.conditions_map) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn condition_map_matches(conditions: &HashMap<String, AssertionConditionData>) -> bool {
+    for (key, data) in conditions {
+        if !condition_matches(key, data) {
+            return false;
+        }
+    }
+    true
+}
+
+fn condition_matches(key: &str, data: &AssertionConditionData) -> bool {
+    if key.eq_ignore_ascii_case(ENFORCEMENT_STATE_KEY) {
+        if matches!(data.operator, AssertionConditionOperator::Equals) {
+            data.value.eq_ignore_ascii_case(ENFORCEMENT_STATE_ENFORCE)
+        } else {
+            false
+        }
+    } else {
+        false
+    }
+}
+
+fn condition_key_supported(key: &str, data: &AssertionConditionData) -> bool {
+    key.eq_ignore_ascii_case(ENFORCEMENT_STATE_KEY)
+        && matches!(data.operator, AssertionConditionOperator::Equals)
+}
+
+fn validate_assertion_conditions(
+    conditions: &AssertionConditions,
+    policy_name: &str,
+    assertion_id: Option<i64>,
+    role: &str,
+    action: &str,
+    resource: &str,
+) {
+    if conditions.conditions_list.is_empty() {
+        warn!(
+            "empty assertion conditions list in policy {policy_name}: assertion_id={assertion_id:?} role='{role}' action='{action}' resource='{resource}'"
+        );
+        return;
+    }
+
+    for condition in &conditions.conditions_list {
+        if condition.conditions_map.is_empty() {
+            warn!(
+                "empty assertion condition map in policy {policy_name}: assertion_id={assertion_id:?} condition_id={condition_id:?} role='{role}' action='{action}' resource='{resource}'",
+                condition_id = condition.id
+            );
+            continue;
+        }
+
+        for (key, data) in &condition.conditions_map {
+            if !condition_key_supported(key, data) {
+                warn!(
+                    "unsupported assertion condition in policy {policy_name}: assertion_id={assertion_id:?} condition_id={condition_id:?} key='{key}' operator={operator:?} value={value:?} role='{role}' action='{action}' resource='{resource}'",
+                    condition_id = condition.id,
+                    operator = data.operator,
+                    value = data.value
+                );
+            }
+        }
+    }
 }
 
 fn strip_domain_prefix(resource: &str, domain: &str) -> Option<String> {
@@ -421,13 +534,13 @@ mod tests {
     }
 
     #[test]
-    fn policy_store_ignores_case_sensitive_and_conditions() {
+    fn policy_store_enforces_conditions() {
         let mut conditions = HashMap::new();
         conditions.insert(
-            "enforcementState".to_string(),
+            ENFORCEMENT_STATE_KEY.to_string(),
             AssertionConditionData {
                 operator: AssertionConditionOperator::Equals,
-                value: "ENFORCE".to_string(),
+                value: ENFORCEMENT_STATE_ENFORCE.to_string(),
             },
         );
         let assertion_conditions = AssertionConditions {
@@ -467,6 +580,373 @@ mod tests {
 
         let roles = vec!["reader".to_string()];
         let decision = store.allow_action("sports", &roles, "READ", "sports:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn policy_store_matches_case_insensitive_condition_key() {
+        let mut conditions = HashMap::new();
+        conditions.insert(
+            "EnforcementState".to_string(),
+            AssertionConditionData {
+                operator: AssertionConditionOperator::Equals,
+                value: ENFORCEMENT_STATE_ENFORCE.to_string(),
+            },
+        );
+        let assertion_conditions = AssertionConditions {
+            conditions_list: vec![AssertionCondition {
+                id: Some(1),
+                conditions_map: conditions,
+            }],
+        };
+
+        let policy = Policy {
+            name: "sports:policy.case-insensitive".to_string(),
+            modified: None,
+            assertions: vec![Assertion {
+                role: "sports:role.reader".to_string(),
+                resource: "sports:resource.read".to_string(),
+                action: "read".to_string(),
+                effect: Some(AssertionEffect::Allow),
+                id: None,
+                case_sensitive: None,
+                conditions: Some(assertion_conditions),
+            }],
+            case_sensitive: None,
+            version: None,
+            active: None,
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        };
+
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![policy],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn policy_store_skips_non_enforced_conditions() {
+        let mut conditions = HashMap::new();
+        conditions.insert(
+            ENFORCEMENT_STATE_KEY.to_string(),
+            AssertionConditionData {
+                operator: AssertionConditionOperator::Equals,
+                value: "REPORT".to_string(),
+            },
+        );
+        let assertion_conditions = AssertionConditions {
+            conditions_list: vec![AssertionCondition {
+                id: Some(1),
+                conditions_map: conditions,
+            }],
+        };
+
+        let policy = Policy {
+            name: "sports:policy.conditions".to_string(),
+            modified: None,
+            assertions: vec![Assertion {
+                role: "sports:role.reader".to_string(),
+                resource: "sports:resource.read".to_string(),
+                action: "read".to_string(),
+                effect: Some(AssertionEffect::Allow),
+                id: None,
+                case_sensitive: None,
+                conditions: Some(assertion_conditions),
+            }],
+            case_sensitive: None,
+            version: None,
+            active: None,
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        };
+
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![policy],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+    }
+
+    #[test]
+    fn policy_store_skips_empty_conditions_list() {
+        let assertion_conditions = AssertionConditions {
+            conditions_list: Vec::new(),
+        };
+
+        let policy = Policy {
+            name: "sports:policy.empty-conditions".to_string(),
+            modified: None,
+            assertions: vec![Assertion {
+                role: "sports:role.reader".to_string(),
+                resource: "sports:resource.read".to_string(),
+                action: "read".to_string(),
+                effect: Some(AssertionEffect::Allow),
+                id: None,
+                case_sensitive: None,
+                conditions: Some(assertion_conditions),
+            }],
+            case_sensitive: None,
+            version: None,
+            active: None,
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        };
+
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![policy],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+    }
+
+    #[test]
+    fn policy_store_skips_unsupported_condition_key() {
+        let mut conditions = HashMap::new();
+        conditions.insert(
+            "unsupportedKey".to_string(),
+            AssertionConditionData {
+                operator: AssertionConditionOperator::Equals,
+                value: "ENFORCE".to_string(),
+            },
+        );
+        let assertion_conditions = AssertionConditions {
+            conditions_list: vec![AssertionCondition {
+                id: Some(1),
+                conditions_map: conditions,
+            }],
+        };
+
+        let policy = Policy {
+            name: "sports:policy.unknown-condition".to_string(),
+            modified: None,
+            assertions: vec![Assertion {
+                role: "sports:role.reader".to_string(),
+                resource: "sports:resource.read".to_string(),
+                action: "read".to_string(),
+                effect: Some(AssertionEffect::Allow),
+                id: None,
+                case_sensitive: None,
+                conditions: Some(assertion_conditions),
+            }],
+            case_sensitive: None,
+            version: None,
+            active: None,
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        };
+
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![policy],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+    }
+
+    #[test]
+    fn policy_store_skips_mixed_supported_and_unsupported_conditions() {
+        let mut conditions = HashMap::new();
+        conditions.insert(
+            ENFORCEMENT_STATE_KEY.to_string(),
+            AssertionConditionData {
+                operator: AssertionConditionOperator::Equals,
+                value: ENFORCEMENT_STATE_ENFORCE.to_string(),
+            },
+        );
+        conditions.insert(
+            "unsupportedKey".to_string(),
+            AssertionConditionData {
+                operator: AssertionConditionOperator::Equals,
+                value: ENFORCEMENT_STATE_ENFORCE.to_string(),
+            },
+        );
+        let assertion_conditions = AssertionConditions {
+            conditions_list: vec![AssertionCondition {
+                id: Some(1),
+                conditions_map: conditions,
+            }],
+        };
+
+        let policy = Policy {
+            name: "sports:policy.mixed-conditions".to_string(),
+            modified: None,
+            assertions: vec![Assertion {
+                role: "sports:role.reader".to_string(),
+                resource: "sports:resource.read".to_string(),
+                action: "read".to_string(),
+                effect: Some(AssertionEffect::Allow),
+                id: None,
+                case_sensitive: None,
+                conditions: Some(assertion_conditions),
+            }],
+            case_sensitive: None,
+            version: None,
+            active: None,
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        };
+
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![policy],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+    }
+
+    #[test]
+    fn policy_store_matches_later_condition_map() {
+        let mut first_conditions = HashMap::new();
+        first_conditions.insert(
+            ENFORCEMENT_STATE_KEY.to_string(),
+            AssertionConditionData {
+                operator: AssertionConditionOperator::Equals,
+                value: "REPORT".to_string(),
+            },
+        );
+        let mut second_conditions = HashMap::new();
+        second_conditions.insert(
+            ENFORCEMENT_STATE_KEY.to_string(),
+            AssertionConditionData {
+                operator: AssertionConditionOperator::Equals,
+                value: ENFORCEMENT_STATE_ENFORCE.to_string(),
+            },
+        );
+        let assertion_conditions = AssertionConditions {
+            conditions_list: vec![
+                AssertionCondition {
+                    id: Some(1),
+                    conditions_map: first_conditions,
+                },
+                AssertionCondition {
+                    id: Some(2),
+                    conditions_map: second_conditions,
+                },
+            ],
+        };
+
+        let policy = Policy {
+            name: "sports:policy.multi-conditions".to_string(),
+            modified: None,
+            assertions: vec![Assertion {
+                role: "sports:role.reader".to_string(),
+                resource: "sports:resource.read".to_string(),
+                action: "read".to_string(),
+                effect: Some(AssertionEffect::Allow),
+                id: None,
+                case_sensitive: None,
+                conditions: Some(assertion_conditions),
+            }],
+            case_sensitive: None,
+            version: None,
+            active: None,
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        };
+
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![policy],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn policy_store_skips_empty_map_and_matches_next() {
+        let empty_conditions = HashMap::new();
+        let mut matching_conditions = HashMap::new();
+        matching_conditions.insert(
+            ENFORCEMENT_STATE_KEY.to_string(),
+            AssertionConditionData {
+                operator: AssertionConditionOperator::Equals,
+                value: ENFORCEMENT_STATE_ENFORCE.to_string(),
+            },
+        );
+        let assertion_conditions = AssertionConditions {
+            conditions_list: vec![
+                AssertionCondition {
+                    id: Some(1),
+                    conditions_map: empty_conditions,
+                },
+                AssertionCondition {
+                    id: Some(2),
+                    conditions_map: matching_conditions,
+                },
+            ],
+        };
+
+        let policy = Policy {
+            name: "sports:policy.empty-map".to_string(),
+            modified: None,
+            assertions: vec![Assertion {
+                role: "sports:role.reader".to_string(),
+                resource: "sports:resource.read".to_string(),
+                action: "read".to_string(),
+                effect: Some(AssertionEffect::Allow),
+                id: None,
+                case_sensitive: None,
+                conditions: Some(assertion_conditions),
+            }],
+            case_sensitive: None,
+            version: None,
+            active: None,
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        };
+
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![policy],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
         assert_eq!(decision.decision, PolicyDecision::Allow);
     }
 }

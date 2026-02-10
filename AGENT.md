@@ -38,3 +38,21 @@ Examples:
 
 - Run Prek checks before pushing or opening a PR:
   `prek run --all-files`
+
+## Build, test, and lint
+
+- Build: `cargo build`
+- Test: `cargo test`
+- Format: `cargo fmt`
+- Lint: `cargo clippy`
+- Example test target: `cargo test policy::tests`
+
+## Examples
+
+- Run a sample example: `cargo run --example issue_access_token`
+- Example environment variables are documented in `docs/examples.md`.
+
+## Documentation updates
+
+- Keep `README.md` short and link to `docs/` for details.
+- Each new doc should include at least one minimal example.

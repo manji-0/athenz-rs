@@ -9,7 +9,10 @@ Include the version path:
 
 ## Does this crate support async clients?
 
-Not currently. The clients are synchronous and use `reqwest::blocking`.
+Yes, for ZMS with the `async-client` feature.
+Enable the feature to use `ZmsAsyncClient` and `ZmsAsyncClientBuilder`.
+The async client uses a non-blocking HTTP client and must be run inside an async runtime (for example, a Tokio-based executor or another compatible async runtime).
+ZTS remains sync-only for now and continues to use the blocking client APIs.
 
 ## Which JWT algorithms are allowed?
 

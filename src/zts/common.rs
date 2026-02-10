@@ -72,6 +72,8 @@ pub(crate) fn apply_query_params<B: RequestBuilderExt>(
     }
 }
 
+pub(crate) use crate::build_url::BuildUrlOptions;
+
 pub(crate) fn build_url(
     base_url: &Url,
     segments: &[&str],
@@ -96,13 +98,6 @@ pub(crate) fn build_url(
         }
     }
     Ok(url)
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct BuildUrlOptions {
-    pub clear_query: bool,
-    pub clear_fragment: bool,
-    pub pop_if_empty: bool,
 }
 
 pub(crate) fn parse_error_from_body(

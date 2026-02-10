@@ -70,6 +70,8 @@ impl RequestBuilderExt for AsyncRequestBuilder {
     }
 }
 
+pub(crate) use crate::build_url::BuildUrlOptions;
+
 pub(crate) fn build_url(
     base_url: &Url,
     segments: &[&str],
@@ -94,13 +96,6 @@ pub(crate) fn build_url(
         }
     }
     Ok(url)
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct BuildUrlOptions {
-    pub clear_query: bool,
-    pub clear_fragment: bool,
-    pub pop_if_empty: bool,
 }
 
 pub(crate) fn apply_audit_headers<B: RequestBuilderExt>(

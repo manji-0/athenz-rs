@@ -129,9 +129,8 @@ impl ZmsClient {
             &self.base_url,
             segments,
             common::BuildUrlOptions {
-                clear_query: false,
-                clear_fragment: false,
                 pop_if_empty: true,
+                ..Default::default()
             },
         )
     }

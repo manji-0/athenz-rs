@@ -72,25 +72,25 @@ pub(crate) fn apply_query_params<B: RequestBuilderExt>(
     }
 }
 
+pub(crate) use crate::build_url::BuildUrlOptions;
+
 pub(crate) fn build_url(
     base_url: &Url,
     segments: &[&str],
-    clear_query: bool,
-    clear_fragment: bool,
-    pop_if_empty: bool,
+    options: BuildUrlOptions,
 ) -> Result<Url, Error> {
     let mut url = base_url.clone();
-    if clear_query {
+    if options.clear_query {
         url.set_query(None);
     }
-    if clear_fragment {
+    if options.clear_fragment {
         url.set_fragment(None);
     }
     {
         let mut path_segments = url
             .path_segments_mut()
             .map_err(|_| Error::InvalidBaseUrl(base_url.to_string()))?;
-        if pop_if_empty {
+        if options.pop_if_empty {
             path_segments.pop_if_empty();
         }
         for segment in segments {
@@ -129,4 +129,36 @@ pub(crate) fn parse_error_from_body(
         err.message = fallback;
     }
     Error::Api(err)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_url, BuildUrlOptions};
+    use url::Url;
+
+    #[test]
+    fn build_url_clears_query_and_fragment_when_requested() {
+        let base_url = Url::parse("https://example.com/zts/v1?foo=bar#frag").unwrap();
+        let url = build_url(
+            &base_url,
+            &["status"],
+            BuildUrlOptions {
+                clear_query: true,
+                clear_fragment: true,
+                pop_if_empty: false,
+            },
+        )
+        .expect("url");
+        assert_eq!(url.query(), None);
+        assert_eq!(url.fragment(), None);
+        assert_eq!(url.path(), "/zts/v1/status");
+    }
+
+    #[test]
+    fn build_url_preserves_query_and_fragment_when_disabled() {
+        let base_url = Url::parse("https://example.com/zts/v1?foo=bar#frag").unwrap();
+        let url = build_url(&base_url, &["status"], BuildUrlOptions::default()).expect("url");
+        assert_eq!(url.query(), Some("foo=bar"));
+        assert_eq!(url.fragment(), Some("frag"));
+    }
 }

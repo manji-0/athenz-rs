@@ -160,7 +160,7 @@ impl ZmsAsyncClient {
     }
 
     fn build_url(&self, segments: &[&str]) -> Result<Url, Error> {
-        common::build_url(&self.base_url, segments, true, true, true)
+        common::build_url(&self.base_url, segments, common::BuildUrlOptions::REQUEST)
     }
 
     fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, Error> {

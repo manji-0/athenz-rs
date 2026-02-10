@@ -125,7 +125,11 @@ impl ZmsClient {
     }
 
     fn build_url(&self, segments: &[&str]) -> Result<Url, Error> {
-        common::build_url(&self.base_url, segments, false, false, false)
+        common::build_url(
+            &self.base_url,
+            segments,
+            common::BuildUrlOptions::SYNC_CLIENT,
+        )
     }
 
     fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, Error> {
@@ -230,6 +234,16 @@ mod tests {
             }
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn build_url_trims_trailing_slash() {
+        let client = ZmsClient::builder("https://example.com/zms/v1/")
+            .expect("builder")
+            .build()
+            .expect("build");
+        let url = client.build_url(&["domain"]).expect("url");
+        assert_eq!(url.path(), "/zms/v1/domain");
     }
 
     #[test]

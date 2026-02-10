@@ -132,7 +132,11 @@ impl ZtsClient {
     }
 
     fn build_url(&self, segments: &[&str]) -> Result<Url, Error> {
-        common::build_url(&self.base_url, segments, false, false, false)
+        common::build_url(
+            &self.base_url,
+            segments,
+            common::BuildUrlOptions::SYNC_CLIENT,
+        )
     }
 
     fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, Error> {
@@ -240,6 +244,16 @@ mod tests {
         assert!(form.contains("proxy_for_principal=user.test"));
         assert!(form.contains("authorization_details=%7B%22type%22%3A%22test%22%7D"));
         assert!(form.contains("openid_issuer=true"));
+    }
+
+    #[test]
+    fn build_url_trims_trailing_slash() {
+        let client = ZtsClient::builder("https://example.com/zts/v1/")
+            .expect("builder")
+            .build()
+            .expect("build");
+        let url = client.build_url(&["domain"]).expect("url");
+        assert_eq!(url.path(), "/zts/v1/domain");
     }
 
     #[test]

@@ -246,6 +246,7 @@ impl NTokenValidator {
         match self {
             NTokenValidator::Static(verifier) => {
                 verifier.verify(&unsigned, &signature)?;
+                validate_version_domain(&claims)?;
                 validate_time_bounds(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
@@ -261,6 +262,7 @@ impl NTokenValidator {
                 let src = key_source_from_claims(&claims, config);
                 let verifier = get_cached_verifier(cache, http, config, &src)?;
                 verifier.verify(&unsigned, &signature)?;
+                validate_version_domain(&claims)?;
                 validate_time_bounds(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
@@ -331,6 +333,7 @@ impl NTokenValidatorAsync {
         match self {
             NTokenValidatorAsync::Static(verifier) => {
                 verifier.verify(&unsigned, &signature)?;
+                validate_version_domain(&claims)?;
                 validate_time_bounds(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
@@ -348,6 +351,7 @@ impl NTokenValidatorAsync {
                 let verifier =
                     get_cached_verifier_async(cache, fetch_locks, http, config, &src).await?;
                 verifier.verify(&unsigned, &signature)?;
+                validate_version_domain(&claims)?;
                 validate_time_bounds(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
@@ -382,6 +386,32 @@ fn validate_ip_hostname(claims: &NToken, options: &NTokenValidationOptions) -> R
             }
             None => return Err(Error::Crypto("ntoken missing ip".to_string())),
         }
+    }
+
+    Ok(())
+}
+
+fn validate_version_domain(claims: &NToken) -> Result<(), Error> {
+    let is_user_version = claims
+        .version
+        .chars()
+        .next()
+        .map(|c| c.eq_ignore_ascii_case(&'U'))
+        .unwrap_or(false);
+    let is_user_domain = claims.domain == "user";
+
+    if is_user_version && !is_user_domain {
+        return Err(Error::Crypto(format!(
+            "ntoken user version requires domain 'user' (domain={}, version={})",
+            claims.domain, claims.version
+        )));
+    }
+
+    if is_user_domain && !is_user_version {
+        return Err(Error::Crypto(format!(
+            "ntoken domain 'user' requires user version (domain={}, version={})",
+            claims.domain, claims.version
+        )));
     }
 
     Ok(())

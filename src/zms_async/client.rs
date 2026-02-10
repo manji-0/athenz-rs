@@ -1,4 +1,6 @@
-use crate::error::{read_body_with_limit_async, Error, MAX_ERROR_BODY_BYTES};
+use crate::error::{
+    read_body_with_limit_async, Error, CONFIG_ERROR_REDIRECT_WITH_AUTH, MAX_ERROR_BODY_BYTES,
+};
 use crate::ntoken::NTokenSigner;
 use crate::zms::common;
 use reqwest::header::{HeaderName, HeaderValue};
@@ -118,10 +120,7 @@ impl ZmsAsyncClientBuilder {
 
     pub fn build(self) -> Result<ZmsAsyncClient, Error> {
         if self.auth.is_some() && !self.disable_redirect {
-            return Err(Error::Crypto(
-                "config error: follow_redirects(true) is not allowed when auth is configured"
-                    .to_string(),
-            ));
+            return Err(Error::Crypto(CONFIG_ERROR_REDIRECT_WITH_AUTH.to_string()));
         }
         let mut builder = HttpClient::builder();
         if let Some(timeout) = self.timeout {

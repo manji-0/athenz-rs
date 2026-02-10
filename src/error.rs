@@ -7,6 +7,8 @@ use std::fmt;
 use std::io;
 
 pub(crate) const MAX_ERROR_BODY_BYTES: usize = 64 * 1024;
+pub(crate) const CONFIG_ERROR_REDIRECT_WITH_AUTH: &str =
+    "config error: redirects must be disabled when auth is configured";
 
 pub(crate) fn fallback_message(status: StatusCode, body: &[u8]) -> String {
     let body_text = String::from_utf8_lossy(body);

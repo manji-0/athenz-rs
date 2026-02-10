@@ -6,7 +6,7 @@ This guide shows the minimum steps to issue an AccessToken.
 
 ```toml
 [dependencies]
-athenz-provider-tenant = "0.1"
+athenz-rs = "0.1"
 ```
 
 ## 2. Choose your ZTS base URL

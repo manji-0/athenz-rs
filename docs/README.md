@@ -1,6 +1,6 @@
 # Documentation
 
-This folder contains user and developer documentation for `athenz-provider-tenant`.
+This folder contains user and developer documentation for `athenz-rs`.
 If you are new, start with `getting-started.md` and then move to the topic guides.
 
 ## Quick example

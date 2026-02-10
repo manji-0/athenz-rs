@@ -1,6 +1,6 @@
 # Support
 
-Thanks for using `athenz-provider-tenant`.
+Thanks for using `athenz-rs`.
 
 ## Getting help
 

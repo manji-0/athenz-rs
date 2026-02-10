@@ -1,4 +1,6 @@
-use crate::error::{read_body_with_limit, Error, MAX_ERROR_BODY_BYTES};
+use crate::error::{
+    read_body_with_limit, Error, CONFIG_ERROR_REDIRECT_WITH_AUTH, MAX_ERROR_BODY_BYTES,
+};
 use crate::ntoken::NTokenSigner;
 use reqwest::blocking::{Client as HttpClient, RequestBuilder, Response};
 use reqwest::{Certificate, Identity, StatusCode};
@@ -86,6 +88,9 @@ impl ZmsClientBuilder {
     }
 
     pub fn build(self) -> Result<ZmsClient, Error> {
+        if self.auth.is_some() && !self.disable_redirect {
+            return Err(Error::Crypto(CONFIG_ERROR_REDIRECT_WITH_AUTH.to_string()));
+        }
         let mut builder = HttpClient::builder();
         if let Some(timeout) = self.timeout {
             builder = builder.timeout(timeout);
@@ -165,6 +170,7 @@ impl ZmsClient {
 
 #[cfg(test)]
 mod tests {
+    use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
     use crate::zms::{DomainListOptions, ZmsClient};
     use std::collections::HashMap;
     use std::io::{Read, Write};
@@ -205,6 +211,35 @@ mod tests {
         assert_eq!(req.query.get("prefix").map(String::as_str), Some("core"));
 
         handle.join().expect("server");
+    }
+
+    #[test]
+    fn auth_requires_redirects_disabled() {
+        let err = match ZmsClient::builder("https://example.com/zms/v1")
+            .expect("builder")
+            .disable_redirect(false)
+            .ntoken_auth("Athenz-Principal-Auth", "token")
+            .build()
+        {
+            Ok(_) => panic!("expected error"),
+            Err(err) => err,
+        };
+        match err {
+            Error::Crypto(message) => {
+                assert_eq!(message, CONFIG_ERROR_REDIRECT_WITH_AUTH);
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn auth_allows_redirects_disabled() {
+        ZmsClient::builder("https://example.com/zms/v1")
+            .expect("builder")
+            .disable_redirect(true)
+            .ntoken_auth("Athenz-Principal-Auth", "token")
+            .build()
+            .expect("build");
     }
 
     struct CapturedRequest {

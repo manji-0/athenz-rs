@@ -416,7 +416,10 @@ fn builder_rejects_redirects_with_auth() {
         Err(err) => err,
     };
     match err {
-        Error::Crypto(message) => assert!(message.contains("follow_redirects(true)")),
+        Error::Crypto(message) => assert_eq!(
+            message,
+            "config error: redirects must be disabled when auth is configured"
+        ),
         other => panic!("unexpected error: {other:?}"),
     }
 }

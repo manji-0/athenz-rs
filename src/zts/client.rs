@@ -135,10 +135,7 @@ impl ZtsClient {
         common::build_url(
             &self.base_url,
             segments,
-            common::BuildUrlOptions {
-                pop_if_empty: true,
-                ..Default::default()
-            },
+            common::BuildUrlOptions::SYNC_CLIENT,
         )
     }
 

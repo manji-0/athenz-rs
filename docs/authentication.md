@@ -1,6 +1,6 @@
 # Authentication
 
-`athenz-provider-tenant` supports two authentication styles for ZTS calls:
+`athenz-rs` supports two authentication styles for ZTS calls:
 
 - mTLS using x.509 certificates
 - NToken using the `Athenz-Principal-Auth` header

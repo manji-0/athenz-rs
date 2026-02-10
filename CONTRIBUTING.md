@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve `athenz-provider-tenant`.
+Thanks for helping improve `athenz-rs`.
 
 ## Development setup
 

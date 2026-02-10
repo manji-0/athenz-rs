@@ -1,3 +1,5 @@
+#[cfg(feature = "async-validate")]
+use crate::error::read_body_with_limit_async;
 use crate::error::{read_body_with_limit, Error, MAX_ERROR_BODY_BYTES};
 use jsonwebtoken::jwk::JwkSet;
 use log::warn;
@@ -157,16 +159,7 @@ impl JwksProviderAsync {
         let mut resp = req.send().await?;
         let status = resp.status();
         if !status.is_success() {
-            let mut body = Vec::new();
-            let mut remaining = MAX_ERROR_BODY_BYTES;
-            while let Some(chunk) = resp.chunk().await? {
-                if remaining == 0 {
-                    break;
-                }
-                let take = remaining.min(chunk.len());
-                body.extend_from_slice(&chunk[..take]);
-                remaining -= take;
-            }
+            let body = read_body_with_limit_async(&mut resp, MAX_ERROR_BODY_BYTES).await?;
             let body_preview = sanitize_error_body(&body);
             let redacted = redact_jwks_uri(&self.jwks_uri);
             return Err(Error::Crypto(if body_preview.is_empty() {

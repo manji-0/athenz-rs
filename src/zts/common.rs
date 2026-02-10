@@ -130,3 +130,35 @@ pub(crate) fn parse_error_from_body(
     }
     Error::Api(err)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{build_url, BuildUrlOptions};
+    use url::Url;
+
+    #[test]
+    fn build_url_clears_query_and_fragment_when_requested() {
+        let base_url = Url::parse("https://example.com/zts/v1?foo=bar#frag").unwrap();
+        let url = build_url(
+            &base_url,
+            &["status"],
+            BuildUrlOptions {
+                clear_query: true,
+                clear_fragment: true,
+                pop_if_empty: false,
+            },
+        )
+        .expect("url");
+        assert_eq!(url.query(), None);
+        assert_eq!(url.fragment(), None);
+        assert_eq!(url.path(), "/zts/v1/status");
+    }
+
+    #[test]
+    fn build_url_preserves_query_and_fragment_when_disabled() {
+        let base_url = Url::parse("https://example.com/zts/v1?foo=bar#frag").unwrap();
+        let url = build_url(&base_url, &["status"], BuildUrlOptions::default()).expect("url");
+        assert_eq!(url.query(), Some("foo=bar"));
+        assert_eq!(url.fragment(), Some("frag"));
+    }
+}

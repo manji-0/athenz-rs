@@ -132,16 +132,14 @@ impl ZtsClient {
     }
 
     fn build_url(&self, segments: &[&str]) -> Result<Url, Error> {
-        const CLEAR_QUERY: bool = false;
-        const CLEAR_FRAGMENT: bool = false;
-        const POP_IF_EMPTY: bool = true;
-
         common::build_url(
             &self.base_url,
             segments,
-            CLEAR_QUERY,
-            CLEAR_FRAGMENT,
-            POP_IF_EMPTY,
+            common::BuildUrlOptions {
+                clear_query: false,
+                clear_fragment: false,
+                pop_if_empty: true,
+            },
         )
     }
 

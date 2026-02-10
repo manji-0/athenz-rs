@@ -75,22 +75,20 @@ pub(crate) fn apply_query_params<B: RequestBuilderExt>(
 pub(crate) fn build_url(
     base_url: &Url,
     segments: &[&str],
-    clear_query: bool,
-    clear_fragment: bool,
-    pop_if_empty: bool,
+    options: BuildUrlOptions,
 ) -> Result<Url, Error> {
     let mut url = base_url.clone();
-    if clear_query {
+    if options.clear_query {
         url.set_query(None);
     }
-    if clear_fragment {
+    if options.clear_fragment {
         url.set_fragment(None);
     }
     {
         let mut path_segments = url
             .path_segments_mut()
             .map_err(|_| Error::InvalidBaseUrl(base_url.to_string()))?;
-        if pop_if_empty {
+        if options.pop_if_empty {
             path_segments.pop_if_empty();
         }
         for segment in segments {
@@ -98,6 +96,13 @@ pub(crate) fn build_url(
         }
     }
     Ok(url)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BuildUrlOptions {
+    pub clear_query: bool,
+    pub clear_fragment: bool,
+    pub pop_if_empty: bool,
 }
 
 pub(crate) fn parse_error_from_body(

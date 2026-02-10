@@ -175,7 +175,15 @@ impl ZtsAsyncClient {
     }
 
     fn build_url(&self, segments: &[&str]) -> Result<Url, Error> {
-        common::build_url(&self.base_url, segments, true, true, true)
+        common::build_url(
+            &self.base_url,
+            segments,
+            common::BuildUrlOptions {
+                clear_query: true,
+                clear_fragment: true,
+                pop_if_empty: true,
+            },
+        )
     }
 
     fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, Error> {

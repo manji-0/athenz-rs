@@ -132,7 +132,17 @@ impl ZtsClient {
     }
 
     fn build_url(&self, segments: &[&str]) -> Result<Url, Error> {
-        common::build_url(&self.base_url, segments, false, false, true)
+        const CLEAR_QUERY: bool = false;
+        const CLEAR_FRAGMENT: bool = false;
+        const POP_IF_EMPTY: bool = true;
+
+        common::build_url(
+            &self.base_url,
+            segments,
+            CLEAR_QUERY,
+            CLEAR_FRAGMENT,
+            POP_IF_EMPTY,
+        )
     }
 
     fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, Error> {

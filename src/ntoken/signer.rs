@@ -33,6 +33,7 @@ impl NTokenSigner {
     }
 
     pub fn builder_mut(&mut self) -> &mut NTokenBuilder {
+        *self.cached.write().unwrap() = None;
         &mut self.builder
     }
 

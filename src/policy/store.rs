@@ -80,14 +80,14 @@ impl PolicyStore {
             Some(value) => value,
             None => return PolicyMatch::new(PolicyDecision::DenyDomainMismatch),
         };
-        let resource_case_sensitive = if domain_policy.has_case_sensitive {
+        let resource_original_case = if domain_policy.has_case_sensitive {
             strip_domain_prefix_if_matches_ascii_case_insensitive(resource, token_domain)
         } else {
             Cow::Borrowed(resource_stripped_lower.as_str())
         };
         let action_match = MatchInput::new(action, &action_lower);
         let resource_match =
-            MatchInput::new(resource_case_sensitive.as_ref(), &resource_stripped_lower);
+            MatchInput::new(resource_original_case.as_ref(), &resource_stripped_lower);
 
         if domain_policy.is_empty() {
             return PolicyMatch::new(PolicyDecision::DenyDomainEmpty);

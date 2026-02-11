@@ -42,6 +42,7 @@ pub struct JwtValidationOptions {
     pub audience: Vec<String>,
     pub leeway: u64,
     pub validate_exp: bool,
+    pub validate_nbf: bool,
     pub allowed_algs: Vec<Algorithm>,
     /// When true, ES512 validation is permitted (requires EC algorithms in `allowed_algs`).
     pub allow_es512: bool,
@@ -54,6 +55,7 @@ impl JwtValidationOptions {
             audience: Vec::new(),
             leeway: 0,
             validate_exp: true,
+            validate_nbf: true,
             allowed_algs: ATHENZ_ALLOWED_ALGS.to_vec(),
             allow_es512: false,
         }

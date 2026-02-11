@@ -36,6 +36,7 @@ pub(super) fn apply_validation_options(
 ) {
     validation.leeway = options.leeway;
     validation.validate_exp = options.validate_exp;
+    validation.validate_nbf = options.validate_nbf;
     if let Some(ref issuer) = options.issuer {
         validation.set_issuer(&[issuer.as_str()]);
     }

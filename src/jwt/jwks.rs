@@ -592,15 +592,8 @@ mod tests {
         (n, e, bad_n)
     }
 
-    fn build_rs256_token_with_kid(kid: &str) -> (String, JwkSet) {
+    fn build_rs256_token_with_kid_and_claims(kid: &str, claims: Value) -> (String, JwkSet) {
         let pem = rsa_private_key_pem();
-        let exp = jsonwebtoken::get_current_timestamp() + 3600;
-        let claims = json!({
-            "iss": "athenz",
-            "aud": "client",
-            "sub": "principal",
-            "exp": exp,
-        });
         let mut header = Header::new(Algorithm::RS256);
         header.kid = Some(kid.to_string());
         let token = encode(
@@ -622,6 +615,17 @@ mod tests {
         });
         let jwks = jwks_from_value(jwks_json).expect("jwks");
         (token, jwks)
+    }
+
+    fn build_rs256_token_with_kid(kid: &str) -> (String, JwkSet) {
+        let exp = jsonwebtoken::get_current_timestamp() + 3600;
+        let claims = json!({
+            "iss": "athenz",
+            "aud": "client",
+            "sub": "principal",
+            "exp": exp,
+        });
+        build_rs256_token_with_kid_and_claims(kid, claims)
     }
 
     fn serve_jwks_sequence(
@@ -878,6 +882,33 @@ mod tests {
             .expect_err("should reject");
         match err {
             Error::UnsupportedAlg(alg) => assert_eq!(alg, ES512_DISABLED_MESSAGE),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn jwt_rs256_rejects_future_nbf() {
+        let now = jsonwebtoken::get_current_timestamp();
+        let claims = json!({
+            "iss": "athenz",
+            "aud": "client",
+            "sub": "principal",
+            "exp": now + 3600,
+            "nbf": now + 60,
+        });
+        let (token, jwks) = build_rs256_token_with_kid_and_claims("good-key", claims);
+        let jwks_provider = jwks_provider_with_seeded_cache(jwks);
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::Jwt(jwt_err) => assert_eq!(jwt_err.kind(), &ErrorKind::ImmatureSignature),
             other => panic!("unexpected error: {:?}", other),
         }
     }

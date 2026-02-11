@@ -78,7 +78,8 @@ impl PolicyStore {
             Some(value) => value,
             None => return PolicyMatch::new(PolicyDecision::DenyDomainMismatch),
         };
-        let resource_original = strip_domain_prefix_if_matches_case_insensitive(resource, token_domain);
+        let resource_original =
+            strip_domain_prefix_if_matches_case_insensitive(resource, token_domain);
         let action_match = MatchInput::new(action, &action_lower);
         let resource_match = MatchInput::new(&resource_original, &resource_lower);
 
@@ -92,10 +93,12 @@ impl PolicyStore {
             .map(|role| normalize_role(role, token_domain))
             .collect();
 
-        if domain_policy
-            .deny
-            .matches(&normalized_roles, &action_match, &resource_match, &mut match_role)
-        {
+        if domain_policy.deny.matches(
+            &normalized_roles,
+            &action_match,
+            &resource_match,
+            &mut match_role,
+        ) {
             return PolicyMatch {
                 decision: PolicyDecision::Deny,
                 matched_role: match_role,
@@ -103,10 +106,12 @@ impl PolicyStore {
         }
 
         match_role = None;
-        if domain_policy
-            .allow
-            .matches(&normalized_roles, &action_match, &resource_match, &mut match_role)
-        {
+        if domain_policy.allow.matches(
+            &normalized_roles,
+            &action_match,
+            &resource_match,
+            &mut match_role,
+        ) {
             return PolicyMatch {
                 decision: PolicyDecision::Allow,
                 matched_role: match_role,
@@ -352,7 +357,10 @@ struct MatchInput<'a> {
 
 impl<'a> MatchInput<'a> {
     fn new(original: &'a str, lowercase: &'a str) -> Self {
-        Self { original, lowercase }
+        Self {
+            original,
+            lowercase,
+        }
     }
 
     fn value(&self, case_sensitive: bool) -> &str {

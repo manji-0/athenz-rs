@@ -143,6 +143,11 @@ impl DomainPolicy {
 
         let domain = policy_data.domain.clone();
         for policy in policy_data.policies {
+            // Treat `active: None` as "unspecified but active".
+            // Only policies explicitly marked as inactive (`Some(false)`) are skipped here.
+            if matches!(policy.active, Some(false)) {
+                continue;
+            }
             let policy_name = policy.name.clone();
             let policy_case_sensitive = policy.case_sensitive.unwrap_or(false);
             for assertion in policy.assertions {
@@ -640,6 +645,89 @@ mod tests {
 
         let decision = store.allow_action("sports", &roles, "read", "sports:resource.secret");
         assert_eq!(decision.decision, PolicyDecision::Deny);
+    }
+
+    fn mk_assertion(
+        role: &str,
+        resource: &str,
+        action: &str,
+        effect: AssertionEffect,
+    ) -> Assertion {
+        Assertion {
+            role: role.to_string(),
+            resource: resource.to_string(),
+            action: action.to_string(),
+            effect: Some(effect),
+            id: None,
+            case_sensitive: None,
+            conditions: None,
+        }
+    }
+
+    fn mk_policy(name: &str, active: Option<bool>, assertions: Vec<Assertion>) -> Policy {
+        Policy {
+            name: name.to_string(),
+            modified: None,
+            assertions,
+            case_sensitive: None,
+            version: None,
+            active,
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        }
+    }
+
+    #[test]
+    fn policy_store_skips_inactive_policies() {
+        let inactive_policy = mk_policy(
+            "sports:policy.inactive",
+            Some(false),
+            vec![mk_assertion(
+                "sports:role.reader",
+                "sports:resource.read",
+                "read",
+                AssertionEffect::Allow,
+            )],
+        );
+
+        let active_policy = mk_policy(
+            "sports:policy.active",
+            Some(true),
+            vec![mk_assertion(
+                "sports:role.reader",
+                "sports:resource.write",
+                "write",
+                AssertionEffect::Allow,
+            )],
+        );
+        let default_active_policy = mk_policy(
+            "sports:policy.default-active",
+            None,
+            vec![mk_assertion(
+                "sports:role.reader",
+                "sports:resource.list",
+                "list",
+                AssertionEffect::Allow,
+            )],
+        );
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![inactive_policy, active_policy, default_active_policy],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+
+        let decision = store.allow_action("sports", &roles, "write", "sports:resource.write");
+        assert_eq!(decision.decision, PolicyDecision::Allow);
+
+        let decision = store.allow_action("sports", &roles, "list", "sports:resource.list");
+        assert_eq!(decision.decision, PolicyDecision::Allow);
     }
 
     #[test]

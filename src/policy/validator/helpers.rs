@@ -1,9 +1,10 @@
 use crate::error::Error;
 use crate::models::{PublicKeyEntry, SignedPolicyData};
+use crate::ybase64::decode as ybase64_decode;
 use crate::zts::ZtsClient;
 #[cfg(feature = "async-validate")]
 use crate::zts_async::ZtsAsyncClient;
-use base64::engine::general_purpose::{STANDARD as BASE64_STD, URL_SAFE_NO_PAD};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use pem::parse_many;
@@ -429,15 +430,4 @@ pub(super) fn canonical_json(value: &serde_json::Value) -> String {
         serde_json::Value::Bool(val) => val.to_string(),
         serde_json::Value::Null => "null".to_string(),
     }
-}
-
-fn ybase64_decode(data: &str) -> Result<Vec<u8>, Error> {
-    let mut normalized = data.replace('.', "+").replace('_', "/").replace('-', "=");
-    let rem = normalized.len() % 4;
-    if rem != 0 {
-        normalized.push_str(&"=".repeat(4 - rem));
-    }
-    BASE64_STD
-        .decode(normalized.as_bytes())
-        .map_err(|e| Error::Crypto(format!("ybase64 decode error: {e}")))
 }

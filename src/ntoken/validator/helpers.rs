@@ -1,7 +1,6 @@
 use crate::error::Error;
 use crate::models::PublicKeyEntry;
-use base64::engine::general_purpose::STANDARD as BASE64_STD;
-use base64::Engine as _;
+use crate::ybase64::decode as ybase64_decode_impl;
 use reqwest::blocking::Client as HttpClient;
 #[cfg(feature = "async-validate")]
 use reqwest::Client as AsyncHttpClient;
@@ -247,8 +246,5 @@ pub(super) fn parse_unix(value: &str) -> Result<i64, Error> {
 }
 
 pub(super) fn ybase64_decode(data: &str) -> Result<Vec<u8>, Error> {
-    let normalized = data.replace('.', "+").replace('_', "/").replace('-', "=");
-    BASE64_STD
-        .decode(normalized.as_bytes())
-        .map_err(|e| Error::Crypto(format!("ybase64 decode error: {e}")))
+    ybase64_decode_impl(data)
 }

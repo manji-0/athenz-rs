@@ -7,6 +7,7 @@ mod jwt;
 mod models;
 mod ntoken;
 mod policy;
+mod ybase64;
 mod zms;
 #[cfg(feature = "async-client")]
 mod zms_async;

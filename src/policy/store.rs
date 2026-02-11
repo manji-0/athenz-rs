@@ -4,6 +4,7 @@ use crate::models::{
 };
 use log::warn;
 use regex::Regex;
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,19 +80,17 @@ impl PolicyStore {
             Some(value) => value,
             None => return PolicyMatch::new(PolicyDecision::DenyDomainMismatch),
         };
-        let resource_stripped_case_sensitive = if domain_policy.has_case_sensitive {
-            Some(strip_domain_prefix_if_matches_ascii_case_insensitive(
+        let resource_case_sensitive = if domain_policy.has_case_sensitive {
+            Cow::Owned(strip_domain_prefix_if_matches_ascii_case_insensitive(
                 resource,
                 token_domain,
             ))
         } else {
-            None
+            Cow::Borrowed(resource_stripped_lower.as_str())
         };
-        let resource_case_sensitive = resource_stripped_case_sensitive
-            .as_deref()
-            .unwrap_or(&resource_stripped_lower);
         let action_match = MatchInput::new(action, &action_lower);
-        let resource_match = MatchInput::new(resource_case_sensitive, &resource_stripped_lower);
+        let resource_match =
+            MatchInput::new(resource_case_sensitive.as_ref(), &resource_stripped_lower);
 
         if domain_policy.is_empty() {
             return PolicyMatch::new(PolicyDecision::DenyDomainEmpty);

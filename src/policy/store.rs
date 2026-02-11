@@ -75,10 +75,13 @@ impl PolicyStore {
 
         let action_lower = action.to_lowercase();
         let resource_lowercased = resource.to_lowercase();
-        let resource_stripped_lower = match strip_domain_prefix(&resource_lowercased, token_domain)
-        {
-            Some(value) => value,
-            None => return PolicyMatch::new(PolicyDecision::DenyDomainMismatch),
+        let resource_stripped_lower = if self.domain_count() == 1 {
+            strip_domain_prefix_if_matches(&resource_lowercased, token_domain).into_owned()
+        } else {
+            match strip_domain_prefix(&resource_lowercased, token_domain) {
+                Some(value) => value,
+                None => return PolicyMatch::new(PolicyDecision::DenyDomainMismatch),
+            }
         };
         let resource_original_case = if domain_policy.has_case_sensitive {
             strip_domain_prefix_if_matches_ascii_case_insensitive(resource, token_domain)
@@ -676,6 +679,61 @@ mod tests {
             tags: None,
             resource_ownership: None,
         }
+    }
+
+    #[test]
+    fn policy_store_allows_colon_resource_when_single_domain_loaded() {
+        let policy = mk_policy(
+            "sports:policy.colon-resource",
+            None,
+            vec![mk_assertion(
+                "sports:role.reader",
+                "other:resource.read",
+                "read",
+                AssertionEffect::Allow,
+            )],
+        );
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![policy],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "other:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::Allow);
+    }
+
+    #[test]
+    fn policy_store_denies_domain_mismatch_when_multiple_domains_loaded() {
+        let policy = mk_policy(
+            "sports:policy.colon-resource",
+            None,
+            vec![mk_assertion(
+                "sports:role.reader",
+                "other:resource.read",
+                "read",
+                AssertionEffect::Allow,
+            )],
+        );
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![policy],
+        };
+        let extra_domain = PolicyData {
+            domain: "weather".to_string(),
+            policies: vec![],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+        store.insert(extra_domain);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "other:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::DenyDomainMismatch);
     }
 
     #[test]

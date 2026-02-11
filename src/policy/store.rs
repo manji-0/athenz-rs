@@ -143,6 +143,9 @@ impl DomainPolicy {
 
         let domain = policy_data.domain.clone();
         for policy in policy_data.policies {
+            if matches!(policy.active, Some(false)) {
+                continue;
+            }
             let policy_name = policy.name.clone();
             let policy_case_sensitive = policy.case_sensitive.unwrap_or(false);
             for assertion in policy.assertions {
@@ -640,6 +643,64 @@ mod tests {
 
         let decision = store.allow_action("sports", &roles, "read", "sports:resource.secret");
         assert_eq!(decision.decision, PolicyDecision::Deny);
+    }
+
+    #[test]
+    fn policy_store_skips_inactive_policies() {
+        let inactive_policy = Policy {
+            name: "sports:policy.inactive".to_string(),
+            modified: None,
+            assertions: vec![Assertion {
+                role: "sports:role.reader".to_string(),
+                resource: "sports:resource.read".to_string(),
+                action: "read".to_string(),
+                effect: Some(AssertionEffect::Allow),
+                id: None,
+                case_sensitive: None,
+                conditions: None,
+            }],
+            case_sensitive: None,
+            version: None,
+            active: Some(false),
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        };
+
+        let active_policy = Policy {
+            name: "sports:policy.active".to_string(),
+            modified: None,
+            assertions: vec![Assertion {
+                role: "sports:role.reader".to_string(),
+                resource: "sports:resource.write".to_string(),
+                action: "write".to_string(),
+                effect: Some(AssertionEffect::Allow),
+                id: None,
+                case_sensitive: None,
+                conditions: None,
+            }],
+            case_sensitive: None,
+            version: None,
+            active: Some(true),
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        };
+
+        let policy_data = PolicyData {
+            domain: "sports".to_string(),
+            policies: vec![inactive_policy, active_policy],
+        };
+
+        let mut store = PolicyStore::new();
+        store.insert(policy_data);
+
+        let roles = vec!["reader".to_string()];
+        let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
+        assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+
+        let decision = store.allow_action("sports", &roles, "write", "sports:resource.write");
+        assert_eq!(decision.decision, PolicyDecision::Allow);
     }
 
     #[test]

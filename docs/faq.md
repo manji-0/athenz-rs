@@ -35,7 +35,7 @@ redirects.
 
 Use `add_ca_cert_pem` on the client builder and pass a CA certificate PEM.
 
-## Why does `PolicyStore` ignore `case_sensitive` and `conditions`?
+## How does `PolicyStore` handle `case_sensitive` and `conditions`?
 
-It matches ZPE behavior by normalizing action/resource to lowercase and
-ignoring conditions.
+It honors `case_sensitive` (assertion overrides policy; default is false) and
+enforces supported assertion conditions.

@@ -53,6 +53,7 @@ if let Some(signed) = response.data {
 
 ## Behavior notes
 
-- `allow_action` lowercases `action` and `resource` before matching.
-- `PolicyStore` ignores `case_sensitive` and `conditions` fields (ZPE behavior).
+- `allow_action` lowercases `action` and `resource` for case-insensitive assertions.
+- `PolicyStore` honors `case_sensitive` (assertion overrides policy; default is false).
+- `PolicyStore` enforces assertion `conditions` for condition keys it recognizes; unsupported or unknown condition keys are ignored during evaluation.
 - Deny assertions are evaluated before allow assertions.

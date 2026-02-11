@@ -78,10 +78,19 @@ impl PolicyStore {
             Some(value) => value,
             None => return PolicyMatch::new(PolicyDecision::DenyDomainMismatch),
         };
-        let resource_original =
-            strip_domain_prefix_if_matches_case_insensitive(resource, token_domain);
+        let resource_case_sensitive = if domain_policy.has_case_sensitive {
+            Some(strip_domain_prefix_if_matches_ascii_case_insensitive(
+                resource,
+                token_domain,
+            ))
+        } else {
+            None
+        };
+        let resource_case_sensitive = resource_case_sensitive
+            .as_deref()
+            .unwrap_or(&resource_lower);
         let action_match = MatchInput::new(action, &action_lower);
-        let resource_match = MatchInput::new(&resource_original, &resource_lower);
+        let resource_match = MatchInput::new(resource_case_sensitive, &resource_lower);
 
         if domain_policy.is_empty() {
             return PolicyMatch::new(PolicyDecision::DenyDomainEmpty);
@@ -126,12 +135,14 @@ impl PolicyStore {
 pub struct DomainPolicy {
     allow: RoleAssertions,
     deny: RoleAssertions,
+    has_case_sensitive: bool,
 }
 
 impl DomainPolicy {
     fn from_policy_data(policy_data: PolicyData) -> Self {
         let mut allow = RoleAssertions::default();
         let mut deny = RoleAssertions::default();
+        let mut has_case_sensitive = false;
 
         let domain = policy_data.domain.clone();
         for policy in policy_data.policies {
@@ -141,6 +152,9 @@ impl DomainPolicy {
                 let effect = assertion.effect.clone().unwrap_or(AssertionEffect::Allow);
                 let assertion_case_sensitive =
                     assertion.case_sensitive.unwrap_or(policy_case_sensitive);
+                if assertion_case_sensitive {
+                    has_case_sensitive = true;
+                }
                 let entry = AssertionEntry::from_assertion(
                     assertion,
                     &policy_name,
@@ -154,7 +168,11 @@ impl DomainPolicy {
             }
         }
 
-        Self { allow, deny }
+        Self {
+            allow,
+            deny,
+            has_case_sensitive,
+        }
     }
 
     fn is_empty(&self) -> bool {
@@ -275,7 +293,7 @@ impl AssertionEntry {
             action.to_lowercase()
         };
         let resource_value = if case_sensitive {
-            strip_domain_prefix_if_matches_case_insensitive(&resource, domain)
+            strip_domain_prefix_if_matches_ascii_case_insensitive(&resource, domain)
         } else {
             strip_domain_prefix_if_matches(&resource.to_lowercase(), domain)
         };
@@ -351,23 +369,23 @@ const ENFORCEMENT_STATE_KEY: &str = "enforcementState";
 const ENFORCEMENT_STATE_ENFORCE: &str = "ENFORCE";
 
 struct MatchInput<'a> {
-    original: &'a str,
-    lowercase: &'a str,
+    case_sensitive: &'a str,
+    case_insensitive: &'a str,
 }
 
 impl<'a> MatchInput<'a> {
-    fn new(original: &'a str, lowercase: &'a str) -> Self {
+    fn new(case_sensitive: &'a str, case_insensitive: &'a str) -> Self {
         Self {
-            original,
-            lowercase,
+            case_sensitive,
+            case_insensitive,
         }
     }
 
     fn value(&self, case_sensitive: bool) -> &str {
         if case_sensitive {
-            self.original
+            self.case_sensitive
         } else {
-            self.lowercase
+            self.case_insensitive
         }
     }
 }
@@ -493,22 +511,31 @@ fn strip_domain_prefix(resource: &str, domain: &str) -> Option<String> {
     Some(resource.to_string())
 }
 
-fn strip_domain_prefix_if_matches(value: &str, domain: &str) -> String {
+enum DomainMatchMode {
+    Exact,
+    AsciiCaseInsensitive,
+}
+
+fn strip_domain_prefix_if_matches_with(value: &str, domain: &str, mode: DomainMatchMode) -> String {
     if let Some(index) = value.find(':') {
-        if &value[..index] == domain {
+        let matches = match mode {
+            DomainMatchMode::Exact => &value[..index] == domain,
+            // Domain names are ASCII, so ASCII-only folding is sufficient.
+            DomainMatchMode::AsciiCaseInsensitive => value[..index].eq_ignore_ascii_case(domain),
+        };
+        if matches {
             return value[index + 1..].to_string();
         }
     }
     value.to_string()
 }
 
-fn strip_domain_prefix_if_matches_case_insensitive(value: &str, domain: &str) -> String {
-    if let Some(index) = value.find(':') {
-        if value[..index].eq_ignore_ascii_case(domain) {
-            return value[index + 1..].to_string();
-        }
-    }
-    value.to_string()
+fn strip_domain_prefix_if_matches(value: &str, domain: &str) -> String {
+    strip_domain_prefix_if_matches_with(value, domain, DomainMatchMode::Exact)
+}
+
+fn strip_domain_prefix_if_matches_ascii_case_insensitive(value: &str, domain: &str) -> String {
+    strip_domain_prefix_if_matches_with(value, domain, DomainMatchMode::AsciiCaseInsensitive)
 }
 
 fn normalize_role(role: &str, domain: &str) -> String {

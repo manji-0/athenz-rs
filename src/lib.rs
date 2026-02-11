@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod build_url;
+mod client_defaults;
 mod error;
 mod jwt;
 mod models;

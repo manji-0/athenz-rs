@@ -1,3 +1,4 @@
+use crate::client_defaults::DEFAULT_TIMEOUT;
 use crate::error::{
     read_body_with_limit, Error, CONFIG_ERROR_REDIRECT_WITH_AUTH, MAX_ERROR_BODY_BYTES,
 };
@@ -29,7 +30,7 @@ impl ZtsClientBuilder {
     pub fn new(base_url: impl AsRef<str>) -> Result<Self, Error> {
         Ok(Self {
             base_url: Url::parse(base_url.as_ref())?,
-            timeout: None,
+            timeout: Some(DEFAULT_TIMEOUT),
             disable_redirect: false,
             identity: None,
             ca_certs: Vec::new(),

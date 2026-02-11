@@ -646,47 +646,59 @@ mod tests {
     }
 
     #[test]
+    fn mk_assertion(
+        role: &str,
+        resource: &str,
+        action: &str,
+        effect: AssertionEffect,
+    ) -> Assertion {
+        Assertion {
+            role: role.to_string(),
+            resource: resource.to_string(),
+            action: action.to_string(),
+            effect: Some(effect),
+            id: None,
+            case_sensitive: None,
+            conditions: None,
+        }
+    }
+
+    fn mk_policy(name: &str, active: bool, assertions: Vec<Assertion>) -> Policy {
+        Policy {
+            name: name.to_string(),
+            modified: None,
+            assertions,
+            case_sensitive: None,
+            version: None,
+            active: Some(active),
+            description: None,
+            tags: None,
+            resource_ownership: None,
+        }
+    }
+
     fn policy_store_skips_inactive_policies() {
-        let inactive_policy = Policy {
-            name: "sports:policy.inactive".to_string(),
-            modified: None,
-            assertions: vec![Assertion {
-                role: "sports:role.reader".to_string(),
-                resource: "sports:resource.read".to_string(),
-                action: "read".to_string(),
-                effect: Some(AssertionEffect::Allow),
-                id: None,
-                case_sensitive: None,
-                conditions: None,
-            }],
-            case_sensitive: None,
-            version: None,
-            active: Some(false),
-            description: None,
-            tags: None,
-            resource_ownership: None,
-        };
+        let inactive_policy = mk_policy(
+            "sports:policy.inactive",
+            false,
+            vec![mk_assertion(
+                "sports:role.reader",
+                "sports:resource.read",
+                "read",
+                AssertionEffect::Allow,
+            )],
+        );
 
-        let active_policy = Policy {
-            name: "sports:policy.active".to_string(),
-            modified: None,
-            assertions: vec![Assertion {
-                role: "sports:role.reader".to_string(),
-                resource: "sports:resource.write".to_string(),
-                action: "write".to_string(),
-                effect: Some(AssertionEffect::Allow),
-                id: None,
-                case_sensitive: None,
-                conditions: None,
-            }],
-            case_sensitive: None,
-            version: None,
-            active: Some(true),
-            description: None,
-            tags: None,
-            resource_ownership: None,
-        };
-
+        let active_policy = mk_policy(
+            "sports:policy.active",
+            true,
+            vec![mk_assertion(
+                "sports:role.reader",
+                "sports:resource.write",
+                "write",
+                AssertionEffect::Allow,
+            )],
+        );
         let policy_data = PolicyData {
             domain: "sports".to_string(),
             policies: vec![inactive_policy, active_policy],

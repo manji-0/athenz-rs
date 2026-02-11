@@ -27,6 +27,7 @@ let client = ZtsClient::builder("https://zts.example.com/zts/v1")?
 
 Notes:
 
+- If you do not call `timeout`, the client uses a 30s default request timeout.
 - `disable_redirect(true)` is useful if you need the `Location` header from `/oauth2/auth`.
 - If you already have a combined PEM (cert + key), use `mtls_identity_from_pem`.
 - Use `ntoken_auth` if you already have a signed NToken string.
@@ -48,3 +49,7 @@ let client = ZmsClient::builder("https://zms.example.com/zms/v1")?
 # Ok(())
 # }
 ```
+
+Notes:
+
+- If you do not call `timeout`, the client uses a 30s default request timeout.

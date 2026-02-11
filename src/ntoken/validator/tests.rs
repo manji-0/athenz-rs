@@ -145,6 +145,20 @@ fn ntoken_signer_builder_mut_updates_fields() {
 }
 
 #[test]
+fn ntoken_signer_builder_mut_invalidates_cached_token() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    let token = signer.token().expect("token");
+    signer.builder_mut().set_hostname("host.example");
+    let token_after = signer.token().expect("token");
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let claims = validator.validate(&token_after).expect("validate");
+    assert_eq!(claims.hostname.as_deref(), Some("host.example"));
+    assert_ne!(token, token_after);
+}
+
+#[test]
 fn ntoken_validate_with_ip_hostname_options() {
     let mut signer =
         NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");

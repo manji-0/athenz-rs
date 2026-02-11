@@ -522,14 +522,11 @@ fn strip_domain_prefix_if_matches_with<'a>(
     if let Some(index) = value.find(':') {
         let matches = match mode {
             DomainMatchMode::Exact => &value[..index] == domain,
-            // Domain names are expected to be ASCII; fall back to exact match for non-ASCII input.
+            // Domain names are expected to be ASCII; compare ASCII letters case-insensitively.
+            // Non-ASCII characters must match exactly.
             DomainMatchMode::AsciiCaseInsensitive => {
                 let prefix = &value[..index];
-                if prefix.is_ascii() && domain.is_ascii() {
-                    prefix.eq_ignore_ascii_case(domain)
-                } else {
-                    prefix == domain
-                }
+                prefix.eq_ignore_ascii_case(domain)
             }
         };
         if matches {

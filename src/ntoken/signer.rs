@@ -32,8 +32,16 @@ impl NTokenSigner {
         })
     }
 
+    /// Returns a mutable reference to the underlying `NTokenBuilder`.
+    ///
+    /// Calling this method will invalidate any cached token by clearing the
+    /// internal cache, even if the returned builder is not subsequently mutated.
+    /// Any later call to [`Self::token`] will recompute and recache a new token.
     pub fn builder_mut(&mut self) -> &mut NTokenBuilder {
-        *self.cached.write().unwrap() = None;
+        *self
+            .cached
+            .write()
+            .expect("ntoken signer cache lock poisoned") = None;
         &mut self.builder
     }
 

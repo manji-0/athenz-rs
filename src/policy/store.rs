@@ -520,8 +520,15 @@ fn strip_domain_prefix_if_matches_with(value: &str, domain: &str, mode: DomainMa
     if let Some(index) = value.find(':') {
         let matches = match mode {
             DomainMatchMode::Exact => &value[..index] == domain,
-            // Domain names are ASCII, so ASCII-only folding is sufficient.
-            DomainMatchMode::AsciiCaseInsensitive => value[..index].eq_ignore_ascii_case(domain),
+            // Domain names are expected to be ASCII; fall back to exact match for non-ASCII input.
+            DomainMatchMode::AsciiCaseInsensitive => {
+                let prefix = &value[..index];
+                if prefix.is_ascii() && domain.is_ascii() {
+                    prefix.eq_ignore_ascii_case(domain)
+                } else {
+                    prefix == domain
+                }
+            }
         };
         if matches {
             return value[index + 1..].to_string();

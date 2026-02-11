@@ -254,6 +254,7 @@ impl JwtValidatorAsync {
         let mut validation = Validation::new(alg);
         validation.leeway = self.options.leeway;
         validation.validate_exp = self.options.validate_exp;
+        validation.validate_nbf = self.options.validate_nbf;
         if let Some(ref issuer) = self.options.issuer {
             validation.set_issuer(&[issuer.as_str()]);
         }

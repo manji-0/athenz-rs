@@ -15,9 +15,9 @@ use super::types::{JwtHeader, JwtTokenData, JwtValidationOptions};
 mod helpers;
 use helpers::{
     allows_es512, apply_validation_options, base64_url_decode, decode_jwt_header, is_es512_jwk,
-    is_es512_key_error, is_rs_jwk, is_rs_key_error, jwt_error, jwt_json_error,
-    p521_verifying_key_from_jwk, resolve_allowed_algs, select_jwk, split_jwt, validate_claims,
-    validate_jwt_typ, validate_kidless_jwks, JwtParts,
+    is_es512_key_error, is_rs_jwk, is_rs_key_error, jwk_matches_constraints, jwt_error,
+    jwt_json_error, p521_verifying_key_from_jwk, resolve_allowed_algs, select_jwk, split_jwt,
+    validate_claims, validate_jwt_typ, validate_kidless_jwks, JwtParts,
 };
 use jsonwebtoken::jwk::JwkSet;
 #[cfg(feature = "async-validate")]
@@ -26,29 +26,29 @@ use std::future::Future;
 fn select_jwk_with_refresh<'a, F>(
     jwks: &'a mut JwkSet,
     kid: Option<&str>,
+    alg: &str,
     refresh: F,
 ) -> Result<&'a jsonwebtoken::jwk::Jwk, Error>
 where
     F: FnOnce() -> Result<JwkSet, Error>,
 {
     if let Some(kid) = kid {
-        if jwks
-            .keys
-            .iter()
-            .any(|key| key.common.key_id.as_deref() == Some(kid))
-        {
-            return select_jwk(jwks, Some(kid));
+        if jwks.keys.iter().any(|key| {
+            key.common.key_id.as_deref() == Some(kid) && jwk_matches_constraints(key, alg)
+        }) {
+            return select_jwk(jwks, Some(kid), alg);
         }
         *jwks = refresh()?;
-        return select_jwk(jwks, Some(kid));
+        return select_jwk(jwks, Some(kid), alg);
     }
-    select_jwk(jwks, None)
+    select_jwk(jwks, None, alg)
 }
 
 #[cfg(feature = "async-validate")]
 async fn select_jwk_with_refresh_async<'a, F, Fut>(
     jwks: &'a mut JwkSet,
     kid: Option<&str>,
+    alg: &str,
     refresh: F,
 ) -> Result<&'a jsonwebtoken::jwk::Jwk, Error>
 where
@@ -56,17 +56,15 @@ where
     Fut: Future<Output = Result<JwkSet, Error>>,
 {
     if let Some(kid) = kid {
-        if jwks
-            .keys
-            .iter()
-            .any(|key| key.common.key_id.as_deref() == Some(kid))
-        {
-            return select_jwk(jwks, Some(kid));
+        if jwks.keys.iter().any(|key| {
+            key.common.key_id.as_deref() == Some(kid) && jwk_matches_constraints(key, alg)
+        }) {
+            return select_jwk(jwks, Some(kid), alg);
         }
         *jwks = refresh().await?;
-        return select_jwk(jwks, Some(kid));
+        return select_jwk(jwks, Some(kid), alg);
     }
-    select_jwk(jwks, None)
+    select_jwk(jwks, None, alg)
 }
 
 pub struct JwtValidator {
@@ -112,7 +110,10 @@ impl JwtValidator {
 
         let (mut jwks, source) = self.jwks.fetch_with_source()?;
         if header.kid.is_none() && jwks.keys.len() > 1 && ATHENZ_RSA_ALGS.contains(&alg) {
-            let keys = jwks.keys.iter().filter(|jwk| is_rs_jwk(jwk));
+            let keys = jwks
+                .keys
+                .iter()
+                .filter(|jwk| is_rs_jwk(jwk) && jwk_matches_constraints(jwk, &header.alg));
             let result = validate_kidless_jwks(
                 keys,
                 &header.alg,
@@ -131,9 +132,11 @@ impl JwtValidator {
         }
 
         let key = if source == FetchSource::Cache {
-            select_jwk_with_refresh(&mut jwks, header.kid.as_deref(), || self.jwks.fetch_fresh())?
+            select_jwk_with_refresh(&mut jwks, header.kid.as_deref(), &header.alg, || {
+                self.jwks.fetch_fresh()
+            })?
         } else {
-            select_jwk(&jwks, header.kid.as_deref())?
+            select_jwk(&jwks, header.kid.as_deref(), &header.alg)?
         };
         let decoding_key = DecodingKey::from_jwk(key)?;
         let token_data = decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
@@ -163,7 +166,10 @@ impl JwtValidator {
 
         let (mut jwks, source) = self.jwks.fetch_with_source()?;
         if header.kid.is_none() && jwks.keys.len() > 1 {
-            let keys = jwks.keys.iter().filter(|jwk| is_es512_jwk(jwk));
+            let keys = jwks
+                .keys
+                .iter()
+                .filter(|jwk| is_es512_jwk(jwk) && jwk_matches_constraints(jwk, &header.alg));
             return validate_kidless_jwks(
                 keys,
                 &header.alg,
@@ -173,9 +179,11 @@ impl JwtValidator {
         }
 
         let key = if source == FetchSource::Cache {
-            select_jwk_with_refresh(&mut jwks, header.kid.as_deref(), || self.jwks.fetch_fresh())?
+            select_jwk_with_refresh(&mut jwks, header.kid.as_deref(), &header.alg, || {
+                self.jwks.fetch_fresh()
+            })?
         } else {
-            select_jwk(&jwks, header.kid.as_deref())?
+            select_jwk(&jwks, header.kid.as_deref(), &header.alg)?
         };
         self.validate_es512_with_key(parts, header, key)
     }
@@ -265,7 +273,10 @@ impl JwtValidatorAsync {
 
         let (mut jwks, source) = self.jwks.fetch_with_source().await?;
         if header.kid.is_none() && jwks.keys.len() > 1 && ATHENZ_RSA_ALGS.contains(&alg) {
-            let keys = jwks.keys.iter().filter(|jwk| is_rs_jwk(jwk));
+            let keys = jwks
+                .keys
+                .iter()
+                .filter(|jwk| is_rs_jwk(jwk) && jwk_matches_constraints(jwk, &header.alg));
             let result = validate_kidless_jwks(
                 keys,
                 &header.alg,
@@ -284,12 +295,12 @@ impl JwtValidatorAsync {
         }
 
         let key = if source == FetchSource::Cache {
-            select_jwk_with_refresh_async(&mut jwks, header.kid.as_deref(), || {
+            select_jwk_with_refresh_async(&mut jwks, header.kid.as_deref(), &header.alg, || {
                 self.jwks.fetch_fresh()
             })
             .await?
         } else {
-            select_jwk(&jwks, header.kid.as_deref())?
+            select_jwk(&jwks, header.kid.as_deref(), &header.alg)?
         };
         let decoding_key = DecodingKey::from_jwk(key)?;
         let token_data = decode::<Value>(token, &decoding_key, &validation).map_err(Error::from)?;
@@ -319,7 +330,10 @@ impl JwtValidatorAsync {
 
         let (mut jwks, source) = self.jwks.fetch_with_source().await?;
         if header.kid.is_none() && jwks.keys.len() > 1 {
-            let keys = jwks.keys.iter().filter(|jwk| is_es512_jwk(jwk));
+            let keys = jwks
+                .keys
+                .iter()
+                .filter(|jwk| is_es512_jwk(jwk) && jwk_matches_constraints(jwk, &header.alg));
             return validate_kidless_jwks(
                 keys,
                 &header.alg,
@@ -329,12 +343,12 @@ impl JwtValidatorAsync {
         }
 
         let key = if source == FetchSource::Cache {
-            select_jwk_with_refresh_async(&mut jwks, header.kid.as_deref(), || {
+            select_jwk_with_refresh_async(&mut jwks, header.kid.as_deref(), &header.alg, || {
                 self.jwks.fetch_fresh()
             })
             .await?
         } else {
-            select_jwk(&jwks, header.kid.as_deref())?
+            select_jwk(&jwks, header.kid.as_deref(), &header.alg)?
         };
         self.validate_es512_with_key(parts, header, key)
     }

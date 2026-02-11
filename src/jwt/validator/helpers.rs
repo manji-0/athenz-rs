@@ -2,7 +2,7 @@ use crate::error::Error;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use jsonwebtoken::errors::ErrorKind;
-use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, JwkSet};
+use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, JwkSet, PublicKeyUse};
 use jsonwebtoken::{Algorithm, Validation};
 use p521::ecdsa::VerifyingKey as P521VerifyingKey;
 use serde_json::Value;
@@ -232,6 +232,25 @@ pub(super) fn is_es512_jwk(jwk: &jsonwebtoken::jwk::Jwk) -> bool {
     )
 }
 
+fn jwk_allows_use(jwk: &jsonwebtoken::jwk::Jwk) -> bool {
+    match jwk.common.public_key_use.as_ref() {
+        None => true,
+        Some(PublicKeyUse::Signature) => true,
+        Some(_) => false,
+    }
+}
+
+fn jwk_allows_alg(jwk: &jsonwebtoken::jwk::Jwk, alg: &str) -> bool {
+    match jwk.common.key_algorithm.as_ref() {
+        None => true,
+        Some(key_alg) => key_alg.to_string() == alg,
+    }
+}
+
+pub(super) fn jwk_matches_constraints(jwk: &jsonwebtoken::jwk::Jwk, alg: &str) -> bool {
+    jwk_allows_use(jwk) && jwk_allows_alg(jwk, alg)
+}
+
 pub(super) fn decode_p521_coord(value: &str) -> Result<Vec<u8>, Error> {
     let bytes = base64_url_decode(value).map_err(|_| jwt_error(ErrorKind::InvalidEcdsaKey))?;
     const P521_COORD_SIZE: usize = 66;
@@ -426,12 +445,13 @@ where
 pub(super) fn select_jwk<'a>(
     jwks: &'a JwkSet,
     kid: Option<&str>,
+    alg: &str,
 ) -> Result<&'a jsonwebtoken::jwk::Jwk, Error> {
     if let Some(kid) = kid {
         if let Some(jwk) = jwks
             .keys
             .iter()
-            .find(|k| k.common.key_id.as_deref() == Some(kid))
+            .find(|k| k.common.key_id.as_deref() == Some(kid) && jwk_matches_constraints(k, alg))
         {
             return Ok(jwk);
         }
@@ -439,7 +459,10 @@ pub(super) fn select_jwk<'a>(
     }
 
     if jwks.keys.len() == 1 {
-        return Ok(&jwks.keys[0]);
+        if jwk_matches_constraints(&jwks.keys[0], alg) {
+            return Ok(&jwks.keys[0]);
+        }
+        return Err(kidless_no_compatible_jwk(alg));
     }
 
     Err(Error::MissingJwk("kid required".to_string()))

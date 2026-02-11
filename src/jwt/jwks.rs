@@ -914,6 +914,67 @@ mod tests {
     }
 
     #[test]
+    fn jwt_rs256_rejects_jwk_use_enc() {
+        let (token, _jwks) = build_rs256_token_with_kid("good-key");
+        let (n, e, _) = rs256_public_components();
+        let jwks = jwks_from_value(json!({
+            "keys": [{
+                "kty": "RSA",
+                "kid": "good-key",
+                "alg": "RS256",
+                "use": "enc",
+                "n": URL_SAFE_NO_PAD.encode(&n),
+                "e": URL_SAFE_NO_PAD.encode(&e),
+            }]
+        }))
+        .expect("jwks");
+        let jwks_provider = jwks_provider_with_seeded_cache(jwks);
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::MissingJwk(kid) => assert_eq!(kid, "good-key"),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn jwt_rs256_rejects_jwk_alg_mismatch() {
+        let (token, _jwks) = build_rs256_token_with_kid("good-key");
+        let (n, e, _) = rs256_public_components();
+        let jwks = jwks_from_value(json!({
+            "keys": [{
+                "kty": "RSA",
+                "kid": "good-key",
+                "alg": "RS512",
+                "n": URL_SAFE_NO_PAD.encode(&n),
+                "e": URL_SAFE_NO_PAD.encode(&e),
+            }]
+        }))
+        .expect("jwks");
+        let jwks_provider = jwks_provider_with_seeded_cache(jwks);
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.audience = vec!["client".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should reject");
+        match err {
+            Error::MissingJwk(kid) => assert_eq!(kid, "good-key"),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
     fn jwt_rs256_validates_without_kid_using_all_keys() {
         let (token, jwks) = build_rs256_token_without_kid();
         let jwks_provider = JwksProvider::new("https://example.com/jwks").expect("provider");

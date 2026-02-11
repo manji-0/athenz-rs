@@ -81,10 +81,7 @@ impl PolicyStore {
             None => return PolicyMatch::new(PolicyDecision::DenyDomainMismatch),
         };
         let resource_case_sensitive = if domain_policy.has_case_sensitive {
-            Cow::Owned(strip_domain_prefix_if_matches_ascii_case_insensitive(
-                resource,
-                token_domain,
-            ))
+            strip_domain_prefix_if_matches_ascii_case_insensitive(resource, token_domain)
         } else {
             Cow::Borrowed(resource_stripped_lower.as_str())
         };
@@ -282,7 +279,7 @@ impl AssertionEntry {
         if let Some(ref conditions) = conditions {
             validate_assertion_conditions(conditions, policy_name, id, &role, &action, &resource);
         }
-        let mut role = strip_domain_prefix_if_matches(&role, domain);
+        let mut role = strip_domain_prefix_if_matches(&role, domain).into_owned();
         if let Some(stripped) = role.strip_prefix("role.") {
             role = stripped.to_string();
         }
@@ -293,9 +290,10 @@ impl AssertionEntry {
             action.to_lowercase()
         };
         let resource_value = if case_sensitive {
-            strip_domain_prefix_if_matches_ascii_case_insensitive(&resource, domain)
+            strip_domain_prefix_if_matches_ascii_case_insensitive(&resource, domain).into_owned()
         } else {
-            strip_domain_prefix_if_matches(&resource.to_lowercase(), domain)
+            let resource_lowercased = resource.to_lowercase();
+            strip_domain_prefix_if_matches(&resource_lowercased, domain).into_owned()
         };
         let action = Match::from_pattern(&action_value, "action", policy_name);
         let resource = Match::from_pattern(&resource_value, "resource", policy_name);
@@ -516,7 +514,11 @@ enum DomainMatchMode {
     AsciiCaseInsensitive,
 }
 
-fn strip_domain_prefix_if_matches_with(value: &str, domain: &str, mode: DomainMatchMode) -> String {
+fn strip_domain_prefix_if_matches_with<'a>(
+    value: &'a str,
+    domain: &str,
+    mode: DomainMatchMode,
+) -> Cow<'a, str> {
     if let Some(index) = value.find(':') {
         let matches = match mode {
             DomainMatchMode::Exact => &value[..index] == domain,
@@ -531,22 +533,25 @@ fn strip_domain_prefix_if_matches_with(value: &str, domain: &str, mode: DomainMa
             }
         };
         if matches {
-            return value[index + 1..].to_string();
+            return Cow::Borrowed(&value[index + 1..]);
         }
     }
-    value.to_string()
+    Cow::Borrowed(value)
 }
 
-fn strip_domain_prefix_if_matches(value: &str, domain: &str) -> String {
+fn strip_domain_prefix_if_matches<'a>(value: &'a str, domain: &str) -> Cow<'a, str> {
     strip_domain_prefix_if_matches_with(value, domain, DomainMatchMode::Exact)
 }
 
-fn strip_domain_prefix_if_matches_ascii_case_insensitive(value: &str, domain: &str) -> String {
+fn strip_domain_prefix_if_matches_ascii_case_insensitive<'a>(
+    value: &'a str,
+    domain: &str,
+) -> Cow<'a, str> {
     strip_domain_prefix_if_matches_with(value, domain, DomainMatchMode::AsciiCaseInsensitive)
 }
 
 fn normalize_role(role: &str, domain: &str) -> String {
-    let mut normalized = strip_domain_prefix_if_matches(role, domain);
+    let mut normalized = strip_domain_prefix_if_matches(role, domain).into_owned();
     if let Some(stripped) = normalized.strip_prefix("role.") {
         normalized = stripped.to_string();
     }

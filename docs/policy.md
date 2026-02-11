@@ -55,5 +55,5 @@ if let Some(signed) = response.data {
 
 - `allow_action` lowercases `action` and `resource` for case-insensitive assertions.
 - `PolicyStore` honors `case_sensitive` (assertion overrides policy; default is false).
-- `PolicyStore` enforces supported assertion `conditions`.
+- `PolicyStore` enforces assertion `conditions` for condition keys it recognizes; unsupported or unknown condition keys are ignored during evaluation.
 - Deny assertions are evaluated before allow assertions.

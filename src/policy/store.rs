@@ -73,12 +73,13 @@ impl PolicyStore {
         };
 
         let action_lower = action.to_lowercase();
-        let resource_lower = resource.to_lowercase();
-        let resource_lower = match strip_domain_prefix(&resource_lower, token_domain) {
+        let resource_lowercased = resource.to_lowercase();
+        let resource_stripped_lower = match strip_domain_prefix(&resource_lowercased, token_domain)
+        {
             Some(value) => value,
             None => return PolicyMatch::new(PolicyDecision::DenyDomainMismatch),
         };
-        let resource_case_sensitive = if domain_policy.has_case_sensitive {
+        let resource_stripped_case_sensitive = if domain_policy.has_case_sensitive {
             Some(strip_domain_prefix_if_matches_ascii_case_insensitive(
                 resource,
                 token_domain,
@@ -86,11 +87,11 @@ impl PolicyStore {
         } else {
             None
         };
-        let resource_case_sensitive = resource_case_sensitive
+        let resource_case_sensitive = resource_stripped_case_sensitive
             .as_deref()
-            .unwrap_or(&resource_lower);
+            .unwrap_or(&resource_stripped_lower);
         let action_match = MatchInput::new(action, &action_lower);
-        let resource_match = MatchInput::new(resource_case_sensitive, &resource_lower);
+        let resource_match = MatchInput::new(resource_case_sensitive, &resource_stripped_lower);
 
         if domain_policy.is_empty() {
             return PolicyMatch::new(PolicyDecision::DenyDomainEmpty);

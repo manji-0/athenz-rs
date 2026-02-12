@@ -236,6 +236,12 @@ pub(super) fn parse_claims(unsigned: &str) -> Result<NToken, Error> {
         return Err(Error::Crypto("invalid ntoken claims".to_string()));
     }
 
+    claims.domain.make_ascii_lowercase();
+    claims.name.make_ascii_lowercase();
+    if let Some(ref mut key_service) = claims.key_service {
+        key_service.make_ascii_lowercase();
+    }
+
     Ok(claims)
 }
 

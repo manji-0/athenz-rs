@@ -1,0 +1,72 @@
+use crate::zts::AccessTokenRequest;
+
+use super::helpers::scope_from_form;
+
+#[test]
+fn access_token_scope_domain_only() {
+    let req = AccessTokenRequest::new("sports", Vec::new());
+    let form = req.to_form();
+    assert!(form.contains("scope=sports%3Adomain"));
+}
+
+#[test]
+fn access_token_scope_wildcard_role() {
+    let req = AccessTokenRequest::new("sports", vec!["*".to_string()]);
+    let form = req.to_form();
+    let scope = scope_from_form(&form);
+    assert_eq!(scope, "sports:role.*");
+    assert!(form.contains("scope=sports%3Arole.*") || form.contains("scope=sports%3Arole.%2A"));
+}
+
+#[test]
+fn access_token_scope_roles() {
+    let req = AccessTokenRequest::new("sports", vec!["reader".to_string(), "writer".to_string()]);
+    let form = req.to_form();
+    let scope = scope_from_form(&form);
+    assert_eq!(scope, "sports:role.reader sports:role.writer");
+}
+
+#[test]
+fn access_token_form_includes_optional_fields() {
+    let mut req = AccessTokenRequest::new("sports", vec!["reader".to_string()]);
+    req.proxy_for_principal = Some("user.test".to_string());
+    req.authorization_details = Some("{\"type\":\"test\"}".to_string());
+    req.openid_issuer = Some(true);
+    let form = req.to_form();
+    assert!(form.contains("proxy_for_principal=user.test"));
+    assert!(form.contains("authorization_details=%7B%22type%22%3A%22test%22%7D"));
+    assert!(form.contains("openid_issuer=true"));
+}
+
+#[test]
+fn access_token_scope_includes_id_token_service() {
+    let mut req = AccessTokenRequest::new("sports", vec!["reader".to_string()]);
+    req.id_token_service = Some("api".to_string());
+    let form = req.to_form();
+    let scope = scope_from_form(&form);
+    assert_eq!(scope, "sports:role.reader openid sports:service.api");
+    assert!(form.contains("scope=sports%3Arole.reader+openid+sports%3Aservice.api"));
+}
+
+#[test]
+fn access_token_raw_scope_overrides_composed_scope() {
+    let mut req = AccessTokenRequest::new("sports", vec!["reader".to_string()]);
+    req.id_token_service = Some("api".to_string());
+    req.raw_scope = Some("custom:scope".to_string());
+    let form = req.to_form();
+    let scope = scope_from_form(&form);
+    assert_eq!(scope, "custom:scope");
+    assert!(form.contains("scope=custom%3Ascope"));
+}
+
+#[test]
+fn access_token_builder_sets_raw_scope() {
+    let req = AccessTokenRequest::builder("sports")
+        .roles(vec!["reader".to_string()])
+        .id_token_service("api")
+        .raw_scope("custom:scope")
+        .build();
+    let form = req.to_form();
+    let scope = scope_from_form(&form);
+    assert_eq!(scope, "custom:scope");
+}

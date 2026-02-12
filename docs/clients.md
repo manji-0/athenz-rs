@@ -2,7 +2,9 @@
 
 This guide explains how to configure ZTS and ZMS clients.
 
-Both clients are synchronous and based on `reqwest` blocking.
+Both clients are synchronous and based on `reqwest` blocking. If you need async
+ZMS support, enable the `async-client` feature and use `ZmsAsyncClient` or
+`ZmsAsyncClientBuilder`.
 
 ## ZTS client
 

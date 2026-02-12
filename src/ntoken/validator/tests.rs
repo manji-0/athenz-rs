@@ -70,6 +70,15 @@ fn ntoken_builder_lowercases_fields() {
 }
 
 #[test]
+fn ntoken_parse_claims_lowercases_domain_and_service() {
+    let unsigned = "v=S1;d=Sports;n=API;k=v1;z=ZTS;a=abc;t=1;e=2";
+    let claims = super::helpers::parse_claims(unsigned).expect("claims");
+    assert_eq!(claims.domain, "sports");
+    assert_eq!(claims.name, "api");
+    assert_eq!(claims.key_service.as_deref(), Some("zts"));
+}
+
+#[test]
 fn ntoken_validate_user_version_requires_user_domain() {
     let mut signer =
         NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");

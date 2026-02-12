@@ -25,7 +25,10 @@ fn get_domain_list_sets_query_and_modified_since() {
     options.prefix = Some("core".to_string());
     options.modified_since = Some("Wed, 21 Oct 2015 07:28:00 GMT".to_string());
 
-    let list = client.get_domain_list(&options).expect("request");
+    let list = client
+        .get_domain_list(&options)
+        .expect("request")
+        .expect("list");
     assert_eq!(list.names, vec!["a".to_string(), "b".to_string()]);
 
     let req = rx.recv().expect("request");
@@ -37,6 +40,22 @@ fn get_domain_list_sets_query_and_modified_since() {
     );
     assert_eq!(req.query.get("limit").map(String::as_str), Some("5"));
     assert_eq!(req.query.get("prefix").map(String::as_str), Some("core"));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_domain_list_returns_none_on_not_modified() {
+    let response = "HTTP/1.1 304 Not Modified\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, _rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = DomainListOptions::default();
+    let list = client.get_domain_list(&options).expect("request");
+    assert!(list.is_none());
 
     handle.join().expect("server");
 }

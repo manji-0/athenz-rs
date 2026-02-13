@@ -677,7 +677,7 @@ fn zts_public_key_response() -> String {
 async fn spawn_zts_key_server(
     response: String,
     expected_requests: usize,
-    timeout: Duration,
+    timeout_duration: Duration,
 ) -> (String, Arc<AtomicUsize>, tokio::task::JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -687,7 +687,7 @@ async fn spawn_zts_key_server(
     let request_count_for_task = request_count.clone();
     let handle = tokio::spawn(async move {
         let mut served = 0usize;
-        let deadline = tokio::time::Instant::now() + timeout;
+        let deadline = tokio::time::Instant::now() + timeout_duration;
         while served < expected_requests {
             let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
             if remaining.is_zero() {
@@ -752,7 +752,7 @@ fn build_domain_signed_policy_data(signed_policy: &SignedPolicyData) -> DomainSi
     let private_key = RsaPrivateKey::from_pkcs1_pem(RSA_PRIVATE_KEY).expect("private key");
     let signing_key = RsaSigningKey::<Sha256>::new(private_key);
     let signature = signing_key.sign(signed_json.as_bytes());
-    let signature_b64 = ybase64_encode(signature.to_bytes().as_slice());
+    let signature_b64 = ybase64_encode(signature.to_bytes().as_ref());
     DomainSignedPolicyData {
         signed_policy_data: signed_policy.clone(),
         signature: signature_b64,

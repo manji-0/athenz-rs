@@ -356,7 +356,7 @@ fn ntoken_validate_limits_zts_key_cache_entries() {
         ybase64_encode(RSA_PUBLIC_KEY.as_bytes())
     );
     let response = format!(
-        "HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\nContent-Length: {}\\r\\n\\r\\n{}",
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
         response_body.len(),
         response_body
     );

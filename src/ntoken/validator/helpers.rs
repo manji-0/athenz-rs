@@ -134,7 +134,7 @@ pub(super) async fn get_cached_verifier_async(
         };
         let mut cache = cache.write().await;
         cache.insert(src.clone(), cached);
-        enforce_cache_limit_async(&mut cache, config.max_cache_entries);
+        enforce_cache_limit(&mut cache, config.max_cache_entries);
         Ok(verifier)
     }
     .await;
@@ -149,24 +149,6 @@ pub(super) async fn get_cached_verifier_async(
 }
 
 fn enforce_cache_limit(cache: &mut HashMap<KeySource, CachedKey>, max_cache_entries: usize) {
-    if max_cache_entries == 0 {
-        cache.clear();
-        return;
-    }
-    while cache.len() > max_cache_entries {
-        if let Some((oldest_key, _)) = cache
-            .iter()
-            .min_by_key(|(_, entry)| entry.created_at)
-            .map(|(key, value)| (key.clone(), value.created_at))
-        {
-            cache.remove(&oldest_key);
-        } else {
-            break;
-        }
-    }
-}
-
-fn enforce_cache_limit_async(cache: &mut HashMap<KeySource, CachedKey>, max_cache_entries: usize) {
     if max_cache_entries == 0 {
         cache.clear();
         return;

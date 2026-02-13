@@ -388,7 +388,9 @@ fn ntoken_validate_limits_zts_key_cache_entries() {
     assert_eq!(request_count.load(Ordering::SeqCst), 2);
 
     thread::sleep(Duration::from_millis(2));
-    validator.validate(&token_v1).expect("v1 after eviction validate");
+    validator
+        .validate(&token_v1)
+        .expect("v1 after eviction validate");
     assert_eq!(request_count.load(Ordering::SeqCst), 3);
 
     handle

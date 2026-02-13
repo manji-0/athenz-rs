@@ -312,21 +312,28 @@ async fn ntoken_validator_async_limits_zts_key_cache_entries() {
         .sign_once()
         .expect("v2 token");
 
-    validator.validate(&token_v1).await.expect("v1 first validate");
+    validator
+        .validate(&token_v1)
+        .await
+        .expect("v1 first validate");
     assert_eq!(request_count.load(Ordering::SeqCst), 1);
 
-    validator.validate(&token_v1).await.expect("v1 cached validate");
+    validator
+        .validate(&token_v1)
+        .await
+        .expect("v1 cached validate");
     assert_eq!(request_count.load(Ordering::SeqCst), 1);
 
     validator.validate(&token_v2).await.expect("v2 validate");
     assert_eq!(request_count.load(Ordering::SeqCst), 2);
 
-    validator.validate(&token_v1).await.expect("v1 after eviction validate");
+    validator
+        .validate(&token_v1)
+        .await
+        .expect("v1 after eviction validate");
     assert_eq!(request_count.load(Ordering::SeqCst), 3);
 
-    handle
-        .await
-        .expect("mock zts key server task should exit");
+    handle.await.expect("mock zts key server task should exit");
 }
 
 #[tokio::test]

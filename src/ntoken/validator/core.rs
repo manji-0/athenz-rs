@@ -11,6 +11,7 @@ use std::time::Instant;
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 
 use super::super::token::NToken;
+use super::checks::validate_authorized_service_claims;
 use super::checks::{validate_ip_hostname, validate_time_bounds, validate_version_domain};
 use super::config::NTokenValidatorConfig;
 #[cfg(feature = "async-validate")]
@@ -77,6 +78,9 @@ impl NTokenValidator {
     /// otherwise string equality). If an expected value is set but the token is
     /// missing the corresponding claim, validation fails.
     ///
+    /// If `options.authorized_service` is set, the token must contain that
+    /// service in its authorized-service list (`b`).
+    ///
     /// Timestamps are also validated: the generation time cannot be in the
     /// future beyond the allowed offset, and the expiry time cannot exceed the
     /// configured maximum window. The allowed offset is not applied to the
@@ -92,6 +96,7 @@ impl NTokenValidator {
                 verifier.verify(&unsigned, &signature)?;
                 validate_version_domain(&claims)?;
                 validate_time_bounds(&claims, options)?;
+                validate_authorized_service_claims(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
@@ -108,6 +113,7 @@ impl NTokenValidator {
                 verifier.verify(&unsigned, &signature)?;
                 validate_version_domain(&claims)?;
                 validate_time_bounds(&claims, options)?;
+                validate_authorized_service_claims(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
@@ -167,6 +173,9 @@ impl NTokenValidatorAsync {
     /// otherwise string equality). If an expected value is set but the token is
     /// missing the corresponding claim, validation fails.
     ///
+    /// If `options.authorized_service` is set, the token must contain that
+    /// service in its authorized-service list (`b`).
+    ///
     /// Timestamps are also validated: the generation time cannot be in the
     /// future beyond the allowed offset, and the expiry time cannot exceed the
     /// configured maximum window. The allowed offset is not applied to the
@@ -182,6 +191,7 @@ impl NTokenValidatorAsync {
                 verifier.verify(&unsigned, &signature)?;
                 validate_version_domain(&claims)?;
                 validate_time_bounds(&claims, options)?;
+                validate_authorized_service_claims(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }
@@ -200,6 +210,7 @@ impl NTokenValidatorAsync {
                 verifier.verify(&unsigned, &signature)?;
                 validate_version_domain(&claims)?;
                 validate_time_bounds(&claims, options)?;
+                validate_authorized_service_claims(&claims, options)?;
                 if claims.is_expired() {
                     return Err(Error::Crypto("ntoken expired".to_string()));
                 }

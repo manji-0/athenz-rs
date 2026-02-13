@@ -1,6 +1,8 @@
 use super::{RSA_PRIVATE_KEY, RSA_PUBLIC_KEY};
 use crate::ntoken::keys::load_private_key;
 use crate::ntoken::token::{sign_with_key_at, unix_time_now};
+use crate::ntoken::validator::checks::validate_authorized_service_claims;
+use crate::ntoken::NToken;
 use crate::ntoken::{NTokenBuilder, NTokenSigner, NTokenValidationOptions, NTokenValidator};
 
 #[test]
@@ -164,6 +166,123 @@ fn ntoken_validate_with_ip_normalization() {
         .validate_with_options(&token, &options)
         .expect("validate");
     assert_eq!(claims.ip.as_deref(), Some("2001:0db8:0:0:0:0:0:1"));
+}
+
+#[test]
+fn ntoken_validate_with_authorized_service_option() {
+    let claims = NToken {
+        version: "S1".to_string(),
+        domain: "sports".to_string(),
+        name: "api".to_string(),
+        key_version: "v1".to_string(),
+        key_service: None,
+        hostname: None,
+        ip: None,
+        authorized_services: Some(vec!["tenant".to_string(), "analytics".to_string()]),
+        authorized_service_key_id: None,
+        authorized_service_name: None,
+        authorized_service_signature: None,
+        generation_time: 1,
+        expiry_time: 2,
+    };
+    let options = NTokenValidationOptions::default().with_authorized_service("tenant");
+    validate_authorized_service_claims(&claims, &options).expect("authorized service");
+}
+
+#[test]
+fn ntoken_validate_with_authorized_service_option_not_authorized() {
+    let claims = NToken {
+        version: "S1".to_string(),
+        domain: "sports".to_string(),
+        name: "api".to_string(),
+        key_version: "v1".to_string(),
+        key_service: None,
+        hostname: None,
+        ip: None,
+        authorized_services: Some(vec!["tenant".to_string(), "analytics".to_string()]),
+        authorized_service_key_id: None,
+        authorized_service_name: None,
+        authorized_service_signature: None,
+        generation_time: 1,
+        expiry_time: 2,
+    };
+    let options = NTokenValidationOptions::default().with_authorized_service("other");
+    let err =
+        validate_authorized_service_claims(&claims, &options).expect_err("not authorized service");
+    assert!(err.to_string().contains("not authorized for service"));
+}
+
+#[test]
+fn ntoken_validate_with_authorized_service_option_no_claims() {
+    let claims = NToken {
+        version: "S1".to_string(),
+        domain: "sports".to_string(),
+        name: "api".to_string(),
+        key_version: "v1".to_string(),
+        key_service: None,
+        hostname: None,
+        ip: None,
+        authorized_services: None,
+        authorized_service_key_id: None,
+        authorized_service_name: None,
+        authorized_service_signature: None,
+        generation_time: 1,
+        expiry_time: 2,
+    };
+    let options = NTokenValidationOptions::default().with_authorized_service("tenant");
+    let err = validate_authorized_service_claims(&claims, &options)
+        .expect_err("missing authorized_services should fail for authorized service option");
+    assert!(err.to_string().contains("not authorized for service"));
+}
+
+#[test]
+fn ntoken_validate_with_partial_authorized_service_signature_fields() {
+    let claims = NToken {
+        version: "S1".to_string(),
+        domain: "sports".to_string(),
+        name: "api".to_string(),
+        key_version: "v1".to_string(),
+        key_service: None,
+        hostname: None,
+        ip: None,
+        authorized_services: Some(vec!["tenant".to_string(), "analytics".to_string()]),
+        authorized_service_key_id: Some("1".to_string()),
+        authorized_service_name: Some("sys.auth.zts".to_string()),
+        authorized_service_signature: None,
+        generation_time: 1,
+        expiry_time: 2,
+    };
+    let options = NTokenValidationOptions::default();
+    let err = validate_authorized_service_claims(&claims, &options)
+        .expect_err("partial re-signature fields");
+    assert!(err
+        .to_string()
+        .contains("incomplete authorized-service re-signature fields"));
+}
+
+#[test]
+fn ntoken_validate_with_signature_without_authorized_services_list() {
+    let claims = NToken {
+        version: "S1".to_string(),
+        domain: "sports".to_string(),
+        name: "api".to_string(),
+        key_version: "v1".to_string(),
+        key_service: None,
+        hostname: None,
+        ip: None,
+        authorized_services: None,
+        authorized_service_key_id: Some("1".to_string()),
+        authorized_service_name: Some("sys.auth.zts".to_string()),
+        authorized_service_signature: Some("signature".to_string()),
+        generation_time: 1,
+        expiry_time: 2,
+    };
+    let options = NTokenValidationOptions::default();
+    let err = validate_authorized_service_claims(&claims, &options)
+        .expect_err("re-signed authorized services without service list");
+    assert!(err
+        .to_string()
+        .contains("re-signed authorized services without service list"));
 }
 
 #[test]

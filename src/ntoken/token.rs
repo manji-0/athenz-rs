@@ -28,6 +28,10 @@ pub(super) const TAG_GENERATION_TIME: &str = "t";
 pub(super) const TAG_EXPIRE_TIME: &str = "e";
 pub(super) const TAG_SALT: &str = "a";
 pub(super) const TAG_SIGNATURE: &str = "s";
+pub(super) const TAG_AUTHORIZED_SERVICES: &str = "b";
+pub(super) const TAG_AUTHORIZED_SERVICE_KEY_ID: &str = "bk";
+pub(super) const TAG_AUTHORIZED_SERVICE_NAME: &str = "bn";
+pub(super) const TAG_AUTHORIZED_SERVICE_SIGNATURE: &str = "bs";
 
 #[derive(Debug, Clone)]
 pub struct NToken {
@@ -38,6 +42,10 @@ pub struct NToken {
     pub key_service: Option<String>,
     pub hostname: Option<String>,
     pub ip: Option<String>,
+    pub authorized_services: Option<Vec<String>>,
+    pub authorized_service_key_id: Option<String>,
+    pub authorized_service_name: Option<String>,
+    pub authorized_service_signature: Option<String>,
     pub generation_time: i64,
     pub expiry_time: i64,
 }

@@ -8,6 +8,7 @@ use crate::zts::common;
 use crate::zts::{AccessTokenRequest, IdTokenRequest, IdTokenResponse};
 use reqwest::StatusCode;
 impl ZtsAsyncClient {
+    /// Issues an OAuth access token.
     pub async fn issue_access_token(
         &self,
         request: &AccessTokenRequest,
@@ -24,6 +25,7 @@ impl ZtsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Issues an ID token via the OIDC authorization endpoint.
     pub async fn issue_id_token(&self, request: &IdTokenRequest) -> Result<IdTokenResponse, Error> {
         if !self.disable_redirect {
             return Err(Error::Crypto(
@@ -75,6 +77,7 @@ impl ZtsAsyncClient {
         }
     }
 
+    /// Introspects an access token.
     pub async fn introspect_access_token(&self, token: &str) -> Result<IntrospectResponse, Error> {
         let url = self.build_url(&["oauth2", "introspect"])?;
         let mut params = url::form_urlencoded::Serializer::new(String::new());
@@ -90,6 +93,7 @@ impl ZtsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Retrieves the OAuth server configuration.
     pub async fn get_oauth_config(&self) -> Result<OAuthConfig, Error> {
         let url = self.build_url(&[".well-known", "oauth-authorization-server"])?;
         // Well-known discovery endpoints are typically public; omit auth to match sync client.
@@ -97,6 +101,7 @@ impl ZtsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Retrieves the OpenID Connect configuration.
     pub async fn get_openid_config(&self) -> Result<OpenIdConfig, Error> {
         let url = self.build_url(&[".well-known", "openid-configuration"])?;
         // Well-known discovery endpoints are typically public; omit auth to match sync client.
@@ -104,6 +109,7 @@ impl ZtsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Retrieves a public key entry for a service.
     pub async fn get_public_key_entry(
         &self,
         domain: &str,
@@ -117,6 +123,7 @@ impl ZtsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Retrieves the JWK list, optionally filtered by service or RFC format.
     pub async fn get_jwk_list(
         &self,
         rfc: Option<bool>,

@@ -7,6 +7,7 @@ use crate::models::{
 use reqwest::StatusCode;
 
 impl ZtsClient {
+    /// Registers an instance and returns its identity.
     pub fn register_instance(
         &self,
         info: &InstanceRegisterInformation,
@@ -29,6 +30,7 @@ impl ZtsClient {
         }
     }
 
+    /// Refreshes the identity for a registered instance.
     pub fn refresh_instance(
         &self,
         provider: &str,
@@ -44,6 +46,7 @@ impl ZtsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves an instance registration token.
     pub fn get_instance_register_token(
         &self,
         provider: &str,
@@ -58,6 +61,7 @@ impl ZtsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Deletes a registered instance.
     pub fn delete_instance(
         &self,
         provider: &str,

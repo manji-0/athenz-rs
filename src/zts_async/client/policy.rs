@@ -3,6 +3,7 @@ use crate::error::Error;
 use crate::models::{DomainSignedPolicyData, JWSPolicyData, SignedPolicyRequest};
 
 impl ZtsAsyncClient {
+    /// Fetches signed policy data for a domain.
     pub async fn get_domain_signed_policy_data(
         &self,
         domain: &str,
@@ -18,6 +19,7 @@ impl ZtsAsyncClient {
         self.expect_conditional_json(resp).await
     }
 
+    /// Fetches JWS policy data for a domain.
     pub async fn post_domain_signed_policy_data_jws(
         &self,
         domain: &str,

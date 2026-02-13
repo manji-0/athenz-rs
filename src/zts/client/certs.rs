@@ -8,6 +8,7 @@ use crate::zts::common;
 use reqwest::StatusCode;
 
 impl ZtsClient {
+    /// Retrieves the CA certificate bundle by name.
     pub fn get_ca_cert_bundle(&self, name: &str) -> Result<CertificateAuthorityBundle, Error> {
         let url = self.build_url(&["cacerts", name])?;
         let mut req = self.http.get(url);
@@ -16,6 +17,7 @@ impl ZtsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Requests SSH certificates.
     pub fn post_ssh_cert(&self, request: &SSHCertRequest) -> Result<SSHCertificates, Error> {
         let url = self.build_url(&["sshcert"])?;
         let mut req = self.http.post(url).json(request);
@@ -26,6 +28,8 @@ impl ZtsClient {
             _ => self.parse_error(resp),
         }
     }
+
+    /// Requests a role certificate.
     pub fn post_role_certificate(
         &self,
         request: &RoleCertificateRequest,
@@ -37,6 +41,7 @@ impl ZtsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves roles that require role certificates.
     pub fn get_roles_require_role_cert(
         &self,
         principal: Option<&str>,

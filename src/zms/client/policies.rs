@@ -5,6 +5,7 @@ use crate::zms::common;
 use crate::zms::{PoliciesQueryOptions, PolicyListOptions};
 
 impl ZmsClient {
+    /// Lists policy names within a domain.
     pub fn get_policy_list(
         &self,
         domain: &str,
@@ -18,6 +19,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Lists policy objects within a domain.
     pub fn get_policies(
         &self,
         domain: &str,
@@ -31,6 +33,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves a specific policy.
     pub fn get_policy(&self, domain: &str, policy: &str) -> Result<Policy, Error> {
         let url = self.build_url(&["domain", domain, "policy", policy])?;
         let mut req = self.http.get(url);
@@ -39,6 +42,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Creates or updates a policy.
     pub fn put_policy(
         &self,
         domain: &str,
@@ -59,6 +63,7 @@ impl ZmsClient {
         self.expect_no_content_or_json(resp)
     }
 
+    /// Deletes a policy.
     pub fn delete_policy(
         &self,
         domain: &str,
@@ -74,6 +79,7 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
+    /// Retrieves a specific assertion by ID.
     pub fn get_assertion(
         &self,
         domain: &str,
@@ -88,6 +94,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Creates a new assertion in a policy.
     pub fn put_assertion(
         &self,
         domain: &str,
@@ -104,6 +111,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Deletes a policy assertion.
     pub fn delete_assertion(
         &self,
         domain: &str,

@@ -27,6 +27,7 @@ pub struct AccessTokenRequest {
 }
 
 impl AccessTokenRequest {
+    /// Creates an access token request with the provided domain and roles.
     pub fn new(domain: impl Into<String>, roles: Vec<String>) -> Self {
         Self {
             domain: domain.into(),
@@ -52,10 +53,12 @@ impl AccessTokenRequest {
         }
     }
 
+    /// Returns a builder for access token requests.
     pub fn builder(domain: impl Into<String>) -> AccessTokenRequestBuilder {
         AccessTokenRequestBuilder::new(domain)
     }
 
+    /// Serializes the request into an application/x-www-form-urlencoded body.
     pub fn to_form(&self) -> String {
         let mut params = url::form_urlencoded::Serializer::new(String::new());
         params.append_pair("grant_type", "client_credentials");
@@ -149,12 +152,14 @@ pub struct AccessTokenRequestBuilder {
 }
 
 impl AccessTokenRequestBuilder {
+    /// Creates a builder with the provided domain.
     pub fn new(domain: impl Into<String>) -> Self {
         Self {
             request: AccessTokenRequest::new(domain, Vec::new()),
         }
     }
 
+    /// Sets the roles to include in the scope.
     pub fn roles<I, S>(mut self, roles: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -164,6 +169,7 @@ impl AccessTokenRequestBuilder {
         self
     }
 
+    /// Sets the service name for ID token scope.
     pub fn id_token_service(mut self, service: impl Into<String>) -> Self {
         self.request.id_token_service = Some(service.into());
         self
@@ -175,86 +181,103 @@ impl AccessTokenRequestBuilder {
         self
     }
 
+    /// Sets the requested token expiration in seconds.
     pub fn expires_in(mut self, value: i32) -> Self {
         self.request.expires_in = Some(value);
         self
     }
 
+    /// Sets the proxy principal SPIFFE URIs.
     pub fn proxy_principal_spiffe_uris(mut self, value: impl Into<String>) -> Self {
         self.request.proxy_principal_spiffe_uris = Some(value.into());
         self
     }
 
+    /// Sets the proxy-for principal.
     pub fn proxy_for_principal(mut self, value: impl Into<String>) -> Self {
         self.request.proxy_for_principal = Some(value.into());
         self
     }
 
+    /// Sets authorization details.
     pub fn authorization_details(mut self, value: impl Into<String>) -> Self {
         self.request.authorization_details = Some(value.into());
         self
     }
 
+    /// Sets the client assertion type.
     pub fn client_assertion_type(mut self, value: impl Into<String>) -> Self {
         self.request.client_assertion_type = Some(value.into());
         self
     }
 
+    /// Sets the client assertion.
     pub fn client_assertion(mut self, value: impl Into<String>) -> Self {
         self.request.client_assertion = Some(value.into());
         self
     }
 
+    /// Sets the requested token type.
     pub fn requested_token_type(mut self, value: impl Into<String>) -> Self {
         self.request.requested_token_type = Some(value.into());
         self
     }
 
+    /// Sets the audience parameter.
     pub fn audience(mut self, value: impl Into<String>) -> Self {
         self.request.audience = Some(value.into());
         self
     }
 
+    /// Sets the resource parameter.
     pub fn resource(mut self, value: impl Into<String>) -> Self {
         self.request.resource = Some(value.into());
         self
     }
 
+    /// Sets the subject token.
     pub fn subject_token(mut self, value: impl Into<String>) -> Self {
         self.request.subject_token = Some(value.into());
         self
     }
 
+    /// Sets the subject token type.
     pub fn subject_token_type(mut self, value: impl Into<String>) -> Self {
         self.request.subject_token_type = Some(value.into());
         self
     }
 
+    /// Sets the assertion parameter.
     pub fn assertion(mut self, value: impl Into<String>) -> Self {
         self.request.assertion = Some(value.into());
         self
     }
 
+    /// Sets the actor token.
     pub fn actor_token(mut self, value: impl Into<String>) -> Self {
         self.request.actor_token = Some(value.into());
         self
     }
 
+    /// Sets the actor token type.
     pub fn actor_token_type(mut self, value: impl Into<String>) -> Self {
         self.request.actor_token_type = Some(value.into());
         self
     }
 
+    /// Sets the actor parameter.
     pub fn actor(mut self, value: impl Into<String>) -> Self {
         self.request.actor = Some(value.into());
         self
     }
 
+    /// Sets the OpenID issuer flag.
     pub fn openid_issuer(mut self, value: bool) -> Self {
         self.request.openid_issuer = Some(value);
         self
     }
 
+    /// Finalizes and returns the access token request.
     pub fn build(self) -> AccessTokenRequest {
         self.request
     }

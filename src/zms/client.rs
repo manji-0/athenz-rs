@@ -26,6 +26,7 @@ pub struct ZmsClientBuilder {
 }
 
 impl ZmsClientBuilder {
+    /// Creates a builder for the provided base URL.
     pub fn new(base_url: impl AsRef<str>) -> Result<Self, Error> {
         Ok(Self {
             base_url: Url::parse(base_url.as_ref())?,
@@ -37,21 +38,25 @@ impl ZmsClientBuilder {
         })
     }
 
+    /// Sets the request timeout for the underlying HTTP client.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 
+    /// Disables redirects for the underlying HTTP client.
     pub fn disable_redirect(mut self, disable: bool) -> Self {
         self.disable_redirect = disable;
         self
     }
 
+    /// Configures mTLS identity from a PEM-encoded identity.
     pub fn mtls_identity_from_pem(mut self, identity_pem: &[u8]) -> Result<Self, Error> {
         self.identity = Some(Identity::from_pem(identity_pem)?);
         Ok(self)
     }
 
+    /// Configures mTLS identity from separate cert and key PEM blobs.
     pub fn mtls_identity_from_parts(
         mut self,
         cert_pem: &[u8],
@@ -67,11 +72,13 @@ impl ZmsClientBuilder {
         Ok(self)
     }
 
+    /// Adds a PEM-encoded CA certificate to the trust store.
     pub fn add_ca_cert_pem(mut self, ca_pem: &[u8]) -> Result<Self, Error> {
         self.ca_certs.push(Certificate::from_pem(ca_pem)?);
         Ok(self)
     }
 
+    /// Sets a static NToken header and value for auth.
     pub fn ntoken_auth(mut self, header: impl Into<String>, token: impl Into<String>) -> Self {
         self.auth = Some(common::AuthProvider::StaticHeader {
             header: header.into(),
@@ -80,6 +87,7 @@ impl ZmsClientBuilder {
         self
     }
 
+    /// Sets an NToken signer for auth.
     pub fn ntoken_signer(mut self, header: impl Into<String>, signer: NTokenSigner) -> Self {
         self.auth = Some(common::AuthProvider::NToken {
             header: header.into(),
@@ -88,6 +96,7 @@ impl ZmsClientBuilder {
         self
     }
 
+    /// Builds the ZMS client from the configured options.
     pub fn build(self) -> Result<ZmsClient, Error> {
         if self.auth.is_some() && !self.disable_redirect {
             return Err(Error::Crypto(CONFIG_ERROR_REDIRECT_WITH_AUTH.to_string()));
@@ -121,6 +130,7 @@ pub struct ZmsClient {
 }
 
 impl ZmsClient {
+    /// Returns a builder for a ZMS client.
     pub fn builder(base_url: impl AsRef<str>) -> Result<ZmsClientBuilder, Error> {
         ZmsClientBuilder::new(base_url)
     }

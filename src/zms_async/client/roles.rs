@@ -5,6 +5,7 @@ use crate::zms::common;
 use crate::zms::{RoleGetOptions, RoleListOptions, RolesQueryOptions};
 
 impl ZmsAsyncClient {
+    /// Lists role names within a domain.
     pub async fn get_role_list(
         &self,
         domain: &str,
@@ -18,6 +19,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Lists role objects within a domain.
     pub async fn get_roles(
         &self,
         domain: &str,
@@ -31,6 +33,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Retrieves a specific role.
     pub async fn get_role(
         &self,
         domain: &str,
@@ -45,6 +48,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Creates or updates a role.
     pub async fn put_role(
         &self,
         domain: &str,
@@ -65,6 +69,7 @@ impl ZmsAsyncClient {
         self.expect_no_content_or_json(resp).await
     }
 
+    /// Deletes a role.
     pub async fn delete_role(
         &self,
         domain: &str,
@@ -80,6 +85,7 @@ impl ZmsAsyncClient {
         self.expect_no_content(resp).await
     }
 
+    /// Retrieves role membership details for a member.
     pub async fn get_role_membership(
         &self,
         domain: &str,
@@ -98,6 +104,7 @@ impl ZmsAsyncClient {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Creates or updates a role membership.
     pub async fn put_role_membership(
         &self,
         domain: &str,
@@ -119,6 +126,7 @@ impl ZmsAsyncClient {
         self.expect_no_content_or_json(resp).await
     }
 
+    /// Deletes a role membership.
     pub async fn delete_role_membership(
         &self,
         domain: &str,

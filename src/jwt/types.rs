@@ -49,6 +49,7 @@ pub struct JwtValidationOptions {
 }
 
 impl JwtValidationOptions {
+    /// Returns the default validation options aligned with Athenz defaults.
     pub fn athenz_default() -> Self {
         Self {
             issuer: None,
@@ -61,18 +62,21 @@ impl JwtValidationOptions {
         }
     }
 
+    /// Returns options restricted to RSA algorithms.
     pub fn rsa_only() -> Self {
         let mut options = Self::athenz_default();
         options.allowed_algs = ATHENZ_RSA_ALGS.to_vec();
         options
     }
 
+    /// Returns options restricted to EC algorithms.
     pub fn ec_only() -> Self {
         let mut options = Self::athenz_default();
         options.allowed_algs = ATHENZ_EC_ALGS.to_vec();
         options
     }
 
+    /// Allows ES512 in addition to the EC allowlist.
     pub fn with_es512(mut self) -> Self {
         // ES512 verification relies on EC allowlist checks for ES256/ES384.
         self.allow_es512 = true;

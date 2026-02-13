@@ -42,6 +42,7 @@ pub struct PolicyClient {
 }
 
 impl PolicyClient {
+    /// Creates a policy client backed by a synchronous ZTS client.
     pub fn new(zts: ZtsClient) -> Self {
         Self {
             zts,
@@ -49,10 +50,12 @@ impl PolicyClient {
         }
     }
 
+    /// Returns a mutable reference to the validator configuration.
     pub fn config_mut(&mut self) -> &mut PolicyValidatorConfig {
         &mut self.config
     }
 
+    /// Fetches signed policy data for a domain.
     pub fn fetch_signed_policy_data(
         &self,
         domain: &str,
@@ -65,6 +68,7 @@ impl PolicyClient {
         })
     }
 
+    /// Fetches JWS policy data for a domain.
     pub fn fetch_jws_policy_data(
         &self,
         domain: &str,
@@ -80,6 +84,7 @@ impl PolicyClient {
         })
     }
 
+    /// Validates signed policy data using the configured ZTS client.
     pub fn validate_signed_policy_data(
         &self,
         data: &DomainSignedPolicyData,
@@ -87,6 +92,7 @@ impl PolicyClient {
         validate_signed_policy_data(data, &self.zts, &self.config)
     }
 
+    /// Validates JWS policy data using the configured ZTS client.
     pub fn validate_jws_policy_data(&self, data: &JWSPolicyData) -> Result<PolicyData, Error> {
         validate_jws_policy_data(data, &self.zts, &self.config)
     }
@@ -100,6 +106,7 @@ pub struct PolicyClientAsync {
 
 #[cfg(feature = "async-validate")]
 impl PolicyClientAsync {
+    /// Creates a policy client backed by an async ZTS client.
     pub fn new(zts: ZtsAsyncClient) -> Self {
         Self {
             zts,
@@ -107,10 +114,12 @@ impl PolicyClientAsync {
         }
     }
 
+    /// Returns a mutable reference to the validator configuration.
     pub fn config_mut(&mut self) -> &mut PolicyValidatorConfig {
         &mut self.config
     }
 
+    /// Fetches signed policy data for a domain.
     pub async fn fetch_signed_policy_data(
         &self,
         domain: &str,
@@ -123,6 +132,7 @@ impl PolicyClientAsync {
         })
     }
 
+    /// Fetches JWS policy data for a domain.
     pub async fn fetch_jws_policy_data(
         &self,
         domain: &str,
@@ -139,6 +149,7 @@ impl PolicyClientAsync {
         })
     }
 
+    /// Validates signed policy data using the configured ZTS client.
     pub async fn validate_signed_policy_data(
         &self,
         data: &DomainSignedPolicyData,
@@ -146,6 +157,7 @@ impl PolicyClientAsync {
         validate_signed_policy_data_async(data, &self.zts, &self.config).await
     }
 
+    /// Validates JWS policy data using the configured ZTS client.
     pub async fn validate_jws_policy_data(
         &self,
         data: &JWSPolicyData,

@@ -24,6 +24,7 @@ pub struct JwtValidatorAsync {
 }
 
 impl JwtValidatorAsync {
+    /// Creates a validator using the provided JWKS provider.
     pub fn new(jwks: JwksProviderAsync) -> Self {
         Self {
             jwks,
@@ -31,11 +32,13 @@ impl JwtValidatorAsync {
         }
     }
 
+    /// Overrides the validation options.
     pub fn with_options(mut self, options: JwtValidationOptions) -> Self {
         self.options = options;
         self
     }
 
+    /// Validates a JWT and returns decoded header and claims.
     pub async fn validate(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
         let parts = split_jwt(token)?;
         let header = decode_jwt_header(parts.header)?;
@@ -98,10 +101,12 @@ impl JwtValidatorAsync {
         })
     }
 
+    /// Validates an access token (alias of `validate`).
     pub async fn validate_access_token(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
         self.validate(token).await
     }
 
+    /// Validates an ID token (alias of `validate`).
     pub async fn validate_id_token(&self, token: &str) -> Result<JwtTokenData<Value>, Error> {
         self.validate(token).await
     }

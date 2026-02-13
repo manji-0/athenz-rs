@@ -8,6 +8,7 @@ use crate::zts::common;
 use crate::zts::{AccessTokenRequest, IdTokenRequest, IdTokenResponse};
 use reqwest::StatusCode;
 impl ZtsClient {
+    /// Issues an OAuth access token.
     pub fn issue_access_token(
         &self,
         request: &AccessTokenRequest,
@@ -24,6 +25,7 @@ impl ZtsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Issues an ID token via the OIDC authorization endpoint.
     pub fn issue_id_token(&self, request: &IdTokenRequest) -> Result<IdTokenResponse, Error> {
         let mut url = self.build_url(&["oauth2", "auth"])?;
         let query = request.to_query();
@@ -73,6 +75,7 @@ impl ZtsClient {
         }
     }
 
+    /// Introspects an access token.
     pub fn introspect_access_token(&self, token: &str) -> Result<IntrospectResponse, Error> {
         let url = self.build_url(&["oauth2", "introspect"])?;
         let mut params = url::form_urlencoded::Serializer::new(String::new());
@@ -88,18 +91,21 @@ impl ZtsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves the OAuth server configuration.
     pub fn get_oauth_config(&self) -> Result<OAuthConfig, Error> {
         let url = self.build_url(&[".well-known", "oauth-authorization-server"])?;
         let resp = self.http.get(url).send()?;
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves the OpenID Connect configuration.
     pub fn get_openid_config(&self) -> Result<OpenIdConfig, Error> {
         let url = self.build_url(&[".well-known", "openid-configuration"])?;
         let resp = self.http.get(url).send()?;
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves a public key entry for a service.
     pub fn get_public_key_entry(
         &self,
         domain: &str,
@@ -113,6 +119,7 @@ impl ZtsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves the JWK list, optionally filtered by service or RFC format.
     pub fn get_jwk_list(&self, rfc: Option<bool>, service: Option<&str>) -> Result<JwkList, Error> {
         let url = self.build_url(&["oauth2", "keys"])?;
         let mut req = self.http.get(url);

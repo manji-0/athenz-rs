@@ -18,6 +18,7 @@ struct CachedToken {
 }
 
 impl NTokenSigner {
+    /// Creates a signer for the given principal and private key.
     pub fn new(
         domain: impl Into<String>,
         name: impl Into<String>,
@@ -45,6 +46,7 @@ impl NTokenSigner {
         &mut self.builder
     }
 
+    /// Returns a cached token when valid, otherwise signs a new token.
     pub fn token(&self) -> Result<String, Error> {
         if let Some(cached) = self.cached.read().unwrap().as_ref() {
             let now = unix_time_now();
@@ -57,6 +59,7 @@ impl NTokenSigner {
         Ok(token)
     }
 
+    /// Signs a fresh token and updates the cache.
     pub fn sign_once(&self) -> Result<String, Error> {
         let (token, expiry) = sign_with_key(&self.builder, &self.key)?;
         let cached = CachedToken {

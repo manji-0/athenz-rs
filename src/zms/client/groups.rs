@@ -5,6 +5,7 @@ use crate::zms::common;
 use crate::zms::{GroupGetOptions, GroupsQueryOptions};
 
 impl ZmsClient {
+    /// Lists groups within a domain.
     pub fn get_groups(&self, domain: &str, options: &GroupsQueryOptions) -> Result<Groups, Error> {
         let url = self.build_url(&["domain", domain, "groups"])?;
         let mut req = self.http.get(url);
@@ -14,6 +15,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves a specific group.
     pub fn get_group(
         &self,
         domain: &str,
@@ -28,6 +30,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Creates or updates a group.
     pub fn put_group(
         &self,
         domain: &str,
@@ -48,6 +51,7 @@ impl ZmsClient {
         self.expect_no_content_or_json(resp)
     }
 
+    /// Deletes a group.
     pub fn delete_group(
         &self,
         domain: &str,
@@ -63,6 +67,7 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
+    /// Retrieves group membership details for a member.
     pub fn get_group_membership(
         &self,
         domain: &str,
@@ -81,6 +86,7 @@ impl ZmsClient {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Creates or updates a group membership.
     pub fn put_group_membership(
         &self,
         domain: &str,
@@ -102,6 +108,7 @@ impl ZmsClient {
         self.expect_no_content_or_json(resp)
     }
 
+    /// Deletes a group membership.
     pub fn delete_group_membership(
         &self,
         domain: &str,

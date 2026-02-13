@@ -43,12 +43,14 @@ pub(super) struct CachedKey {
 }
 
 impl NTokenValidator {
+    /// Creates a validator using a static public key.
     pub fn new_with_public_key(public_key_pem: &[u8]) -> Result<Self, Error> {
         Ok(NTokenValidator::Static(
             NTokenVerifier::from_public_key_pem(public_key_pem)?,
         ))
     }
 
+    /// Creates a validator that fetches public keys from ZTS.
     pub fn new_with_zts(config: NTokenValidatorConfig) -> Result<Self, Error> {
         let http = HttpClient::builder()
             .timeout(config.public_key_fetch_timeout)
@@ -60,6 +62,7 @@ impl NTokenValidator {
         })
     }
 
+    /// Validates an NToken using default validation options.
     pub fn validate(&self, token: &str) -> Result<NToken, Error> {
         let options = NTokenValidationOptions::default();
         self.validate_with_options(token, &options)
@@ -129,12 +132,14 @@ pub enum NTokenValidatorAsync {
 
 #[cfg(feature = "async-validate")]
 impl NTokenValidatorAsync {
+    /// Creates a validator using a static public key.
     pub fn new_with_public_key(public_key_pem: &[u8]) -> Result<Self, Error> {
         Ok(NTokenValidatorAsync::Static(
             NTokenVerifier::from_public_key_pem(public_key_pem)?,
         ))
     }
 
+    /// Creates a validator that fetches public keys from ZTS.
     pub fn new_with_zts(config: NTokenValidatorConfig) -> Result<Self, Error> {
         let http = AsyncHttpClient::builder()
             .timeout(config.public_key_fetch_timeout)
@@ -147,6 +152,7 @@ impl NTokenValidatorAsync {
         })
     }
 
+    /// Validates an NToken using default validation options.
     pub async fn validate(&self, token: &str) -> Result<NToken, Error> {
         let options = NTokenValidationOptions::default();
         self.validate_with_options(token, &options).await

@@ -14,8 +14,10 @@ use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use url::Url;
 
 use super::super::token::{
-    NToken, TAG_DOMAIN, TAG_EXPIRE_TIME, TAG_GENERATION_TIME, TAG_HOSTNAME, TAG_IP,
-    TAG_KEY_SERVICE, TAG_KEY_VERSION, TAG_NAME, TAG_SALT, TAG_SIGNATURE, TAG_VERSION,
+    NToken, TAG_AUTHORIZED_SERVICES, TAG_AUTHORIZED_SERVICE_KEY_ID, TAG_AUTHORIZED_SERVICE_NAME,
+    TAG_AUTHORIZED_SERVICE_SIGNATURE, TAG_DOMAIN, TAG_EXPIRE_TIME, TAG_GENERATION_TIME,
+    TAG_HOSTNAME, TAG_IP, TAG_KEY_SERVICE, TAG_KEY_VERSION, TAG_NAME, TAG_SALT, TAG_SIGNATURE,
+    TAG_VERSION,
 };
 use super::{CachedKey, KeySource, NTokenValidatorConfig, NTokenVerifier};
 
@@ -199,6 +201,10 @@ pub(super) fn parse_claims(unsigned: &str) -> Result<NToken, Error> {
         key_service: None,
         hostname: None,
         ip: None,
+        authorized_services: None,
+        authorized_service_key_id: None,
+        authorized_service_name: None,
+        authorized_service_signature: None,
         generation_time: 0,
         expiry_time: 0,
     };
@@ -219,6 +225,27 @@ pub(super) fn parse_claims(unsigned: &str) -> Result<NToken, Error> {
             TAG_KEY_SERVICE => claims.key_service = Some(value.to_string()),
             TAG_HOSTNAME => claims.hostname = Some(value.to_string()),
             TAG_IP => claims.ip = Some(value.to_string()),
+            TAG_AUTHORIZED_SERVICES => {
+                claims.authorized_services = Some(parse_authorized_services(value)?)
+            }
+            TAG_AUTHORIZED_SERVICE_KEY_ID => {
+                claims.authorized_service_key_id = Some(validate_non_empty_value(
+                    TAG_AUTHORIZED_SERVICE_KEY_ID,
+                    value,
+                )?);
+            }
+            TAG_AUTHORIZED_SERVICE_NAME => {
+                claims.authorized_service_name = Some(validate_non_empty_value(
+                    TAG_AUTHORIZED_SERVICE_NAME,
+                    value,
+                )?);
+            }
+            TAG_AUTHORIZED_SERVICE_SIGNATURE => {
+                claims.authorized_service_signature = Some(validate_non_empty_value(
+                    TAG_AUTHORIZED_SERVICE_SIGNATURE,
+                    value,
+                )?);
+            }
             TAG_GENERATION_TIME => claims.generation_time = parse_unix(value)?,
             TAG_EXPIRE_TIME => claims.expiry_time = parse_unix(value)?,
             TAG_SALT | TAG_SIGNATURE => {}
@@ -238,6 +265,14 @@ pub(super) fn parse_claims(unsigned: &str) -> Result<NToken, Error> {
 
     claims.domain.make_ascii_lowercase();
     claims.name.make_ascii_lowercase();
+    if let Some(ref mut services) = claims.authorized_services {
+        for service in services.iter_mut() {
+            service.make_ascii_lowercase();
+        }
+    }
+    if let Some(ref mut authorized_service_name) = claims.authorized_service_name {
+        authorized_service_name.make_ascii_lowercase();
+    }
     if let Some(ref mut key_service) = claims.key_service {
         key_service.make_ascii_lowercase();
     }
@@ -249,6 +284,30 @@ pub(super) fn parse_unix(value: &str) -> Result<i64, Error> {
     value
         .parse::<i64>()
         .map_err(|_| Error::Crypto(format!("invalid unix time: {value}")))
+}
+
+fn parse_authorized_services(value: &str) -> Result<Vec<String>, Error> {
+    let services: Vec<&str> = value
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+    if services.is_empty() {
+        return Err(Error::Crypto(
+            "invalid ntoken authorized service list".to_string(),
+        ));
+    }
+    Ok(services
+        .into_iter()
+        .map(|s| s.to_ascii_lowercase())
+        .collect())
+}
+
+fn validate_non_empty_value(tag: &str, value: &str) -> Result<String, Error> {
+    if value.is_empty() {
+        return Err(Error::Crypto(format!("invalid ntoken field: {tag}")));
+    }
+    Ok(value.to_string())
 }
 
 pub(super) fn ybase64_decode(data: &str) -> Result<Vec<u8>, Error> {

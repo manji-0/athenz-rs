@@ -16,6 +16,7 @@ const DEFAULT_MAX_EXPIRY: Duration = Duration::from_secs(60 * 60 * 24 * 30);
 pub struct NTokenValidationOptions {
     hostname: Option<String>,
     ip: Option<String>,
+    authorized_service: Option<String>,
     allowed_offset: Duration,
     max_expiry: Duration,
 }
@@ -29,6 +30,11 @@ impl NTokenValidationOptions {
     /// Returns the configured IP address, if any.
     pub fn ip(&self) -> Option<&str> {
         self.ip.as_deref()
+    }
+
+    /// Returns the expected authorized service, if any.
+    pub fn authorized_service(&self) -> Option<&str> {
+        self.authorized_service.as_deref()
     }
 
     /// Returns the allowed clock offset when validating token timestamps.
@@ -53,6 +59,12 @@ impl NTokenValidationOptions {
         self
     }
 
+    /// Set the expected authorized service name.
+    pub fn with_authorized_service(mut self, authorized_service: impl Into<String>) -> Self {
+        self.authorized_service = Some(authorized_service.into().to_ascii_lowercase());
+        self
+    }
+
     /// Set the allowed clock offset when validating token timestamps.
     pub fn with_allowed_offset(mut self, allowed_offset: Duration) -> Self {
         self.allowed_offset = allowed_offset;
@@ -71,6 +83,7 @@ impl Default for NTokenValidationOptions {
         Self {
             hostname: None,
             ip: None,
+            authorized_service: None,
             allowed_offset: DEFAULT_ALLOWED_OFFSET,
             max_expiry: DEFAULT_MAX_EXPIRY,
         }

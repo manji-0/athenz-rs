@@ -91,6 +91,43 @@ pub(super) fn validate_time_bounds(
     Ok(())
 }
 
+pub(super) fn validate_authorized_service_claims(
+    claims: &NToken,
+    options: &NTokenValidationOptions,
+) -> Result<(), Error> {
+    if let Some(expected_service) = options.authorized_service() {
+        let authorized = claims
+            .authorized_services
+            .as_deref()
+            .is_some_and(|services| services.iter().any(|service| service == expected_service));
+        if !authorized {
+            return Err(Error::Crypto(format!(
+                "ntoken not authorized for service: {expected_service}"
+            )));
+        }
+    }
+
+    let has_authorized_services = claims.authorized_services.is_some();
+    let has_re_signature = claims.authorized_service_signature.is_some()
+        || claims.authorized_service_key_id.is_some()
+        || claims.authorized_service_name.is_some();
+    let has_full_re_signature = claims.authorized_service_signature.is_some()
+        && claims.authorized_service_key_id.is_some()
+        && claims.authorized_service_name.is_some();
+    if has_re_signature && !has_full_re_signature {
+        return Err(Error::Crypto(
+            "ntoken has incomplete authorized-service re-signature fields".to_string(),
+        ));
+    }
+    if claims.authorized_service_signature.is_some() && !has_authorized_services {
+        return Err(Error::Crypto(
+            "ntoken has re-signed authorized services without service list".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 fn duration_to_i64(duration: Duration) -> i64 {
     i64::try_from(duration.as_secs()).unwrap_or(i64::MAX)
 }

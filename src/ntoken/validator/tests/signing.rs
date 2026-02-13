@@ -39,6 +39,35 @@ fn ntoken_parse_claims_lowercases_domain_and_service() {
 }
 
 #[test]
+fn ntoken_parse_authorized_service_claims() {
+    let unsigned =
+        "v=S1;d=Sports;n=API;k=v1;b=SvcA,svcB;bk=1;bn=SYS.AUTH.ZTS;bs=signature;a=abc;t=1;e=2";
+    let claims = super::super::helpers::parse_claims(unsigned).expect("claims");
+    assert_eq!(
+        claims.authorized_services,
+        Some(vec!["svca".to_string(), "svcb".to_string()])
+    );
+    assert_eq!(claims.authorized_service_key_id.as_deref(), Some("1"));
+    assert_eq!(
+        claims.authorized_service_name.as_deref(),
+        Some("sys.auth.zts")
+    );
+    assert_eq!(
+        claims.authorized_service_signature.as_deref(),
+        Some("signature")
+    );
+}
+
+#[test]
+fn ntoken_parse_authorized_service_claims_empty_list() {
+    let unsigned = "v=S1;d=Sports;n=API;k=v1;b=;a=abc;t=1;e=2";
+    let err = super::super::helpers::parse_claims(unsigned).expect_err("empty authorized services");
+    assert!(err
+        .to_string()
+        .contains("invalid ntoken authorized service list"));
+}
+
+#[test]
 fn ntoken_signer_builder_mut_updates_fields() {
     let mut signer =
         NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");

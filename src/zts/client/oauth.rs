@@ -27,6 +27,12 @@ impl ZtsClient {
 
     /// Issues an ID token via the OIDC authorization endpoint.
     pub fn issue_id_token(&self, request: &IdTokenRequest) -> Result<IdTokenResponse, Error> {
+        if !self.disable_redirect {
+            return Err(Error::Crypto(
+                "config error: issue_id_token requires disable_redirect(true) to observe Location header"
+                    .to_string(),
+            ));
+        }
         let mut url = self.build_url(&["oauth2", "auth"])?;
         let query = request.to_query();
         url.set_query(Some(&query));

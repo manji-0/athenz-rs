@@ -137,6 +137,7 @@ fn issue_id_token_ok_includes_location_header() {
     let (base_url, _rx, handle) = serve_once(response);
     let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
         .expect("builder")
+        .disable_redirect(true)
         .build()
         .expect("build");
     let req = IdTokenRequest::new(
@@ -182,6 +183,29 @@ fn issue_id_token_redirect_requires_location() {
     }
 
     handle.join().expect("server");
+}
+
+#[test]
+fn issue_id_token_rejects_when_redirects_enabled() {
+    let client = ZtsClient::builder("https://example.com/zts/v1")
+        .expect("builder")
+        .disable_redirect(false)
+        .build()
+        .expect("build");
+    let req = IdTokenRequest::new(
+        "sports.api",
+        "https://example.com/callback",
+        "openid",
+        "nonce-123",
+    );
+
+    let err = client.issue_id_token(&req).expect_err("request");
+    match err {
+        Error::Crypto(message) => {
+            assert!(message.contains("issue_id_token requires disable_redirect(true)"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]

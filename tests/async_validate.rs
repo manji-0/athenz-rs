@@ -22,8 +22,12 @@ use rsa::RsaPublicKey;
 use serde_json::json;
 use sha2::Sha256;
 use signature::{SignatureEncoding, Signer};
+use std::io;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::{timeout, Duration};
 
 mod common;
@@ -286,6 +290,50 @@ async fn ntoken_validator_async_uses_cache() {
     assert_eq!(req.path, "/zts/v1/domain/sports/service/api/publickey/v1");
 
     validator.validate(&token).await.expect("second validate");
+}
+
+#[tokio::test]
+async fn ntoken_validator_async_limits_zts_key_cache_entries() {
+    let response = zts_public_key_response();
+    let (base_url, request_count, handle) =
+        spawn_zts_key_server(response, 3, Duration::from_secs(2)).await;
+
+    let mut config = NTokenValidatorConfig::default();
+    config.zts_base_url = format!("{}/zts/v1", base_url);
+    config.max_cache_entries = 1;
+    let validator = NTokenValidatorAsync::new_with_zts(config).expect("validator");
+
+    let token_v1 = NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes())
+        .expect("signer")
+        .sign_once()
+        .expect("v1 token");
+    let token_v2 = NTokenSigner::new("sports", "api", "v2", RSA_PRIVATE_KEY.as_bytes())
+        .expect("signer")
+        .sign_once()
+        .expect("v2 token");
+
+    validator
+        .validate(&token_v1)
+        .await
+        .expect("v1 first validate");
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
+
+    validator
+        .validate(&token_v1)
+        .await
+        .expect("v1 cached validate");
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
+
+    validator.validate(&token_v2).await.expect("v2 validate");
+    assert_eq!(request_count.load(Ordering::SeqCst), 2);
+
+    validator
+        .validate(&token_v1)
+        .await
+        .expect("v1 after eviction validate");
+    assert_eq!(request_count.load(Ordering::SeqCst), 3);
+
+    handle.await.expect("mock zts key server task should exit");
 }
 
 #[tokio::test]
@@ -633,6 +681,57 @@ fn zts_public_key_response() -> String {
     )
 }
 
+async fn spawn_zts_key_server(
+    response: String,
+    expected_requests: usize,
+    timeout_duration: Duration,
+) -> (String, Arc<AtomicUsize>, tokio::task::JoinHandle<()>) {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
+    let base_url = format!("http://{}", listener.local_addr().expect("addr"));
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let request_count_for_task = request_count.clone();
+    let handle = tokio::spawn(async move {
+        let mut served = 0usize;
+        let deadline = tokio::time::Instant::now() + timeout_duration;
+        while served < expected_requests {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            match timeout(remaining.min(Duration::from_millis(10)), listener.accept()).await {
+                Ok(Ok((mut stream, _))) => {
+                    let _ = consume_http_request_async(&mut stream).await;
+                    let _ = stream.write_all(response.as_bytes()).await;
+                    request_count_for_task.fetch_add(1, Ordering::SeqCst);
+                    served += 1;
+                }
+                Ok(Err(_)) => break,
+                Err(_) => {}
+            }
+        }
+    });
+
+    (base_url, request_count, handle)
+}
+
+async fn consume_http_request_async(stream: &mut tokio::net::TcpStream) -> io::Result<()> {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 1024];
+    loop {
+        let read = stream.read(&mut chunk).await?;
+        if read == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..read]);
+        if buf.windows(4).any(|window| window == b"\r\n\r\n") {
+            break;
+        }
+    }
+    Ok(())
+}
+
 fn build_jws_policy_data(signed_policy: &SignedPolicyData) -> JWSPolicyData {
     let protected = URL_SAFE_NO_PAD.encode(
         serde_json::to_vec(&json!({
@@ -660,7 +759,7 @@ fn build_domain_signed_policy_data(signed_policy: &SignedPolicyData) -> DomainSi
     let private_key = RsaPrivateKey::from_pkcs1_pem(RSA_PRIVATE_KEY).expect("private key");
     let signing_key = RsaSigningKey::<Sha256>::new(private_key);
     let signature = signing_key.sign(signed_json.as_bytes());
-    let signature_b64 = ybase64_encode(signature.to_bytes().as_slice());
+    let signature_b64 = ybase64_encode(signature.to_bytes().as_ref());
     DomainSignedPolicyData {
         signed_policy_data: signed_policy.clone(),
         signature: signature_b64,

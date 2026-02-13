@@ -41,6 +41,7 @@ pub(super) struct KeySource {
 pub(super) struct CachedKey {
     pub(super) verifier: NTokenVerifier,
     pub(super) expires_at: Instant,
+    pub(super) created_at: Instant,
 }
 
 impl NTokenValidator {

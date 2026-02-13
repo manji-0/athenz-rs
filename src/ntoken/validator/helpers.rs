@@ -67,11 +67,12 @@ pub(super) fn get_cached_verifier(
     let entry: PublicKeyEntry = resp.json()?;
     let pem_bytes = ybase64_decode(&entry.key)?;
     let verifier = NTokenVerifier::from_public_key_pem(&pem_bytes)?;
+    let now = Instant::now();
 
     let cached = CachedKey {
         verifier: verifier.clone(),
-        expires_at: Instant::now() + config.cache_ttl,
-        created_at: Instant::now(),
+        expires_at: now + config.cache_ttl,
+        created_at: now,
     };
     let mut cache = cache.write().unwrap();
     cache.insert(src.clone(), cached);
@@ -126,11 +127,12 @@ pub(super) async fn get_cached_verifier_async(
         let entry: PublicKeyEntry = resp.json().await?;
         let pem_bytes = ybase64_decode(&entry.key)?;
         let verifier = NTokenVerifier::from_public_key_pem(&pem_bytes)?;
+        let now = Instant::now();
 
         let cached = CachedKey {
             verifier: verifier.clone(),
-            expires_at: Instant::now() + config.cache_ttl,
-            created_at: Instant::now(),
+            expires_at: now + config.cache_ttl,
+            created_at: now,
         };
         let mut cache = cache.write().await;
         cache.insert(src.clone(), cached);

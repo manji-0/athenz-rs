@@ -361,7 +361,7 @@ fn ntoken_validate_limits_zts_key_cache_entries() {
         response_body
     );
     let (base_url, request_count, handle) =
-        spawn_zts_key_server(response, 3, Duration::from_secs(2));
+        spawn_zts_key_server(response, 3, Duration::from_secs(10));
 
     let mut config = NTokenValidatorConfig::default();
     config.zts_base_url = format!("{}/zts/v1", base_url);
@@ -383,11 +383,9 @@ fn ntoken_validate_limits_zts_key_cache_entries() {
     validator.validate(&token_v1).expect("v1 cached validate");
     assert_eq!(request_count.load(Ordering::SeqCst), 1);
 
-    thread::sleep(Duration::from_millis(2));
     validator.validate(&token_v2).expect("v2 validate");
     assert_eq!(request_count.load(Ordering::SeqCst), 2);
 
-    thread::sleep(Duration::from_millis(2));
     validator
         .validate(&token_v1)
         .expect("v1 after eviction validate");
@@ -426,6 +424,7 @@ fn spawn_zts_key_server(
         while served < expected_requests {
             match listener.accept() {
                 Ok((mut stream, _)) => {
+                    let _ = stream.set_nonblocking(false);
                     consume_http_request(&mut stream);
                     let _ = stream.write_all(response.as_bytes());
                     request_count_for_thread.fetch_add(1, Ordering::SeqCst);
@@ -454,7 +453,7 @@ fn consume_http_request(stream: &mut TcpStream) {
             break;
         }
         buf.extend_from_slice(&chunk[..read]);
-        if buf.windows(4).any(|window| window == b"\\r\\n\\r\\n") {
+        if buf.windows(4).any(|window| window == b"\r\n\r\n") {
             break;
         }
     }

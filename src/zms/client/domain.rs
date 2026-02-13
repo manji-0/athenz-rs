@@ -3,6 +3,7 @@ use crate::error::Error;
 use crate::models::{Domain, DomainList, DomainMeta, SubDomain, TopLevelDomain, UserDomain};
 use crate::zms::common;
 use crate::zms::DomainListOptions;
+use reqwest::StatusCode;
 
 impl ZmsClient {
     pub fn get_domain(&self, domain: &str) -> Result<Domain, Error> {
@@ -13,7 +14,10 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
-    pub fn get_domain_list(&self, options: &DomainListOptions) -> Result<DomainList, Error> {
+    pub fn get_domain_list(
+        &self,
+        options: &DomainListOptions,
+    ) -> Result<Option<DomainList>, Error> {
         let url = self.build_url(&["domain"])?;
         let mut req = self.http.get(url);
         req = common::apply_query_params(req, options.to_query_pairs());
@@ -22,7 +26,11 @@ impl ZmsClient {
         }
         req = self.apply_auth(req)?;
         let resp = req.send()?;
-        self.expect_ok_json(resp)
+        match resp.status() {
+            StatusCode::OK => Ok(Some(resp.json::<DomainList>().map_err(Error::from)?)),
+            StatusCode::NOT_MODIFIED => Ok(None),
+            _ => self.parse_error(resp),
+        }
     }
 
     pub fn post_top_level_domain(

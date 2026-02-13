@@ -119,6 +119,7 @@ impl ZtsClientBuilder {
         Ok(ZtsClient {
             base_url: self.base_url,
             http,
+            disable_redirect: self.disable_redirect,
             auth: self.auth,
         })
     }
@@ -127,6 +128,7 @@ impl ZtsClientBuilder {
 pub struct ZtsClient {
     base_url: Url,
     http: HttpClient,
+    disable_redirect: bool,
     auth: Option<common::AuthProvider>,
 }
 

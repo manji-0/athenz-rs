@@ -8,6 +8,8 @@ pub struct AccessTokenRequest {
     pub id_token_service: Option<String>,
     /// If set, this value is used as-is and overrides role/id_token_service scope composition.
     pub raw_scope: Option<String>,
+    /// OAuth `grant_type`. Defaults to `client_credentials` when unset.
+    pub grant_type: Option<String>,
     pub expires_in: Option<i32>,
     pub proxy_principal_spiffe_uris: Option<String>,
     pub proxy_for_principal: Option<String>,
@@ -34,6 +36,7 @@ impl AccessTokenRequest {
             roles,
             id_token_service: None,
             raw_scope: None,
+            grant_type: None,
             expires_in: None,
             proxy_principal_spiffe_uris: None,
             proxy_for_principal: None,
@@ -61,7 +64,8 @@ impl AccessTokenRequest {
     /// Serializes the request into an application/x-www-form-urlencoded body.
     pub fn to_form(&self) -> String {
         let mut params = url::form_urlencoded::Serializer::new(String::new());
-        params.append_pair("grant_type", "client_credentials");
+        let grant_type = self.grant_type.as_deref().unwrap_or("client_credentials");
+        params.append_pair("grant_type", grant_type);
         if let Some(expires_in) = self.expires_in {
             params.append_pair("expires_in", &expires_in.to_string());
         }
@@ -178,6 +182,12 @@ impl AccessTokenRequestBuilder {
     /// Overrides composed scopes from roles/id_token_service.
     pub fn raw_scope(mut self, scope: impl Into<String>) -> Self {
         self.request.raw_scope = Some(scope.into());
+        self
+    }
+
+    /// Sets OAuth `grant_type` (for example, `token-exchange` or `jwt-bearer`).
+    pub fn grant_type(mut self, grant_type: impl Into<String>) -> Self {
+        self.request.grant_type = Some(grant_type.into());
         self
     }
 

@@ -1,11 +1,20 @@
 use crate::zts::AccessTokenRequest;
+use url::form_urlencoded;
 
 use super::helpers::scope_from_form;
+
+fn grant_type_from_form(form: &str) -> String {
+    form_urlencoded::parse(form.as_bytes())
+        .find(|(key, _)| key == "grant_type")
+        .map(|(_, value)| value.to_string())
+        .unwrap_or_default()
+}
 
 #[test]
 fn access_token_scope_domain_only() {
     let req = AccessTokenRequest::new("sports", Vec::new());
     let form = req.to_form();
+    assert_eq!(grant_type_from_form(&form), "client_credentials");
     assert!(form.contains("scope=sports%3Adomain"));
 }
 
@@ -69,4 +78,22 @@ fn access_token_builder_sets_raw_scope() {
     let form = req.to_form();
     let scope = scope_from_form(&form);
     assert_eq!(scope, "custom:scope");
+}
+
+#[test]
+fn access_token_custom_grant_type_overrides_default() {
+    let mut req = AccessTokenRequest::new("sports", vec!["reader".to_string()]);
+    req.grant_type = Some("token-exchange".to_string());
+    let form = req.to_form();
+    assert_eq!(grant_type_from_form(&form), "token-exchange");
+}
+
+#[test]
+fn access_token_builder_sets_grant_type() {
+    let req = AccessTokenRequest::builder("sports")
+        .roles(vec!["reader".to_string()])
+        .grant_type("jwt-bearer")
+        .build();
+    let form = req.to_form();
+    assert_eq!(grant_type_from_form(&form), "jwt-bearer");
 }

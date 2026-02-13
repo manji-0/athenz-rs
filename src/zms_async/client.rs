@@ -29,6 +29,7 @@ pub struct ZmsAsyncClientBuilder {
 }
 
 impl ZmsAsyncClientBuilder {
+    /// Creates a builder for the provided base URL.
     pub fn new(base_url: impl AsRef<str>) -> Result<Self, Error> {
         Ok(Self {
             base_url: Url::parse(base_url.as_ref())?,
@@ -40,6 +41,7 @@ impl ZmsAsyncClientBuilder {
         })
     }
 
+    /// Sets the request timeout for the underlying HTTP client.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
@@ -87,11 +89,13 @@ impl ZmsAsyncClientBuilder {
         Ok(self)
     }
 
+    /// Adds a PEM-encoded CA certificate to the trust store.
     pub fn add_ca_cert_pem(mut self, ca_pem: &[u8]) -> Result<Self, Error> {
         self.ca_certs.push(Certificate::from_pem(ca_pem)?);
         Ok(self)
     }
 
+    /// Configures a static auth header.
     pub fn ntoken_auth(
         mut self,
         header: impl AsRef<str>,
@@ -107,6 +111,7 @@ impl ZmsAsyncClientBuilder {
         Ok(self)
     }
 
+    /// Configures a signer-based auth header.
     pub fn ntoken_signer(
         mut self,
         header: impl AsRef<str>,
@@ -119,6 +124,7 @@ impl ZmsAsyncClientBuilder {
         Ok(self)
     }
 
+    /// Builds the async ZMS client from the configured options.
     pub fn build(self) -> Result<ZmsAsyncClient, Error> {
         if self.auth.is_some() && !self.disable_redirect {
             return Err(Error::Crypto(CONFIG_ERROR_REDIRECT_WITH_AUTH.to_string()));
@@ -156,6 +162,7 @@ pub struct ZmsAsyncClient {
 }
 
 impl ZmsAsyncClient {
+    /// Returns a builder for an async ZMS client.
     pub fn builder(base_url: impl AsRef<str>) -> Result<ZmsAsyncClientBuilder, Error> {
         ZmsAsyncClientBuilder::new(base_url)
     }

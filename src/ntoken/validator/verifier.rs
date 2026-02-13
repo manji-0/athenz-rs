@@ -15,12 +15,14 @@ pub struct NTokenVerifier {
 }
 
 impl NTokenVerifier {
+    /// Creates a verifier from a PEM-encoded public key.
     pub fn from_public_key_pem(public_key_pem: &[u8]) -> Result<Self, Error> {
         Ok(Self {
             key: load_public_key(public_key_pem)?,
         })
     }
 
+    /// Verifies the signature over the unsigned token string.
     pub fn verify(&self, unsigned: &str, signature: &str) -> Result<(), Error> {
         let sig_bytes = ybase64_decode(signature)?;
         match &self.key {

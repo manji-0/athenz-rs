@@ -5,6 +5,7 @@ use crate::zms::common;
 use crate::zms::{ServiceIdentitiesQueryOptions, ServiceListOptions};
 
 impl ZmsClient {
+    /// Retrieves a service identity.
     pub fn get_service_identity(
         &self,
         domain: &str,
@@ -17,6 +18,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Creates or updates a service identity.
     pub fn put_service_identity(
         &self,
         domain: &str,
@@ -37,6 +39,7 @@ impl ZmsClient {
         self.expect_no_content_or_json(resp)
     }
 
+    /// Deletes a service identity.
     pub fn delete_service_identity(
         &self,
         domain: &str,
@@ -52,6 +55,7 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
+    /// Lists service identities within a domain.
     pub fn get_service_identities(
         &self,
         domain: &str,
@@ -65,6 +69,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Lists service identity names within a domain.
     pub fn get_service_identity_list(
         &self,
         domain: &str,
@@ -78,6 +83,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves a public key entry for a service.
     pub fn get_public_key_entry(
         &self,
         domain: &str,
@@ -91,6 +97,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Creates or updates a public key entry for a service.
     pub fn put_public_key_entry(
         &self,
         domain: &str,
@@ -108,6 +115,7 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
+    /// Deletes a public key entry for a service.
     pub fn delete_public_key_entry(
         &self,
         domain: &str,

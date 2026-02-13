@@ -55,6 +55,7 @@ pub struct JwksProviderAsync {
 
 #[cfg(feature = "async-validate")]
 impl JwksProviderAsync {
+    /// Creates a JWKS provider for the given URI with default settings.
     pub fn new(jwks_uri: impl AsRef<str>) -> Result<Self, Error> {
         let jwks_uri = Url::parse(jwks_uri.as_ref())?;
         let http = AsyncHttpClient::builder().build()?;
@@ -68,21 +69,25 @@ impl JwksProviderAsync {
         })
     }
 
+    /// Sets the request timeout used when fetching JWKS.
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 
+    /// Replaces the underlying async HTTP client.
     pub fn with_http_client(mut self, http: AsyncHttpClient) -> Self {
         self.http = http;
         self
     }
 
+    /// Disables the request timeout.
     pub fn without_timeout(mut self) -> Self {
         self.timeout = None;
         self
     }
 
+    /// Sets the cache time-to-live and updates any cached entry.
     pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
         self.cache_ttl = ttl;
         let cache = self.cache.into_inner();
@@ -95,6 +100,7 @@ impl JwksProviderAsync {
         self
     }
 
+    /// Seeds the cache with a preloaded JWKS set.
     pub fn with_preloaded(self, jwks: JwkSet) -> Self {
         let now = Instant::now();
         let cached = CachedJwks {
@@ -107,6 +113,7 @@ impl JwksProviderAsync {
         this
     }
 
+    /// Fetches JWKS, using the cache when still valid.
     pub async fn fetch(&self) -> Result<JwkSet, Error> {
         let (jwks, _source) = self.fetch_with_source().await?;
         Ok(jwks)
@@ -135,6 +142,7 @@ impl JwksProviderAsync {
         Ok((jwks, FetchSource::Remote))
     }
 
+    /// Fetches JWKS from remote unless it was refreshed very recently.
     pub async fn fetch_fresh(&self) -> Result<JwkSet, Error> {
         let now = Instant::now();
         if let Some(cached) = self.cache.read().await.as_ref() {
@@ -193,6 +201,7 @@ impl JwksProviderAsync {
 }
 
 impl JwksProvider {
+    /// Creates a JWKS provider for the given URI with default settings.
     pub fn new(jwks_uri: impl AsRef<str>) -> Result<Self, Error> {
         let jwks_uri = Url::parse(jwks_uri.as_ref())?;
         let http = HttpClient::builder().build()?;
@@ -206,21 +215,25 @@ impl JwksProvider {
         })
     }
 
+    /// Sets the request timeout used when fetching JWKS.
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 
+    /// Replaces the underlying HTTP client.
     pub fn with_http_client(mut self, http: HttpClient) -> Self {
         self.http = http;
         self
     }
 
+    /// Disables the request timeout.
     pub fn without_timeout(mut self) -> Self {
         self.timeout = None;
         self
     }
 
+    /// Sets the cache time-to-live and updates any cached entry.
     pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
         self.cache_ttl = ttl;
         if let Some(cached) = self.cache.write().unwrap().as_mut() {
@@ -231,6 +244,7 @@ impl JwksProvider {
         self
     }
 
+    /// Seeds the cache with a preloaded JWKS set.
     pub fn with_preloaded(self, jwks: JwkSet) -> Self {
         let now = Instant::now();
         let cached = CachedJwks {
@@ -242,6 +256,7 @@ impl JwksProvider {
         self
     }
 
+    /// Fetches JWKS, using the cache when still valid.
     pub fn fetch(&self) -> Result<JwkSet, Error> {
         let (jwks, _source) = self.fetch_with_source()?;
         Ok(jwks)
@@ -265,6 +280,7 @@ impl JwksProvider {
         Ok((jwks, FetchSource::Remote))
     }
 
+    /// Fetches JWKS from remote unless it was refreshed very recently.
     pub fn fetch_fresh(&self) -> Result<JwkSet, Error> {
         let now = Instant::now();
         if let Some(cached) = self.cache.read().unwrap().as_ref() {
@@ -359,11 +375,13 @@ fn redact_jwks_uri(uri: &Url) -> String {
     redacted.to_string()
 }
 
+/// Parses and sanitizes a JWKS JSON document from raw bytes.
 pub fn jwks_from_slice(body: &[u8]) -> Result<JwkSet, Error> {
     let report = jwks_from_slice_with_report(body)?;
     Ok(report.jwks)
 }
 
+/// Parses and sanitizes a JWKS JSON document, returning a report of removals.
 pub fn jwks_from_slice_with_report(body: &[u8]) -> Result<JwksSanitizeReport, Error> {
     let mut value: Value = serde_json::from_slice(body)?;
     let removed_algs = sanitize_jwks(&mut value);

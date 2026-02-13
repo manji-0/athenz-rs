@@ -6,6 +6,7 @@ use crate::zms::DomainListOptions;
 use reqwest::StatusCode;
 
 impl ZmsAsyncClient {
+    /// Retrieves a domain by name.
     pub async fn get_domain(&self, domain: &str) -> Result<Domain, Error> {
         let url = self.build_url(&["domain", domain])?;
         let mut req = self.http.get(url);
@@ -14,6 +15,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Lists domains using the provided query options.
     pub async fn get_domain_list(
         &self,
         options: &DomainListOptions,
@@ -33,6 +35,7 @@ impl ZmsAsyncClient {
         }
     }
 
+    /// Creates a top-level domain.
     pub async fn post_top_level_domain(
         &self,
         detail: &TopLevelDomain,
@@ -47,6 +50,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Creates a sub-domain under the given parent.
     pub async fn post_sub_domain(
         &self,
         parent: &str,
@@ -62,6 +66,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Creates a user domain for the provided name.
     pub async fn post_user_domain(
         &self,
         name: &str,
@@ -77,6 +82,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Deletes a top-level domain.
     pub async fn delete_top_level_domain(
         &self,
         name: &str,
@@ -91,6 +97,7 @@ impl ZmsAsyncClient {
         self.expect_no_content(resp).await
     }
 
+    /// Deletes a sub-domain under the given parent.
     pub async fn delete_sub_domain(
         &self,
         parent: &str,
@@ -106,6 +113,7 @@ impl ZmsAsyncClient {
         self.expect_no_content(resp).await
     }
 
+    /// Deletes a user domain.
     pub async fn delete_user_domain(
         &self,
         name: &str,
@@ -120,6 +128,7 @@ impl ZmsAsyncClient {
         self.expect_no_content(resp).await
     }
 
+    /// Updates domain metadata.
     pub async fn put_domain_meta(
         &self,
         name: &str,

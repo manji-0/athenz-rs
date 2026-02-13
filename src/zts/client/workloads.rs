@@ -5,6 +5,7 @@ use crate::models::{
 };
 
 impl ZtsClient {
+    /// Retrieves workloads for a service.
     pub fn get_workloads_by_service(
         &self,
         domain: &str,
@@ -17,6 +18,7 @@ impl ZtsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves workloads by IP address.
     pub fn get_workloads_by_ip(&self, ip: &str) -> Result<Workloads, Error> {
         let url = self.build_url(&["workloads", ip])?;
         let mut req = self.http.get(url);
@@ -25,6 +27,7 @@ impl ZtsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Retrieves transport rules for a service.
     pub fn get_transport_rules(
         &self,
         domain: &str,
@@ -37,6 +40,7 @@ impl ZtsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Requests external credentials for a provider and domain.
     pub fn post_external_credentials(
         &self,
         provider: &str,

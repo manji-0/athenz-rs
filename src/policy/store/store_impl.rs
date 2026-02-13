@@ -16,24 +16,29 @@ pub struct PolicyStore {
 }
 
 impl PolicyStore {
+    /// Creates an empty policy store.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Returns the number of domains currently loaded.
     pub fn domain_count(&self) -> usize {
         self.domains.len()
     }
 
+    /// Inserts policy data for a domain, replacing any existing entry.
     pub fn insert(&mut self, policy_data: PolicyData) {
         let domain = policy_data.domain.clone();
         let entry = DomainPolicy::from_policy_data(policy_data);
         self.domains.insert(domain, entry);
     }
 
+    /// Removes and returns the policy data for a domain, if present.
     pub fn remove(&mut self, domain: &str) -> Option<DomainPolicy> {
         self.domains.remove(domain)
     }
 
+    /// Evaluates whether the provided roles allow the given action on a resource.
     pub fn allow_action(
         &self,
         token_domain: &str,

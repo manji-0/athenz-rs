@@ -6,6 +6,7 @@ use crate::zms::DomainListOptions;
 use reqwest::StatusCode;
 
 impl ZmsClient {
+    /// Retrieves a domain by name.
     pub fn get_domain(&self, domain: &str) -> Result<Domain, Error> {
         let url = self.build_url(&["domain", domain])?;
         let mut req = self.http.get(url);
@@ -14,6 +15,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Lists domains using the provided query options.
     pub fn get_domain_list(
         &self,
         options: &DomainListOptions,
@@ -33,6 +35,7 @@ impl ZmsClient {
         }
     }
 
+    /// Creates a top-level domain.
     pub fn post_top_level_domain(
         &self,
         detail: &TopLevelDomain,
@@ -47,6 +50,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Creates a sub-domain under the given parent.
     pub fn post_sub_domain(
         &self,
         parent: &str,
@@ -62,6 +66,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Creates a user domain for the provided name.
     pub fn post_user_domain(
         &self,
         name: &str,
@@ -77,6 +82,7 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Deletes a top-level domain.
     pub fn delete_top_level_domain(
         &self,
         name: &str,
@@ -91,6 +97,7 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
+    /// Deletes a sub-domain under the given parent.
     pub fn delete_sub_domain(
         &self,
         parent: &str,
@@ -106,6 +113,7 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
+    /// Deletes a user domain.
     pub fn delete_user_domain(
         &self,
         name: &str,
@@ -120,6 +128,7 @@ impl ZmsClient {
         self.expect_no_content(resp)
     }
 
+    /// Updates domain metadata.
     pub fn put_domain_meta(
         &self,
         name: &str,

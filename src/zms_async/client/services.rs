@@ -5,6 +5,7 @@ use crate::zms::common;
 use crate::zms::{ServiceIdentitiesQueryOptions, ServiceListOptions};
 
 impl ZmsAsyncClient {
+    /// Retrieves a service identity.
     pub async fn get_service_identity(
         &self,
         domain: &str,
@@ -17,6 +18,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Creates or updates a service identity.
     pub async fn put_service_identity(
         &self,
         domain: &str,
@@ -37,6 +39,7 @@ impl ZmsAsyncClient {
         self.expect_no_content_or_json(resp).await
     }
 
+    /// Deletes a service identity.
     pub async fn delete_service_identity(
         &self,
         domain: &str,
@@ -52,6 +55,7 @@ impl ZmsAsyncClient {
         self.expect_no_content(resp).await
     }
 
+    /// Lists service identities within a domain.
     pub async fn get_service_identities(
         &self,
         domain: &str,
@@ -65,6 +69,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Lists service identity names within a domain.
     pub async fn get_service_identity_list(
         &self,
         domain: &str,
@@ -78,6 +83,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Retrieves a public key entry for a service.
     pub async fn get_public_key_entry(
         &self,
         domain: &str,
@@ -91,6 +97,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Creates or updates a public key entry for a service.
     pub async fn put_public_key_entry(
         &self,
         domain: &str,
@@ -108,6 +115,7 @@ impl ZmsAsyncClient {
         self.expect_no_content(resp).await
     }
 
+    /// Deletes a public key entry for a service.
     pub async fn delete_public_key_entry(
         &self,
         domain: &str,

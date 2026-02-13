@@ -45,10 +45,12 @@ pub struct NToken {
 pub type NTokenClaims = NToken;
 
 impl NToken {
+    /// Returns the principal name in `domain.name` form.
     pub fn principal_name(&self) -> String {
         format!("{}.{}", self.domain, self.name)
     }
 
+    /// Returns true when the token has expired.
     pub fn is_expired(&self) -> bool {
         let now = unix_time_now();
         self.expiry_time <= now
@@ -68,6 +70,7 @@ pub struct NTokenBuilder {
 }
 
 impl NTokenBuilder {
+    /// Creates a builder with defaults and lowercased identifiers.
     pub fn new(
         domain: impl Into<String>,
         name: impl Into<String>,
@@ -91,11 +94,13 @@ impl NTokenBuilder {
         }
     }
 
+    /// Sets the token version.
     pub fn with_version(mut self, version: impl Into<String>) -> Self {
         self.version = version.into();
         self
     }
 
+    /// Sets the key service name (stored in lowercase).
     pub fn with_key_service(mut self, key_service: impl Into<String>) -> Self {
         let mut key_service = key_service.into();
         key_service.make_ascii_lowercase();
@@ -103,26 +108,31 @@ impl NTokenBuilder {
         self
     }
 
+    /// Sets the hostname claim.
     pub fn with_hostname(mut self, hostname: impl Into<String>) -> Self {
         self.hostname = Some(hostname.into());
         self
     }
 
+    /// Sets the IP address claim.
     pub fn with_ip(mut self, ip: impl Into<String>) -> Self {
         self.ip = Some(ip.into());
         self
     }
 
+    /// Sets the token expiration duration.
     pub fn with_expiration(mut self, expiration: Duration) -> Self {
         self.expiration = expiration;
         self
     }
 
+    /// Sets the token version.
     pub fn set_version(&mut self, version: impl Into<String>) -> &mut Self {
         self.version = version.into();
         self
     }
 
+    /// Sets the key service name (stored in lowercase).
     pub fn set_key_service(&mut self, key_service: impl Into<String>) -> &mut Self {
         let mut key_service = key_service.into();
         key_service.make_ascii_lowercase();
@@ -130,21 +140,25 @@ impl NTokenBuilder {
         self
     }
 
+    /// Sets the hostname claim.
     pub fn set_hostname(&mut self, hostname: impl Into<String>) -> &mut Self {
         self.hostname = Some(hostname.into());
         self
     }
 
+    /// Sets the IP address claim.
     pub fn set_ip(&mut self, ip: impl Into<String>) -> &mut Self {
         self.ip = Some(ip.into());
         self
     }
 
+    /// Sets the token expiration duration.
     pub fn set_expiration(&mut self, expiration: Duration) -> &mut Self {
         self.expiration = expiration;
         self
     }
 
+    /// Signs and returns an NToken using the provided private key PEM.
     pub fn sign(&self, private_key_pem: &[u8]) -> Result<String, Error> {
         let key = load_private_key(private_key_pem)?;
         let (token, _) = sign_with_key(self, &key)?;

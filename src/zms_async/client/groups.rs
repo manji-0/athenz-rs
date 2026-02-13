@@ -5,6 +5,7 @@ use crate::zms::common;
 use crate::zms::{GroupGetOptions, GroupsQueryOptions};
 
 impl ZmsAsyncClient {
+    /// Lists groups within a domain.
     pub async fn get_groups(
         &self,
         domain: &str,
@@ -18,6 +19,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Retrieves a specific group.
     pub async fn get_group(
         &self,
         domain: &str,
@@ -32,6 +34,7 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Creates or updates a group.
     pub async fn put_group(
         &self,
         domain: &str,
@@ -52,6 +55,7 @@ impl ZmsAsyncClient {
         self.expect_no_content_or_json(resp).await
     }
 
+    /// Deletes a group.
     pub async fn delete_group(
         &self,
         domain: &str,
@@ -67,6 +71,7 @@ impl ZmsAsyncClient {
         self.expect_no_content(resp).await
     }
 
+    /// Retrieves group membership details for a member.
     pub async fn get_group_membership(
         &self,
         domain: &str,
@@ -85,6 +90,7 @@ impl ZmsAsyncClient {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Creates or updates a group membership.
     pub async fn put_group_membership(
         &self,
         domain: &str,
@@ -106,6 +112,7 @@ impl ZmsAsyncClient {
         self.expect_no_content_or_json(resp).await
     }
 
+    /// Deletes a group membership.
     pub async fn delete_group_membership(
         &self,
         domain: &str,

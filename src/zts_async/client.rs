@@ -46,6 +46,7 @@ impl ZtsAsyncClientBuilder {
         })
     }
 
+    /// Sets the request timeout for the underlying HTTP client.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
@@ -171,6 +172,7 @@ pub struct ZtsAsyncClient {
 }
 
 impl ZtsAsyncClient {
+    /// Returns a builder for an async ZTS client.
     pub fn builder(base_url: impl AsRef<str>) -> Result<ZtsAsyncClientBuilder, Error> {
         ZtsAsyncClientBuilder::new(base_url)
     }

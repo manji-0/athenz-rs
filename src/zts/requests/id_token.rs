@@ -16,6 +16,7 @@ pub struct IdTokenRequest {
 }
 
 impl IdTokenRequest {
+    /// Creates an ID token request with required parameters.
     pub fn new(
         client_id: impl Into<String>,
         redirect_uri: impl Into<String>,
@@ -37,6 +38,7 @@ impl IdTokenRequest {
         }
     }
 
+    /// Serializes the request into a URL query string.
     pub fn to_query(&self) -> String {
         let mut params = url::form_urlencoded::Serializer::new(String::new());
         params.append_pair("response_type", "id_token");

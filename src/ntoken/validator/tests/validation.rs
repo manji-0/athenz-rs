@@ -3,7 +3,17 @@ use crate::ntoken::keys::load_private_key;
 use crate::ntoken::token::{sign_with_key_at, unix_time_now};
 use crate::ntoken::validator::checks::validate_authorized_service_claims;
 use crate::ntoken::NToken;
-use crate::ntoken::{NTokenBuilder, NTokenSigner, NTokenValidationOptions, NTokenValidator};
+use crate::ntoken::{
+    NTokenBuilder, NTokenSigner, NTokenValidationOptions, NTokenValidator, NTokenValidatorConfig,
+};
+use base64::engine::general_purpose::STANDARD as BASE64_STD;
+use base64::Engine as _;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
 
 #[test]
 fn ntoken_validate_user_version_requires_user_domain() {
@@ -337,4 +347,113 @@ fn ntoken_validate_allows_expiry_at_max_bound() {
     validator
         .validate_with_options(&token, &options)
         .expect("expiry at max bound");
+}
+
+#[test]
+fn ntoken_validate_limits_zts_key_cache_entries() {
+    let response_body = format!(
+        r#"{{"key":"{}","id":"v1"}}"#,
+        ybase64_encode(RSA_PUBLIC_KEY.as_bytes())
+    );
+    let response = format!(
+        "HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\nContent-Length: {}\\r\\n\\r\\n{}",
+        response_body.len(),
+        response_body
+    );
+    let (base_url, request_count, handle) =
+        spawn_zts_key_server(response, 3, Duration::from_secs(2));
+
+    let mut config = NTokenValidatorConfig::default();
+    config.zts_base_url = format!("{}/zts/v1", base_url);
+    config.max_cache_entries = 1;
+    let validator = NTokenValidator::new_with_zts(config).expect("validator");
+
+    let token_v1 = NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes())
+        .expect("signer")
+        .sign_once()
+        .expect("v1 token");
+    let token_v2 = NTokenSigner::new("sports", "api", "v2", RSA_PRIVATE_KEY.as_bytes())
+        .expect("signer")
+        .sign_once()
+        .expect("v2 token");
+
+    validator.validate(&token_v1).expect("v1 first validate");
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
+
+    validator.validate(&token_v1).expect("v1 cached validate");
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
+
+    thread::sleep(Duration::from_millis(2));
+    validator.validate(&token_v2).expect("v2 validate");
+    assert_eq!(request_count.load(Ordering::SeqCst), 2);
+
+    thread::sleep(Duration::from_millis(2));
+    validator.validate(&token_v1).expect("v1 after eviction validate");
+    assert_eq!(request_count.load(Ordering::SeqCst), 3);
+
+    handle
+        .join()
+        .expect("mock zts key server thread should exit");
+}
+
+fn ybase64_encode(data: &[u8]) -> String {
+    BASE64_STD
+        .encode(data)
+        .replace('+', ".")
+        .replace('/', "_")
+        .replace('=', "-")
+}
+
+fn spawn_zts_key_server(
+    response: String,
+    expected_requests: usize,
+    timeout: Duration,
+) -> (String, Arc<AtomicUsize>, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let base_url = format!("http://{}", listener.local_addr().expect("addr"));
+    listener
+        .set_nonblocking(true)
+        .expect("set socket non-blocking");
+
+    let request_count = Arc::new(AtomicUsize::new(0));
+    let request_count_for_thread = request_count.clone();
+
+    let handle = thread::spawn(move || {
+        let mut served = 0usize;
+        let deadline = Instant::now() + timeout;
+        while served < expected_requests {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    consume_http_request(&mut stream);
+                    let _ = stream.write_all(response.as_bytes());
+                    request_count_for_thread.fetch_add(1, Ordering::SeqCst);
+                    served += 1;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    (base_url, request_count, handle)
+}
+
+fn consume_http_request(stream: &mut TcpStream) {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 1024];
+    loop {
+        let read = stream.read(&mut chunk).unwrap_or(0);
+        if read == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..read]);
+        if buf.windows(4).any(|window| window == b"\\r\\n\\r\\n") {
+            break;
+        }
+    }
 }

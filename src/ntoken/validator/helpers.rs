@@ -49,8 +49,9 @@ pub(super) fn get_cached_verifier(
     config: &NTokenValidatorConfig,
     src: &KeySource,
 ) -> Result<NTokenVerifier, Error> {
+    let now = Instant::now();
     if let Some(entry) = cache.read().unwrap().get(src) {
-        if entry.expires_at > Instant::now() {
+        if entry.expires_at > now {
             return Ok(entry.verifier.clone());
         }
     }
@@ -70,8 +71,11 @@ pub(super) fn get_cached_verifier(
     let cached = CachedKey {
         verifier: verifier.clone(),
         expires_at: Instant::now() + config.cache_ttl,
+        created_at: Instant::now(),
     };
-    cache.write().unwrap().insert(src.clone(), cached);
+    let mut cache = cache.write().unwrap();
+    cache.insert(src.clone(), cached);
+    enforce_cache_limit(&mut cache, config.max_cache_entries);
     Ok(verifier)
 }
 
@@ -83,10 +87,11 @@ pub(super) async fn get_cached_verifier_async(
     config: &NTokenValidatorConfig,
     src: &KeySource,
 ) -> Result<NTokenVerifier, Error> {
+    let now = Instant::now();
     {
         let cache = cache.read().await;
         if let Some(entry) = cache.get(src) {
-            if entry.expires_at > Instant::now() {
+            if entry.expires_at > now {
                 return Ok(entry.verifier.clone());
             }
         }
@@ -125,9 +130,11 @@ pub(super) async fn get_cached_verifier_async(
         let cached = CachedKey {
             verifier: verifier.clone(),
             expires_at: Instant::now() + config.cache_ttl,
+            created_at: Instant::now(),
         };
         let mut cache = cache.write().await;
         cache.insert(src.clone(), cached);
+        enforce_cache_limit_async(&mut cache, config.max_cache_entries);
         Ok(verifier)
     }
     .await;
@@ -139,6 +146,42 @@ pub(super) async fn get_cached_verifier_async(
         }
     }
     result
+}
+
+fn enforce_cache_limit(cache: &mut HashMap<KeySource, CachedKey>, max_cache_entries: usize) {
+    if max_cache_entries == 0 {
+        cache.clear();
+        return;
+    }
+    while cache.len() > max_cache_entries {
+        if let Some((oldest_key, _)) = cache
+            .iter()
+            .min_by_key(|(_, entry)| entry.created_at)
+            .map(|(key, value)| (key.clone(), value.created_at))
+        {
+            cache.remove(&oldest_key);
+        } else {
+            break;
+        }
+    }
+}
+
+fn enforce_cache_limit_async(cache: &mut HashMap<KeySource, CachedKey>, max_cache_entries: usize) {
+    if max_cache_entries == 0 {
+        cache.clear();
+        return;
+    }
+    while cache.len() > max_cache_entries {
+        if let Some((oldest_key, _)) = cache
+            .iter()
+            .min_by_key(|(_, entry)| entry.created_at)
+            .map(|(key, value)| (key.clone(), value.created_at))
+        {
+            cache.remove(&oldest_key);
+        } else {
+            break;
+        }
+    }
 }
 
 pub(super) fn key_source_from_claims(claims: &NToken, config: &NTokenValidatorConfig) -> KeySource {

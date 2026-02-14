@@ -38,6 +38,7 @@ pub(in crate::jwt::validator) fn split_jwt(token: &str) -> Result<JwtParts<'_>, 
 pub(in crate::jwt::validator) fn decode_jwt_header(encoded: &str) -> Result<JwtHeader, Error> {
     let header_bytes = base64_url_decode(encoded)?;
     let raw: Value = serde_json::from_slice(&header_bytes).map_err(jwt_json_error)?;
+    validate_unsupported_jose_headers(&raw)?;
     let alg = raw
         .get("alg")
         .and_then(Value::as_str)
@@ -59,6 +60,13 @@ pub(in crate::jwt::validator) fn decode_jwt_header(encoded: &str) -> Result<JwtH
     })
 }
 
+fn validate_unsupported_jose_headers(raw: &Value) -> Result<(), Error> {
+    if raw.get("crit").is_some() || raw.get("b64").is_some() {
+        return Err(jwt_error(ErrorKind::InvalidToken));
+    }
+    Ok(())
+}
+
 pub(in crate::jwt::validator) fn validate_jwt_typ(typ: Option<&str>) -> Result<(), Error> {
     let Some(typ) = typ else {
         return Ok(());
@@ -76,4 +84,58 @@ pub(in crate::jwt::validator) fn base64_url_decode(data: &str) -> Result<Vec<u8>
     URL_SAFE_NO_PAD
         .decode(data)
         .map_err(|err| Error::Crypto(format!("base64url decode error: {err}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_jwt_header;
+    use crate::error::Error;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine as _;
+    use jsonwebtoken::errors::ErrorKind;
+    use serde_json::{json, Value};
+
+    fn encoded_header(value: Value) -> String {
+        URL_SAFE_NO_PAD.encode(serde_json::to_vec(&value).expect("header json"))
+    }
+
+    fn assert_invalid_token(err: Error) {
+        match err {
+            Error::Jwt(jwt_err) => assert_eq!(jwt_err.kind(), &ErrorKind::InvalidToken),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn decode_jwt_header_rejects_crit_header() {
+        let encoded = encoded_header(json!({
+            "alg": "RS256",
+            "crit": ["exp"],
+        }));
+
+        let err = decode_jwt_header(&encoded).expect_err("crit must be rejected");
+        assert_invalid_token(err);
+    }
+
+    #[test]
+    fn decode_jwt_header_rejects_b64_false_header() {
+        let encoded = encoded_header(json!({
+            "alg": "RS256",
+            "b64": false,
+        }));
+
+        let err = decode_jwt_header(&encoded).expect_err("b64 must be rejected");
+        assert_invalid_token(err);
+    }
+
+    #[test]
+    fn decode_jwt_header_rejects_b64_true_header() {
+        let encoded = encoded_header(json!({
+            "alg": "RS256",
+            "b64": true,
+        }));
+
+        let err = decode_jwt_header(&encoded).expect_err("b64 must be rejected");
+        assert_invalid_token(err);
+    }
 }

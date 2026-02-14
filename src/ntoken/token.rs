@@ -231,15 +231,15 @@ fn sign_with_key_at_internal(
         }
         PrivateKey::P256(signing_key) => {
             let sig: P256Signature = signing_key.sign(unsigned.as_bytes());
-            sig.to_vec()
+            sig.to_der().as_bytes().to_vec()
         }
         PrivateKey::P384(signing_key) => {
             let sig: P384Signature = signing_key.sign(unsigned.as_bytes());
-            sig.to_vec()
+            sig.to_der().as_bytes().to_vec()
         }
         PrivateKey::P521(signing_key) => {
             let sig: P521Signature = signing_key.sign(unsigned.as_bytes());
-            sig.to_vec()
+            sig.to_der().as_bytes().to_vec()
         }
     };
     let signature = ybase64_encode(&signature);
@@ -265,4 +265,56 @@ fn ybase64_encode(data: &[u8]) -> String {
         .replace('+', ".")
         .replace('/', "_")
         .replace('=', "-")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sign_with_key_at, NTokenBuilder, PrivateKey, TAG_SIGNATURE};
+    use crate::ybase64::decode as ybase64_decode;
+    use p256::ecdsa::{Signature as P256Signature, SigningKey as P256SigningKey};
+    use p384::ecdsa::{Signature as P384Signature, SigningKey as P384SigningKey};
+    use p521::ecdsa::{Signature as P521Signature, SigningKey as P521SigningKey};
+    use rand::thread_rng;
+
+    fn signature_bytes(token: &str) -> Vec<u8> {
+        let marker = format!(";{TAG_SIGNATURE}=");
+        let signature = token
+            .rsplit_once(&marker)
+            .map(|(_, value)| value)
+            .expect("signature");
+        ybase64_decode(signature).expect("decode signature")
+    }
+
+    #[test]
+    fn ntoken_p256_signature_is_der_encoded() {
+        let builder = NTokenBuilder::new("sports", "api", "v1");
+        let key = PrivateKey::P256(P256SigningKey::random(&mut thread_rng()));
+        let token = sign_with_key_at(&builder, &key, 1, 2).expect("token");
+        let sig = signature_bytes(&token);
+
+        assert!(P256Signature::from_der(&sig).is_ok());
+        assert_ne!(sig.len(), 64);
+    }
+
+    #[test]
+    fn ntoken_p384_signature_is_der_encoded() {
+        let builder = NTokenBuilder::new("sports", "api", "v1");
+        let key = PrivateKey::P384(P384SigningKey::random(&mut thread_rng()));
+        let token = sign_with_key_at(&builder, &key, 1, 2).expect("token");
+        let sig = signature_bytes(&token);
+
+        assert!(P384Signature::from_der(&sig).is_ok());
+        assert_ne!(sig.len(), 96);
+    }
+
+    #[test]
+    fn ntoken_p521_signature_is_der_encoded() {
+        let builder = NTokenBuilder::new("sports", "api", "v1");
+        let key = PrivateKey::P521(P521SigningKey::random(&mut thread_rng()));
+        let token = sign_with_key_at(&builder, &key, 1, 2).expect("token");
+        let sig = signature_bytes(&token);
+
+        assert!(P521Signature::from_der(&sig).is_ok());
+        assert_ne!(sig.len(), 132);
+    }
 }

@@ -101,7 +101,7 @@ pub(in crate::jwt::validator) fn validate_claims(
             }
         }
         (TryParse::Parsed(Issuer::Multiple(iss)), Some(correct_iss)) => {
-            if !has_overlap(correct_iss, &iss) {
+            if !is_subset(correct_iss, &iss) {
                 return Err(jwt_error(ErrorKind::InvalidIssuer));
             }
         }
@@ -121,7 +121,7 @@ pub(in crate::jwt::validator) fn validate_claims(
             }
         }
         (TryParse::Parsed(Audience::Multiple(aud)), Some(correct_aud)) => {
-            if !has_overlap(correct_aud, &aud) {
+            if !is_subset(correct_aud, &aud) {
                 return Err(jwt_error(ErrorKind::InvalidAudience));
             }
         }
@@ -131,14 +131,114 @@ pub(in crate::jwt::validator) fn validate_claims(
     Ok(())
 }
 
-pub(in crate::jwt::validator) fn has_overlap(
+pub(in crate::jwt::validator) fn is_subset(
     reference: &HashSet<String>,
     given: &HashSet<String>,
 ) -> bool {
-    if reference.len() < given.len() {
-        reference.iter().any(|a| given.contains(a))
-    } else {
-        given.iter().any(|a| reference.contains(a))
+    !given.is_empty() && given.iter().all(|value| reference.contains(value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_claims;
+    use crate::error::Error;
+    use jsonwebtoken::errors::ErrorKind;
+    use jsonwebtoken::{Algorithm, Validation};
+    use serde_json::json;
+
+    fn assert_invalid_claim(err: Error, kind: ErrorKind) {
+        match err {
+            Error::Jwt(jwt_err) => assert_eq!(jwt_err.kind(), &kind),
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    fn base_validation() -> Validation {
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.required_spec_claims.clear();
+        validation.validate_exp = false;
+        validation.validate_nbf = false;
+        validation.validate_aud = false;
+        validation
+    }
+
+    #[test]
+    fn issuer_list_must_be_subset_of_allowed_issuers() {
+        let mut validation = base_validation();
+        validation.set_issuer(&["trusted"]);
+        let claims = json!({
+            "iss": ["trusted", "evil"],
+            "sub": "principal",
+        });
+
+        let err = validate_claims(&claims, &validation).expect_err("issuer must be rejected");
+        assert_invalid_claim(err, ErrorKind::InvalidIssuer);
+    }
+
+    #[test]
+    fn issuer_list_subset_is_allowed() {
+        let mut validation = base_validation();
+        validation.set_issuer(&["trusted", "backup"]);
+        let claims = json!({
+            "iss": ["trusted"],
+            "sub": "principal",
+        });
+
+        validate_claims(&claims, &validation).expect("issuer subset should be allowed");
+    }
+
+    #[test]
+    fn issuer_list_empty_is_rejected() {
+        let mut validation = base_validation();
+        validation.set_issuer(&["trusted"]);
+        let claims = json!({
+            "iss": [],
+            "sub": "principal",
+        });
+
+        let err = validate_claims(&claims, &validation).expect_err("empty issuer list rejected");
+        assert_invalid_claim(err, ErrorKind::InvalidIssuer);
+    }
+
+    #[test]
+    fn audience_list_must_be_subset_of_allowed_audience() {
+        let mut validation = base_validation();
+        validation.set_audience(&["client"]);
+        validation.validate_aud = true;
+        let claims = json!({
+            "aud": ["client", "evil"],
+            "sub": "principal",
+        });
+
+        let err = validate_claims(&claims, &validation).expect_err("audience must be rejected");
+        assert_invalid_claim(err, ErrorKind::InvalidAudience);
+    }
+
+    #[test]
+    fn audience_list_subset_is_allowed() {
+        let mut validation = base_validation();
+        validation.set_audience(&["client", "backup"]);
+        validation.validate_aud = true;
+        let claims = json!({
+            "aud": ["client"],
+            "sub": "principal",
+        });
+
+        validate_claims(&claims, &validation).expect("audience subset should be allowed");
+    }
+
+    #[test]
+    fn audience_list_empty_is_rejected() {
+        let mut validation = base_validation();
+        validation.set_audience(&["client"]);
+        validation.validate_aud = true;
+        let claims = json!({
+            "aud": [],
+            "sub": "principal",
+        });
+
+        let err = validate_claims(&claims, &validation).expect_err("empty audience list rejected");
+        assert_invalid_claim(err, ErrorKind::InvalidAudience);
     }
 }
 

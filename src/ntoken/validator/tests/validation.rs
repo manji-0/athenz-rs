@@ -11,6 +11,7 @@ use base64::Engine as _;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -396,6 +397,45 @@ fn ntoken_validate_limits_zts_key_cache_entries() {
         .expect("mock zts key server thread should exit");
 }
 
+#[test]
+fn ntoken_validate_sends_auth_header_when_fetching_zts_public_key() {
+    let response_body = format!(
+        r#"{{"key":"{}","id":"v1"}}"#,
+        ybase64_encode(RSA_PUBLIC_KEY.as_bytes())
+    );
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        response_body.len(),
+        response_body
+    );
+    let (base_url, request_rx, handle) =
+        spawn_zts_key_server_with_capture(response, Duration::from_secs(5));
+
+    let mut config = NTokenValidatorConfig::default();
+    config.zts_base_url = format!("{}/zts/v1", base_url);
+    config.public_key_fetch_auth_header = Some((
+        "Athenz-Principal-Auth".to_string(),
+        "NToken dummy".to_string(),
+    ));
+    let validator = NTokenValidator::new_with_zts(config).expect("validator");
+
+    let token = NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes())
+        .expect("signer")
+        .sign_once()
+        .expect("token");
+    validator.validate(&token).expect("validate");
+
+    let request = request_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("captured request");
+    let request_lower = request.to_ascii_lowercase();
+    assert!(request_lower.contains("athenz-principal-auth: ntoken dummy"));
+
+    handle
+        .join()
+        .expect("mock zts key server thread should exit");
+}
+
 fn ybase64_encode(data: &[u8]) -> String {
     BASE64_STD
         .encode(data)
@@ -442,6 +482,58 @@ fn spawn_zts_key_server(
     });
 
     (base_url, request_count, handle)
+}
+
+fn spawn_zts_key_server_with_capture(
+    response: String,
+    timeout: Duration,
+) -> (String, mpsc::Receiver<String>, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let base_url = format!("http://{}", listener.local_addr().expect("addr"));
+    listener
+        .set_nonblocking(true)
+        .expect("set socket non-blocking");
+    let (request_tx, request_rx) = mpsc::channel();
+
+    let handle = thread::spawn(move || {
+        let deadline = Instant::now() + timeout;
+        loop {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let _ = stream.set_nonblocking(false);
+                    let request = read_http_request(&mut stream);
+                    let _ = request_tx.send(request);
+                    let _ = stream.write_all(response.as_bytes());
+                    break;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    (base_url, request_rx, handle)
+}
+
+fn read_http_request(stream: &mut TcpStream) -> String {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 1024];
+    loop {
+        let read = stream.read(&mut chunk).unwrap_or(0);
+        if read == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..read]);
+        if buf.windows(4).any(|window| window == b"\r\n\r\n") {
+            break;
+        }
+    }
+    String::from_utf8_lossy(&buf).to_string()
 }
 
 fn consume_http_request(stream: &mut TcpStream) {

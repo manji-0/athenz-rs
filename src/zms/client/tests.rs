@@ -61,6 +61,80 @@ fn get_domain_list_returns_none_on_not_modified() {
 }
 
 #[test]
+fn get_info_calls_sys_info_endpoint() {
+    let body = r#"{"buildJdkSpec":"17","implementationTitle":"zms"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let info = client.get_info().expect("info");
+    assert_eq!(info.build_jdk_spec.as_deref(), Some("17"));
+    assert_eq!(info.implementation_title.as_deref(), Some("zms"));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/sys/info");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_status_calls_status_endpoint() {
+    let body = r#"{"code":200,"message":"ok"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let status = client.get_status().expect("status");
+    assert_eq!(status.code, 200);
+    assert_eq!(status.message, "ok");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/status");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_schema_calls_schema_endpoint() {
+    let body = r#"{"name":"zms","types":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let schema = client.get_schema().expect("schema");
+    assert_eq!(schema.0.get("name").and_then(|v| v.as_str()), Some("zms"));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/schema");
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn auth_requires_redirects_disabled() {
     let err = match ZmsClient::builder("https://example.com/zms/v1")
         .expect("builder")

@@ -165,6 +165,58 @@ fn get_user_authority_attributes_calls_endpoint() {
 }
 
 #[test]
+fn get_domain_stats_calls_domain_stats_endpoint() {
+    let body = r#"{"name":"sports","subdomain":1,"role":2,"roleMember":3,"policy":4,"assertion":5,"entity":6,"service":7,"serviceHost":8,"publicKey":9,"group":10,"groupMember":11}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let stats = client.get_domain_stats("sports").expect("domain stats");
+    assert_eq!(stats.name.as_deref(), Some("sports"));
+    assert_eq!(stats.subdomain, 1);
+    assert_eq!(stats.group_member, 11);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/stats");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_system_stats_calls_system_stats_endpoint() {
+    let body = r#"{"subdomain":1,"role":2,"roleMember":3,"policy":4,"assertion":5,"entity":6,"service":7,"serviceHost":8,"publicKey":9,"group":10,"groupMember":11}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let stats = client.get_system_stats().expect("system stats");
+    assert_eq!(stats.name, None);
+    assert_eq!(stats.policy, 4);
+    assert_eq!(stats.public_key, 9);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/sys/stats");
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn auth_requires_redirects_disabled() {
     let err = match ZmsClient::builder("https://example.com/zms/v1")
         .expect("builder")

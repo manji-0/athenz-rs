@@ -160,6 +160,57 @@ async fn get_user_authority_attributes_calls_endpoint() {
 }
 
 #[tokio::test]
+async fn get_domain_stats_calls_domain_stats_endpoint() {
+    let body = r#"{"name":"sports","subdomain":1,"role":2,"roleMember":3,"policy":4,"assertion":5,"entity":6,"service":7,"serviceHost":8,"publicKey":9,"group":10,"groupMember":11}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let stats = client
+        .get_domain_stats("sports")
+        .await
+        .expect("domain stats");
+    assert_eq!(stats.name.as_deref(), Some("sports"));
+    assert_eq!(stats.subdomain, 1);
+    assert_eq!(stats.group_member, 11);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/stats");
+}
+
+#[tokio::test]
+async fn get_system_stats_calls_system_stats_endpoint() {
+    let body = r#"{"subdomain":1,"role":2,"roleMember":3,"policy":4,"assertion":5,"entity":6,"service":7,"serviceHost":8,"publicKey":9,"group":10,"groupMember":11}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let stats = client.get_system_stats().await.expect("system stats");
+    assert_eq!(stats.name, None);
+    assert_eq!(stats.policy, 4);
+    assert_eq!(stats.public_key, 9);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/sys/stats");
+}
+
+#[tokio::test]
 async fn get_domain_list_applies_auth_header() {
     let body = r#"{"names":["a"]}"#;
     let response = json_response("200 OK", body);

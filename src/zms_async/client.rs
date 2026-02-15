@@ -16,6 +16,7 @@ mod meta;
 mod policies;
 mod roles;
 mod services;
+mod stats;
 
 /// Builder for [`ZmsAsyncClient`].
 ///

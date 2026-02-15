@@ -4,13 +4,16 @@ mod build_url;
 mod client_defaults;
 mod error;
 mod jwt;
+#[path = "models/mod.rs"]
 mod models;
 mod ntoken;
 mod policy;
 mod ybase64;
+#[path = "zms/mod.rs"]
 mod zms;
 #[cfg(feature = "async-client")]
 mod zms_async;
+#[path = "zts/mod.rs"]
 mod zts;
 #[cfg(feature = "async-client")]
 mod zts_async;

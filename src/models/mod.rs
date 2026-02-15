@@ -1,6 +1,8 @@
 mod common;
 mod policy;
+#[path = "zms/mod.rs"]
 mod zms;
+#[path = "zts/mod.rs"]
 mod zts;
 
 pub use common::{Info, Jwk, JwkList, PublicKeyEntry, RdlSchema, Status};

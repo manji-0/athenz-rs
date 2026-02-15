@@ -41,9 +41,9 @@ pub use models::{
     RoleAccess, RoleAuditLog, RoleCertificate, RoleCertificateRequest, RoleList, RoleMember,
     RoleMeta, Roles, SSHCertRequest, SSHCertRequestData, SSHCertRequestMeta, SSHCertificate,
     SSHCertificates, ServiceIdentities, ServiceIdentity, ServiceIdentityList, SignedPolicyData,
-    SignedPolicyRequest, Status, SubDomain, TopLevelDomain, TransportDirection, TransportRule,
-    TransportRules, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain, Workload,
-    Workloads,
+    SignedPolicyRequest, Stats, Status, SubDomain, TopLevelDomain, TransportDirection,
+    TransportRule, TransportRules, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain,
+    Workload, Workloads,
 };
 
 #[cfg(feature = "async-validate")]

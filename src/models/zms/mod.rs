@@ -5,6 +5,7 @@ mod group;
 mod policy;
 mod role;
 mod service;
+mod stats;
 
 pub use assertion::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
@@ -25,3 +26,4 @@ pub use role::{
 pub use service::{
     ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity, ServiceIdentityList,
 };
+pub use stats::Stats;

@@ -1,4 +1,5 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
+use crate::models::PrincipalState;
 use crate::zms::{DomainListOptions, ZmsClient};
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -233,6 +234,35 @@ fn get_domain_data_check_calls_domain_check_endpoint() {
     let req = rx.recv().expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/check");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_principal_state_calls_principal_state_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let principal_state = PrincipalState { suspended: true };
+    client
+        .put_principal_state(
+            "sports.api",
+            &principal_state,
+            Some("disable compromised principal"),
+        )
+        .expect("put principal state");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/principal/sports.api/state");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("disable compromised principal")
+    );
 
     handle.join().expect("server");
 }

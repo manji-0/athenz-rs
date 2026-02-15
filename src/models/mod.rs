@@ -16,7 +16,8 @@ pub use zms::{
     Groups, Membership, Policies, Policy, PolicyList, ResourceDomainOwnership,
     ResourceGroupOwnership, ResourcePolicyOwnership, ResourceRoleOwnership,
     ResourceServiceIdentityOwnership, Role, RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles,
-    ServiceIdentities, ServiceIdentity, ServiceIdentityList, SubDomain, TopLevelDomain, UserDomain,
+    ServiceIdentities, ServiceIdentity, ServiceIdentityList, SubDomain, TopLevelDomain,
+    UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain,
 };
 pub use zts::{
     AccessTokenResponse, AthenzJwkConfig, CertificateAuthorityBundle, ExternalCredentialsRequest,

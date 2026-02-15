@@ -1,4 +1,5 @@
 mod assertion;
+mod authority;
 mod domain;
 mod group;
 mod policy;
@@ -9,6 +10,7 @@ pub use assertion::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
     AssertionConditions, AssertionEffect,
 };
+pub use authority::{UserAuthorityAttributeMap, UserAuthorityAttributes};
 pub use domain::{
     Domain, DomainList, DomainMeta, DomainMetric, DomainMetricType, DomainMetrics,
     ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,

@@ -42,7 +42,8 @@ pub use models::{
     RoleMeta, Roles, SSHCertRequest, SSHCertRequestData, SSHCertRequestMeta, SSHCertificate,
     SSHCertificates, ServiceIdentities, ServiceIdentity, ServiceIdentityList, SignedPolicyData,
     SignedPolicyRequest, Status, SubDomain, TopLevelDomain, TransportDirection, TransportRule,
-    TransportRules, UserDomain, Workload, Workloads,
+    TransportRules, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain, Workload,
+    Workloads,
 };
 
 #[cfg(feature = "async-validate")]

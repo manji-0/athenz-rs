@@ -10,6 +10,7 @@ use url::Url;
 
 use super::common;
 
+mod authority;
 mod domain;
 mod groups;
 mod meta;

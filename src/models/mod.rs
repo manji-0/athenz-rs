@@ -11,13 +11,13 @@ pub use policy::{
 };
 pub use zms::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
-    AssertionConditions, AssertionEffect, Domain, DomainList, DomainMeta, DomainMetric,
-    DomainMetricType, DomainMetrics, Group, GroupAuditLog, GroupMember, GroupMembership, GroupMeta,
-    Groups, Membership, Policies, Policy, PolicyList, ResourceDomainOwnership,
-    ResourceGroupOwnership, ResourcePolicyOwnership, ResourceRoleOwnership,
-    ResourceServiceIdentityOwnership, Role, RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles,
-    ServiceIdentities, ServiceIdentity, ServiceIdentityList, Stats, SubDomain, TopLevelDomain,
-    UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain,
+    AssertionConditions, AssertionEffect, DanglingPolicy, Domain, DomainDataCheck, DomainList,
+    DomainMeta, DomainMetric, DomainMetricType, DomainMetrics, Group, GroupAuditLog, GroupMember,
+    GroupMembership, GroupMeta, Groups, Membership, Policies, Policy, PolicyList,
+    ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership,
+    ResourceRoleOwnership, ResourceServiceIdentityOwnership, Role, RoleAuditLog, RoleList,
+    RoleMember, RoleMeta, Roles, ServiceIdentities, ServiceIdentity, ServiceIdentityList, Stats,
+    SubDomain, TopLevelDomain, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain,
 };
 pub use zts::{
     AccessTokenResponse, AthenzJwkConfig, CertificateAuthorityBundle, ExternalCredentialsRequest,

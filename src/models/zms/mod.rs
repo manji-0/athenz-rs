@@ -1,6 +1,7 @@
 mod assertion;
 mod authority;
 mod domain;
+mod domain_data_check;
 mod group;
 mod policy;
 mod role;
@@ -16,6 +17,7 @@ pub use domain::{
     Domain, DomainList, DomainMeta, DomainMetric, DomainMetricType, DomainMetrics,
     ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,
 };
+pub use domain_data_check::{DanglingPolicy, DomainDataCheck};
 pub use group::{
     Group, GroupAuditLog, GroupMember, GroupMembership, GroupMeta, Groups, ResourceGroupOwnership,
 };

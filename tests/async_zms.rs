@@ -187,6 +187,52 @@ async fn get_domain_stats_calls_domain_stats_endpoint() {
 }
 
 #[tokio::test]
+async fn get_domain_data_check_calls_domain_check_endpoint() {
+    let body = r#"{"danglingRoles":["sports:role.admin"],"danglingPolicies":[{"policyName":"sports:policy.readers","roleName":"sports:role.readers"}],"policyCount":4,"assertionCount":9,"roleWildCardCount":2,"providersWithoutTrust":["sports.provider"],"tenantsWithoutAssumeRole":["sports.tenant"]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let check = client
+        .get_domain_data_check("sports")
+        .await
+        .expect("domain data check");
+    assert_eq!(
+        check.dangling_roles,
+        Some(vec!["sports:role.admin".to_string()])
+    );
+    let dangling_policy = check
+        .dangling_policies
+        .as_ref()
+        .and_then(|policies| policies.first())
+        .expect("dangling policy");
+    assert_eq!(dangling_policy.policy_name, "sports:policy.readers");
+    assert_eq!(dangling_policy.role_name, "sports:role.readers");
+    assert_eq!(check.policy_count, 4);
+    assert_eq!(check.assertion_count, 9);
+    assert_eq!(check.role_wild_card_count, 2);
+    assert_eq!(
+        check.providers_without_trust,
+        Some(vec!["sports.provider".to_string()])
+    );
+    assert_eq!(
+        check.tenants_without_assume_role,
+        Some(vec!["sports.tenant".to_string()])
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/check");
+}
+
+#[tokio::test]
 async fn get_system_stats_calls_system_stats_endpoint() {
     let body = r#"{"subdomain":1,"role":2,"roleMember":3,"policy":4,"assertion":5,"entity":6,"service":7,"serviceHost":8,"publicKey":9,"group":10,"groupMember":11}"#;
     let response = json_response("200 OK", body);

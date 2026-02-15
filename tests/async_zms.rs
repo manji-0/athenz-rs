@@ -63,6 +63,74 @@ async fn get_domain_list_returns_none_on_not_modified() {
 }
 
 #[tokio::test]
+async fn get_info_calls_sys_info_endpoint() {
+    let body = r#"{"buildJdkSpec":"17","implementationTitle":"zms"}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let info = client.get_info().await.expect("info");
+    assert_eq!(info.build_jdk_spec.as_deref(), Some("17"));
+    assert_eq!(info.implementation_title.as_deref(), Some("zms"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/sys/info");
+}
+
+#[tokio::test]
+async fn get_status_calls_status_endpoint() {
+    let body = r#"{"code":200,"message":"ok"}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let status = client.get_status().await.expect("status");
+    assert_eq!(status.code, 200);
+    assert_eq!(status.message, "ok");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/status");
+}
+
+#[tokio::test]
+async fn get_schema_calls_schema_endpoint() {
+    let body = r#"{"name":"zms","types":[]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let schema = client.get_schema().await.expect("schema");
+    assert_eq!(schema.0.get("name").and_then(|v| v.as_str()), Some("zms"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/schema");
+}
+
+#[tokio::test]
 async fn get_domain_list_applies_auth_header() {
     let body = r#"{"names":["a"]}"#;
     let response = json_response("200 OK", body);

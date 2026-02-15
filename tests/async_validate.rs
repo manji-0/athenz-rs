@@ -293,6 +293,44 @@ async fn ntoken_validator_async_uses_cache() {
 }
 
 #[tokio::test]
+async fn ntoken_validator_async_sends_auth_header_when_fetching_zts_public_key() {
+    let signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    let token = signer.sign_once().expect("token");
+
+    let body = format!(
+        r#"{{"key":"{}","id":"v1"}}"#,
+        ybase64_encode(RSA_PUBLIC_KEY.as_bytes())
+    );
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx) = serve_once(response).await;
+
+    let mut config = NTokenValidatorConfig::default();
+    config.zts_base_url = format!("{}/zts/v1", base_url);
+    config.public_key_fetch_auth_header = Some((
+        "Athenz-Principal-Auth".to_string(),
+        "NToken dummy".to_string(),
+    ));
+    let validator = NTokenValidatorAsync::new_with_zts(config).expect("validator");
+
+    validator.validate(&token).await.expect("validate");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.path, "/zts/v1/domain/sports/service/api/publickey/v1");
+    assert_eq!(
+        req.header_value("Athenz-Principal-Auth"),
+        Some("NToken dummy")
+    );
+}
+
+#[tokio::test]
 async fn ntoken_validator_async_limits_zts_key_cache_entries() {
     let response = zts_public_key_response();
     let (base_url, request_count, handle) =

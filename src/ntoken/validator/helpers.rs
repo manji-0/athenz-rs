@@ -57,7 +57,11 @@ pub(super) fn get_cached_verifier(
     }
 
     let url = build_zts_public_key_url(config, src)?;
-    let resp = http.get(url).send()?;
+    let mut req = http.get(url);
+    if let Some((header, value)) = &config.public_key_fetch_auth_header {
+        req = req.header(header.as_str(), value.as_str());
+    }
+    let resp = req.send()?;
     if !resp.status().is_success() {
         return Err(Error::Crypto(format!(
             "unable to fetch public key: status {}",
@@ -117,7 +121,11 @@ pub(super) async fn get_cached_verifier_async(
         }
 
         let url = build_zts_public_key_url(config, src)?;
-        let resp = http.get(url).send().await?;
+        let mut req = http.get(url);
+        if let Some((header, value)) = &config.public_key_fetch_auth_header {
+            req = req.header(header.as_str(), value.as_str());
+        }
+        let resp = req.send().await?;
         if !resp.status().is_success() {
             return Err(Error::Crypto(format!(
                 "unable to fetch public key: status {}",

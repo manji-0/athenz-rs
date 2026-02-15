@@ -135,6 +135,36 @@ fn get_schema_calls_schema_endpoint() {
 }
 
 #[test]
+fn get_user_authority_attributes_calls_endpoint() {
+    let body = r#"{"attributes":{"employeeType":{"values":["full_time"]}}}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let attributes = client
+        .get_user_authority_attributes()
+        .expect("authority attributes");
+    let employee_type = attributes
+        .attributes
+        .get("employeeType")
+        .expect("employeeType attribute");
+    assert_eq!(employee_type.values, vec!["full_time".to_string()]);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/authority/user/attribute");
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn auth_requires_redirects_disabled() {
     let err = match ZmsClient::builder("https://example.com/zms/v1")
         .expect("builder")

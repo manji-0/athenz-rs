@@ -131,6 +131,35 @@ async fn get_schema_calls_schema_endpoint() {
 }
 
 #[tokio::test]
+async fn get_user_authority_attributes_calls_endpoint() {
+    let body = r#"{"attributes":{"employeeType":{"values":["full_time"]}}}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let attributes = client
+        .get_user_authority_attributes()
+        .await
+        .expect("authority attributes");
+    let employee_type = attributes
+        .attributes
+        .get("employeeType")
+        .expect("employeeType attribute");
+    assert_eq!(employee_type.values, vec!["full_time".to_string()]);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/authority/user/attribute");
+}
+
+#[tokio::test]
 async fn get_domain_list_applies_auth_header() {
     let body = r#"{"names":["a"]}"#;
     let response = json_response("200 OK", body);

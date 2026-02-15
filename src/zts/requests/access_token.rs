@@ -1,5 +1,9 @@
 /// Request parameters for AccessToken issuance.
 /// Use `new()`/`builder()` for forward-compatible construction.
+const GRANT_TYPE_CLIENT_CREDENTIALS: &str = "client_credentials";
+const GRANT_TYPE_TOKEN_EXCHANGE: &str = "urn:ietf:params:oauth:grant-type:token-exchange";
+const GRANT_TYPE_JWT_BEARER: &str = "urn:ietf:params:oauth:grant-type:jwt-bearer";
+
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct AccessTokenRequest {
@@ -8,7 +12,12 @@ pub struct AccessTokenRequest {
     pub id_token_service: Option<String>,
     /// If set, this value is used as-is and overrides role/id_token_service scope composition.
     pub raw_scope: Option<String>,
-    /// OAuth `grant_type`. Defaults to `client_credentials` when unset.
+    /// OAuth `grant_type`.
+    ///
+    /// When unset, this is inferred from request fields:
+    /// - if token exchange fields are present -> `urn:ietf:params:oauth:grant-type:token-exchange`
+    /// - else, if `assertion` is present -> `urn:ietf:params:oauth:grant-type:jwt-bearer`
+    /// - else -> `client_credentials`
     pub grant_type: Option<String>,
     pub expires_in: Option<i32>,
     pub proxy_principal_spiffe_uris: Option<String>,
@@ -64,8 +73,7 @@ impl AccessTokenRequest {
     /// Serializes the request into an application/x-www-form-urlencoded body.
     pub fn to_form(&self) -> String {
         let mut params = url::form_urlencoded::Serializer::new(String::new());
-        let grant_type = self.grant_type.as_deref().unwrap_or("client_credentials");
-        params.append_pair("grant_type", grant_type);
+        params.append_pair("grant_type", self.resolved_grant_type());
         if let Some(expires_in) = self.expires_in {
             params.append_pair("expires_in", &expires_in.to_string());
         }
@@ -116,6 +124,28 @@ impl AccessTokenRequest {
         }
         params.append_pair("scope", &self.scope());
         params.finish()
+    }
+
+    fn resolved_grant_type(&self) -> &str {
+        if let Some(ref grant_type) = self.grant_type {
+            return grant_type.as_str();
+        }
+        if self.uses_token_exchange_fields() {
+            return GRANT_TYPE_TOKEN_EXCHANGE;
+        }
+        if self.assertion.is_some() {
+            return GRANT_TYPE_JWT_BEARER;
+        }
+        GRANT_TYPE_CLIENT_CREDENTIALS
+    }
+
+    fn uses_token_exchange_fields(&self) -> bool {
+        self.subject_token.is_some()
+            || self.subject_token_type.is_some()
+            || self.requested_token_type.is_some()
+            || self.actor_token.is_some()
+            || self.actor_token_type.is_some()
+            || self.actor.is_some()
     }
 
     fn scope(&self) -> String {
@@ -185,7 +215,7 @@ impl AccessTokenRequestBuilder {
         self
     }
 
-    /// Sets OAuth `grant_type` (for example, `token-exchange` or `jwt-bearer`).
+    /// Sets OAuth `grant_type` explicitly, overriding inferred defaults.
     pub fn grant_type(mut self, grant_type: impl Into<String>) -> Self {
         self.request.grant_type = Some(grant_type.into());
         self

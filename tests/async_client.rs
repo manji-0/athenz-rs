@@ -177,6 +177,65 @@ async fn issue_access_token_allows_custom_grant_type() {
 }
 
 #[tokio::test]
+async fn issue_access_token_infers_token_exchange_grant_type() {
+    let body = r#"{"access_token":"token","token_type":"Bearer","expires_in":3600}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    let request = AccessTokenRequest::builder("sports")
+        .roles(["reader"])
+        .subject_token("subject-token")
+        .subject_token_type("urn:ietf:params:oauth:token-type:access_token")
+        .build();
+    let response = client.issue_access_token(&request).await.expect("token");
+    assert_eq!(response.access_token, "token");
+
+    let req = timeout(REQUEST_TIMEOUT, rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    let body_str = String::from_utf8_lossy(&req.body);
+    assert!(
+        body_str.contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Atoken-exchange")
+    );
+}
+
+#[tokio::test]
+async fn issue_access_token_infers_jwt_bearer_grant_type() {
+    let body = r#"{"access_token":"token","token_type":"Bearer","expires_in":3600}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    let request = AccessTokenRequest::builder("sports")
+        .roles(["reader"])
+        .assertion("jwt-assertion")
+        .build();
+    let response = client.issue_access_token(&request).await.expect("token");
+    assert_eq!(response.access_token, "token");
+
+    let req = timeout(REQUEST_TIMEOUT, rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    let body_str = String::from_utf8_lossy(&req.body);
+    assert!(body_str.contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer"));
+}
+
+#[tokio::test]
 async fn register_instance_returns_location_on_created() {
     let body = r#"{"provider":"prov","name":"sports.api","instanceId":"i-123"}"#;
     let response = format!(

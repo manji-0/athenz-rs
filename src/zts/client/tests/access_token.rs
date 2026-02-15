@@ -97,3 +97,41 @@ fn access_token_builder_sets_grant_type() {
     let form = req.to_form();
     assert_eq!(grant_type_from_form(&form), "jwt-bearer");
 }
+
+#[test]
+fn access_token_infers_token_exchange_grant_type() {
+    let req = AccessTokenRequest::builder("sports")
+        .roles(vec!["reader".to_string()])
+        .subject_token("subject-token")
+        .subject_token_type("urn:ietf:params:oauth:token-type:access_token")
+        .build();
+    let form = req.to_form();
+    assert_eq!(
+        grant_type_from_form(&form),
+        "urn:ietf:params:oauth:grant-type:token-exchange"
+    );
+}
+
+#[test]
+fn access_token_infers_jwt_bearer_grant_type() {
+    let req = AccessTokenRequest::builder("sports")
+        .roles(vec!["reader".to_string()])
+        .assertion("jwt-assertion")
+        .build();
+    let form = req.to_form();
+    assert_eq!(
+        grant_type_from_form(&form),
+        "urn:ietf:params:oauth:grant-type:jwt-bearer"
+    );
+}
+
+#[test]
+fn access_token_explicit_grant_type_overrides_inferred_grant_type() {
+    let req = AccessTokenRequest::builder("sports")
+        .roles(vec!["reader".to_string()])
+        .subject_token("subject-token")
+        .grant_type("custom-grant")
+        .build();
+    let form = req.to_form();
+    assert_eq!(grant_type_from_form(&form), "custom-grant");
+}

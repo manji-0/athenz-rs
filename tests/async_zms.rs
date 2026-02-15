@@ -1,6 +1,6 @@
 #![cfg(feature = "async-client")]
 
-use athenz_rs::{DomainListOptions, NTokenSigner, ZmsAsyncClient};
+use athenz_rs::{DomainListOptions, NTokenSigner, PrincipalState, ZmsAsyncClient};
 use rand::thread_rng;
 use rsa::pkcs1::EncodeRsaPrivateKey;
 use rsa::RsaPrivateKey;
@@ -230,6 +230,39 @@ async fn get_domain_data_check_calls_domain_check_endpoint() {
         .expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/check");
+}
+
+#[tokio::test]
+async fn put_principal_state_calls_principal_state_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let principal_state = PrincipalState { suspended: true };
+    client
+        .put_principal_state(
+            "sports.api",
+            &principal_state,
+            Some("disable compromised principal"),
+        )
+        .await
+        .expect("put principal state");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/principal/sports.api/state");
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("disable compromised principal")
+    );
+    assert_eq!(req.body, br#"{"suspended":true}"#);
 }
 
 #[tokio::test]

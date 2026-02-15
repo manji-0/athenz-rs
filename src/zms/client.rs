@@ -15,6 +15,7 @@ mod domain;
 mod groups;
 mod meta;
 mod policies;
+mod principal;
 mod roles;
 mod services;
 mod stats;

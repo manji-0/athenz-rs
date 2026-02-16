@@ -19,6 +19,7 @@ mod principal;
 mod roles;
 mod services;
 mod stats;
+mod tenancy;
 mod token;
 
 pub struct ZmsClientBuilder {

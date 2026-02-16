@@ -1,5 +1,7 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
-use crate::models::PrincipalState;
+use crate::models::{
+    PrincipalState, ProviderResourceGroupRoles, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
+};
 use crate::zms::{DomainListOptions, ZmsClient};
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -21,10 +23,12 @@ fn get_domain_list_sets_query_and_modified_since() {
         .build()
         .expect("build");
 
-    let mut options = DomainListOptions::default();
-    options.limit = Some(5);
-    options.prefix = Some("core".to_string());
-    options.modified_since = Some("Wed, 21 Oct 2015 07:28:00 GMT".to_string());
+    let options = DomainListOptions {
+        limit: Some(5),
+        prefix: Some("core".to_string()),
+        modified_since: Some("Wed, 21 Oct 2015 07:28:00 GMT".to_string()),
+        ..Default::default()
+    };
 
     let list = client
         .get_domain_list(&options)
@@ -234,6 +238,436 @@ fn get_domain_data_check_calls_domain_check_endpoint() {
     let req = rx.recv().expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/check");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn tenancy_put_tenancy_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let detail = Tenancy {
+        domain: "sports".to_string(),
+        service: "storage".to_string(),
+        resource_groups: Some(vec!["core".to_string()]),
+        create_admin_role: Some(true),
+    };
+    client
+        .put_tenancy(
+            "sports",
+            "storage",
+            &detail,
+            Some("register tenant service"),
+            Some("sports.owner"),
+        )
+        .expect("put tenancy");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/tenancy/storage");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("register tenant service")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn tenancy_delete_tenancy_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_tenancy(
+            "sports",
+            "storage",
+            Some("delete tenant service"),
+            Some("sports.owner"),
+        )
+        .expect("delete tenancy");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/domain/sports/tenancy/storage");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete tenant service")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn tenancy_put_tenant_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let detail = Tenancy {
+        domain: "sports.tenant".to_string(),
+        service: "storage".to_string(),
+        resource_groups: Some(vec!["core".to_string()]),
+        create_admin_role: Some(true),
+    };
+    client
+        .put_tenant(
+            "sports",
+            "storage",
+            "sports.tenant",
+            &detail,
+            Some("register tenant domain"),
+            Some("sports.owner"),
+        )
+        .expect("put tenant");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/storage/tenant/sports.tenant"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("register tenant domain")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn tenancy_delete_tenant_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_tenant(
+            "sports",
+            "storage",
+            "sports.tenant",
+            Some("delete tenant domain"),
+            Some("sports.owner"),
+        )
+        .expect("delete tenant");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/storage/tenant/sports.tenant"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete tenant domain")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn tenancy_put_tenant_resource_group_roles_calls_endpoint() {
+    let body = r#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let detail = TenantResourceGroupRoles {
+        domain: "sports".to_string(),
+        service: "storage".to_string(),
+        tenant: "sports.tenant".to_string(),
+        roles: vec![TenantRoleAction {
+            role: "reader".to_string(),
+            action: "read".to_string(),
+        }],
+        resource_group: "core".to_string(),
+    };
+
+    let result = client
+        .put_tenant_resource_group_roles(
+            "sports",
+            "storage",
+            "sports.tenant",
+            "core",
+            &detail,
+            Some("upsert tenant roles"),
+            Some("sports.owner"),
+        )
+        .expect("put tenant resource group roles");
+    assert_eq!(result.domain, "sports");
+    assert_eq!(result.service, "storage");
+    assert_eq!(result.tenant, "sports.tenant");
+    assert_eq!(result.roles.len(), 1);
+    assert_eq!(result.roles[0].role, "reader");
+    assert_eq!(result.roles[0].action, "read");
+    assert_eq!(result.resource_group, "core");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/storage/tenant/sports.tenant/resourceGroup/core"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("upsert tenant roles")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn tenancy_get_tenant_resource_group_roles_calls_endpoint() {
+    let body = r#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let result = client
+        .get_tenant_resource_group_roles("sports", "storage", "sports.tenant", "core")
+        .expect("get tenant resource group roles");
+    assert_eq!(result.domain, "sports");
+    assert_eq!(result.service, "storage");
+    assert_eq!(result.tenant, "sports.tenant");
+    assert_eq!(result.roles.len(), 1);
+    assert_eq!(result.roles[0].role, "reader");
+    assert_eq!(result.roles[0].action, "read");
+    assert_eq!(result.resource_group, "core");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/storage/tenant/sports.tenant/resourceGroup/core"
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn tenancy_delete_tenant_resource_group_roles_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_tenant_resource_group_roles(
+            "sports",
+            "storage",
+            "sports.tenant",
+            "core",
+            Some("delete tenant roles"),
+            Some("sports.owner"),
+        )
+        .expect("delete tenant resource group roles");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/storage/tenant/sports.tenant/resourceGroup/core"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete tenant roles")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn tenancy_put_provider_resource_group_roles_calls_endpoint() {
+    let body = r#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core","createAdminRole":true,"skipPrincipalMember":false}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let detail = ProviderResourceGroupRoles {
+        domain: "sports".to_string(),
+        service: "storage".to_string(),
+        tenant: "sports.tenant".to_string(),
+        roles: vec![TenantRoleAction {
+            role: "reader".to_string(),
+            action: "read".to_string(),
+        }],
+        resource_group: "core".to_string(),
+        create_admin_role: Some(true),
+        skip_principal_member: Some(false),
+    };
+
+    let result = client
+        .put_provider_resource_group_roles(
+            "sports.tenant",
+            "sports",
+            "storage",
+            "core",
+            &detail,
+            Some("upsert provider roles"),
+            Some("sports.owner"),
+        )
+        .expect("put provider resource group roles");
+    assert_eq!(result.domain, "sports");
+    assert_eq!(result.service, "storage");
+    assert_eq!(result.tenant, "sports.tenant");
+    assert_eq!(result.roles.len(), 1);
+    assert_eq!(result.roles[0].role, "reader");
+    assert_eq!(result.roles[0].action, "read");
+    assert_eq!(result.resource_group, "core");
+    assert_eq!(result.create_admin_role, Some(true));
+    assert_eq!(result.skip_principal_member, Some(false));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports.tenant/provDomain/sports/provService/storage/resourceGroup/core"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("upsert provider roles")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn tenancy_get_provider_resource_group_roles_calls_endpoint() {
+    let body = r#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core","createAdminRole":true,"skipPrincipalMember":false}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let result = client
+        .get_provider_resource_group_roles("sports.tenant", "sports", "storage", "core")
+        .expect("get provider resource group roles");
+    assert_eq!(result.domain, "sports");
+    assert_eq!(result.service, "storage");
+    assert_eq!(result.tenant, "sports.tenant");
+    assert_eq!(result.roles.len(), 1);
+    assert_eq!(result.roles[0].role, "reader");
+    assert_eq!(result.roles[0].action, "read");
+    assert_eq!(result.resource_group, "core");
+    assert_eq!(result.create_admin_role, Some(true));
+    assert_eq!(result.skip_principal_member, Some(false));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports.tenant/provDomain/sports/provService/storage/resourceGroup/core"
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn tenancy_delete_provider_resource_group_roles_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_provider_resource_group_roles(
+            "sports.tenant",
+            "sports",
+            "storage",
+            "core",
+            Some("delete provider roles"),
+            Some("sports.owner"),
+        )
+        .expect("delete provider resource group roles");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports.tenant/provDomain/sports/provService/storage/resourceGroup/core"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete provider roles")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
 
     handle.join().expect("server");
 }

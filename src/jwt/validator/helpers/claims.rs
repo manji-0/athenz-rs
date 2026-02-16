@@ -139,6 +139,7 @@ pub(in crate::jwt::validator) fn is_subset(
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::validate_claims;
     use crate::error::Error;

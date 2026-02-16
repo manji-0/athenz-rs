@@ -371,9 +371,11 @@ fn ntoken_validate_limits_zts_key_cache_entries() {
     let (base_url, request_count, handle) =
         spawn_zts_key_server(response, 3, Duration::from_secs(10));
 
-    let mut config = NTokenValidatorConfig::default();
-    config.zts_base_url = format!("{}/zts/v1", base_url);
-    config.max_cache_entries = 1;
+    let config = NTokenValidatorConfig {
+        zts_base_url: format!("{}/zts/v1", base_url),
+        max_cache_entries: 1,
+        ..Default::default()
+    };
     let validator = NTokenValidator::new_with_zts(config).expect("validator");
 
     let token_v1 = NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes())
@@ -419,8 +421,10 @@ async fn ntoken_validate_async_fetches_zts_public_key() {
     let (base_url, request_count, handle) =
         spawn_zts_key_server(response, 1, Duration::from_secs(5));
 
-    let mut config = NTokenValidatorConfig::default();
-    config.zts_base_url = format!("{}/zts/v1", base_url);
+    let config = NTokenValidatorConfig {
+        zts_base_url: format!("{}/zts/v1", base_url),
+        ..Default::default()
+    };
     let validator = NTokenValidatorAsync::new_with_zts(config).expect("validator");
 
     let token = NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes())
@@ -450,12 +454,14 @@ fn ntoken_validate_sends_auth_header_when_fetching_zts_public_key() {
     let (base_url, request_rx, handle) =
         spawn_zts_key_server_with_capture(response, Duration::from_secs(5));
 
-    let mut config = NTokenValidatorConfig::default();
-    config.zts_base_url = format!("{}/zts/v1", base_url);
-    config.public_key_fetch_auth_header = Some((
-        "Athenz-Principal-Auth".to_string(),
-        "NToken dummy".to_string(),
-    ));
+    let config = NTokenValidatorConfig {
+        zts_base_url: format!("{}/zts/v1", base_url),
+        public_key_fetch_auth_header: Some((
+            "Athenz-Principal-Auth".to_string(),
+            "NToken dummy".to_string(),
+        )),
+        ..Default::default()
+    };
     let validator = NTokenValidator::new_with_zts(config).expect("validator");
 
     let token = NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes())

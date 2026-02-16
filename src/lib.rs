@@ -36,14 +36,15 @@ pub use models::{
     GroupMembership, GroupMeta, Groups, Info, InstanceIdentity, InstanceRefreshInformation,
     InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken,
     IntrospectResponse, JWSPolicyData, Jwk, JwkList, Membership, OAuthConfig, OidcResponse,
-    OpenIdConfig, Policies, Policy, PolicyData, PolicyList, PublicKeyEntry, RdlSchema,
-    ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership,
-    ResourceRoleOwnership, ResourceServiceIdentityOwnership, Role, RoleAccess, RoleAuditLog,
-    RoleCertificate, RoleCertificateRequest, RoleList, RoleMember, RoleMeta, Roles, SSHCertRequest,
-    SSHCertRequestData, SSHCertRequestMeta, SSHCertificate, SSHCertificates, ServiceIdentities,
-    ServiceIdentity, ServiceIdentityList, SignedPolicyData, SignedPolicyRequest, Stats, Status,
-    SubDomain, TopLevelDomain, TransportDirection, TransportRule, TransportRules,
-    UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain, Workload, Workloads,
+    OpenIdConfig, Policies, Policy, PolicyData, PolicyList, PrincipalMember, PrincipalState,
+    PublicKeyEntry, RdlSchema, ResourceDomainOwnership, ResourceGroupOwnership,
+    ResourcePolicyOwnership, ResourceRoleOwnership, ResourceServiceIdentityOwnership, Role,
+    RoleAccess, RoleAuditLog, RoleCertificate, RoleCertificateRequest, RoleList, RoleMember,
+    RoleMeta, Roles, SSHCertRequest, SSHCertRequestData, SSHCertRequestMeta, SSHCertificate,
+    SSHCertificates, ServiceIdentities, ServiceIdentity, ServiceIdentityList, SignedPolicyData,
+    SignedPolicyRequest, Stats, Status, SubDomain, TopLevelDomain, TransportDirection,
+    TransportRule, TransportRules, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain,
+    Workload, Workloads,
 };
 
 #[cfg(feature = "async-validate")]

@@ -239,3 +239,104 @@ impl ZmsAsyncClient {
         Err(common::parse_error_from_body(status, &body, true))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ZmsAsyncClient;
+    use std::collections::HashMap;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::mpsc;
+    use std::thread;
+
+    #[tokio::test]
+    async fn get_status_calls_status_endpoint() {
+        let body = r#"{"code":200,"message":"ok"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let status = client.get_status().await.expect("status");
+        assert_eq!(status.code, 200);
+        assert_eq!(status.message, "ok");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.path, "/zms/v1/status");
+        assert!(req.headers.contains_key("host"));
+
+        handle.join().expect("server");
+    }
+
+    struct CapturedRequest {
+        method: String,
+        path: String,
+        headers: HashMap<String, String>,
+    }
+
+    fn serve_once(
+        response: String,
+    ) -> (
+        String,
+        mpsc::Receiver<CapturedRequest>,
+        thread::JoinHandle<()>,
+    ) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let (tx, rx) = mpsc::channel();
+        let handle = thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let req = read_request(&mut stream);
+                let _ = tx.send(req);
+                let _ = stream.write_all(response.as_bytes());
+            }
+        });
+        (format!("http://{}", addr), rx, handle)
+    }
+
+    fn read_request(stream: &mut TcpStream) -> CapturedRequest {
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 1024];
+        loop {
+            let read = stream.read(&mut chunk).unwrap_or(0);
+            if read == 0 {
+                break;
+            }
+            buf.extend_from_slice(&chunk[..read]);
+            if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                break;
+            }
+        }
+
+        let header_end = buf
+            .windows(4)
+            .position(|w| w == b"\r\n\r\n")
+            .map(|pos| pos + 4)
+            .unwrap_or(buf.len());
+        let header_str = String::from_utf8_lossy(&buf[..header_end]);
+        let mut lines = header_str.split("\r\n");
+        let request_line = lines.next().unwrap_or("");
+        let mut parts = request_line.split_whitespace();
+        let method = parts.next().unwrap_or("").to_string();
+        let path = parts.next().unwrap_or("").to_string();
+        let mut headers = HashMap::new();
+        for line in lines {
+            if let Some((key, value)) = line.split_once(':') {
+                headers.insert(key.trim().to_ascii_lowercase(), value.trim().to_string());
+            }
+        }
+
+        CapturedRequest {
+            method,
+            path,
+            headers,
+        }
+    }
+}

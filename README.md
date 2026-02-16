@@ -26,6 +26,22 @@ RoleToken is intentionally not included (deprecated).
 athenz-rs = "0.1"
 ```
 
+## Feature Flags
+
+Choose one dependency entry based on your use case:
+
+Enable async ZTS/ZMS clients:
+```toml
+[dependencies]
+athenz-rs = { version = "0.1", features = ["async-client"] }
+```
+
+Enable async NToken/JWT validation (includes `async-client`):
+```toml
+[dependencies]
+athenz-rs = { version = "0.1", features = ["async-validate"] }
+```
+
 ## Quickstart
 
 ### Issue AccessToken with mTLS
@@ -61,6 +77,54 @@ println!("claims: {}", data.claims);
 # }
 ```
 
+### Issue AccessToken with async ZTS client (`async-client`)
+
+```rust
+use athenz_rs::{AccessTokenRequest, ZtsAsyncClient};
+
+# async fn example() -> Result<(), Box<dyn std::error::Error>> {
+let client = ZtsAsyncClient::builder("https://zts.example.com/zts/v1")?
+    .build()?;
+
+let req = AccessTokenRequest::builder("sports")
+    .roles(["reader"])
+    .build();
+let token = client.issue_access_token(&req).await?;
+println!("{}", token.access_token);
+# Ok(())
+# }
+```
+
+### Call ZMS metadata with async client (`async-client`)
+
+```rust
+use athenz_rs::ZmsAsyncClient;
+
+# async fn example() -> Result<(), Box<dyn std::error::Error>> {
+let client = ZmsAsyncClient::builder("https://zms.example.com/zms/v1")?
+    .build()?;
+let status = client.get_status().await?;
+println!("status={} {}", status.code, status.message);
+# Ok(())
+# }
+```
+
+### Validate NToken with async validator (`async-validate`)
+
+```rust
+use athenz_rs::{NTokenValidatorAsync, NTokenValidatorConfig};
+
+# async fn example(token: &str) -> Result<(), Box<dyn std::error::Error>> {
+let mut config = NTokenValidatorConfig::default();
+config.zts_base_url = "https://zts.example.com/zts/v1".to_string();
+
+let validator = NTokenValidatorAsync::new_with_zts(config)?;
+let claims = validator.validate(token).await?;
+println!("service={}.{}", claims.domain, claims.name);
+# Ok(())
+# }
+```
+
 ## Documentation
 
 - `docs/README.md` (overview and index)
@@ -83,6 +147,8 @@ println!("claims: {}", data.claims);
 ## Notes and Behavior
 
 - ZTS base URL should include the `/zts/v1` path.
+- `async-client` requires running inside an async runtime (for example Tokio).
+- `async-validate` enables async JWT/NToken validation and implies `async-client`.
 - JWT validation allowlist defaults to RS256/RS384/RS512/ES256/ES384. ES512 (P-521) is verified internally and must be explicitly enabled via `JwtValidationOptions.allow_es512` with EC algorithms in `allowed_algs` (or use `.with_es512()`).
 - EC private keys must be in PKCS#8 (`PRIVATE KEY`) format; SEC1 (`EC PRIVATE KEY`) is not supported.
 - `PolicyStore` lowercases action/resource and ignores `case_sensitive`/`conditions` (ZPE behavior).

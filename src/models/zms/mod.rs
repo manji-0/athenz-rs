@@ -25,7 +25,8 @@ pub use domain::{
 };
 pub use domain_data_check::{DanglingPolicy, DomainDataCheck};
 pub use group::{
-    Group, GroupAuditLog, GroupMember, GroupMembership, GroupMeta, Groups, ResourceGroupOwnership,
+    DomainGroupMember, DomainGroupMembers, DomainGroupMembership, Group, GroupAuditLog,
+    GroupMember, GroupMembership, GroupMeta, Groups, ResourceGroupOwnership,
 };
 pub use policy::{Policies, Policy, PolicyList, ResourcePolicyOwnership};
 pub use principal::{PrincipalMember, PrincipalState};

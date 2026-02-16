@@ -268,6 +268,142 @@ fn put_principal_state_calls_principal_state_endpoint() {
 }
 
 #[test]
+fn get_user_token_calls_user_token_endpoint() {
+    let body = r#"{"token":"signed-user-token","header":"Athenz-Principal-Auth"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let user_token = client
+        .get_user_token("jane", Some("sports.api,media.api"), Some(true))
+        .expect("user token");
+    assert_eq!(user_token.token, "signed-user-token");
+    assert_eq!(user_token.header.as_deref(), Some("Athenz-Principal-Auth"));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/user/jane/token");
+    assert_eq!(
+        req.query.get("services").map(String::as_str),
+        Some("sports.api,media.api")
+    );
+    assert_eq!(req.query.get("header").map(String::as_str), Some("true"));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn options_user_token_calls_user_token_options_endpoint() {
+    let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .options_user_token("jane", Some("sports.api"))
+        .expect("options user token");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "OPTIONS");
+    assert_eq!(req.path, "/zms/v1/user/jane/token");
+    assert_eq!(
+        req.query.get("services").map(String::as_str),
+        Some("sports.api")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn options_user_token_accepts_no_content_response() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .options_user_token("jane", Some("sports.api"))
+        .expect("options user token");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "OPTIONS");
+    assert_eq!(req.path, "/zms/v1/user/jane/token");
+    assert_eq!(
+        req.query.get("services").map(String::as_str),
+        Some("sports.api")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn options_user_token_applies_auth_header() {
+    let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .disable_redirect(true)
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .build()
+        .expect("build");
+
+    client
+        .options_user_token("jane", Some("sports.api"))
+        .expect("options user token");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "OPTIONS");
+    assert_eq!(req.path, "/zms/v1/user/jane/token");
+    assert_eq!(
+        req.query.get("services").map(String::as_str),
+        Some("sports.api")
+    );
+    assert_eq!(
+        req.headers.get("athenz-principal-auth").map(String::as_str),
+        Some("token")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_service_principal_calls_principal_endpoint() {
+    let body = r#"{"domain":"sports","service":"api","token":"signed-service-token"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let principal = client.get_service_principal().expect("service principal");
+    assert_eq!(principal.domain, "sports");
+    assert_eq!(principal.service, "api");
+    assert_eq!(principal.token, "signed-service-token");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/principal");
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn get_system_stats_calls_system_stats_endpoint() {
     let body = r#"{"subdomain":1,"role":2,"roleMember":3,"policy":4,"assertion":5,"entity":6,"service":7,"serviceHost":8,"publicKey":9,"group":10,"groupMember":11}"#;
     let response = format!(

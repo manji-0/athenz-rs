@@ -41,10 +41,10 @@ pub use models::{
     ResourcePolicyOwnership, ResourceRoleOwnership, ResourceServiceIdentityOwnership, Role,
     RoleAccess, RoleAuditLog, RoleCertificate, RoleCertificateRequest, RoleList, RoleMember,
     RoleMeta, Roles, SSHCertRequest, SSHCertRequestData, SSHCertRequestMeta, SSHCertificate,
-    SSHCertificates, ServiceIdentities, ServiceIdentity, ServiceIdentityList, SignedPolicyData,
-    SignedPolicyRequest, Stats, Status, SubDomain, TopLevelDomain, TransportDirection,
-    TransportRule, TransportRules, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain,
-    Workload, Workloads,
+    SSHCertificates, ServiceIdentities, ServiceIdentity, ServiceIdentityList, ServicePrincipal,
+    SignedPolicyData, SignedPolicyRequest, Stats, Status, SubDomain, TopLevelDomain,
+    TransportDirection, TransportRule, TransportRules, UserAuthorityAttributeMap,
+    UserAuthorityAttributes, UserDomain, UserToken, Workload, Workloads,
 };
 
 #[cfg(feature = "async-validate")]

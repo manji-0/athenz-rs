@@ -24,6 +24,7 @@ pub(super) const TAG_KEY_VERSION: &str = "k";
 pub(super) const TAG_KEY_SERVICE: &str = "z";
 pub(super) const TAG_HOSTNAME: &str = "h";
 pub(super) const TAG_IP: &str = "i";
+pub(super) const TAG_ORIGINAL_REQUESTOR: &str = "o";
 pub(super) const TAG_GENERATION_TIME: &str = "t";
 pub(super) const TAG_EXPIRE_TIME: &str = "e";
 pub(super) const TAG_SALT: &str = "a";
@@ -42,6 +43,7 @@ pub struct NToken {
     pub key_service: Option<String>,
     pub hostname: Option<String>,
     pub ip: Option<String>,
+    pub original_requestor: Option<String>,
     pub authorized_services: Option<Vec<String>>,
     pub authorized_service_key_id: Option<String>,
     pub authorized_service_name: Option<String>,
@@ -74,6 +76,7 @@ pub struct NTokenBuilder {
     key_service: Option<String>,
     hostname: Option<String>,
     ip: Option<String>,
+    original_requestor: Option<String>,
     expiration: Duration,
 }
 
@@ -98,6 +101,7 @@ impl NTokenBuilder {
             key_service: None,
             hostname: None,
             ip: None,
+            original_requestor: None,
             expiration: DEFAULT_EXPIRATION,
         }
     }
@@ -125,6 +129,18 @@ impl NTokenBuilder {
     /// Sets the IP address claim.
     pub fn with_ip(mut self, ip: impl Into<String>) -> Self {
         self.ip = Some(ip.into());
+        self
+    }
+
+    /// Sets the original requestor claim (stored in lowercase).
+    pub fn with_original_requestor(mut self, original_requestor: impl Into<String>) -> Self {
+        let mut original_requestor = original_requestor.into();
+        original_requestor.make_ascii_lowercase();
+        if original_requestor.is_empty() {
+            self.original_requestor = None;
+        } else {
+            self.original_requestor = Some(original_requestor);
+        }
         self
     }
 
@@ -160,6 +176,18 @@ impl NTokenBuilder {
         self
     }
 
+    /// Sets the original requestor claim (stored in lowercase).
+    pub fn set_original_requestor(&mut self, original_requestor: impl Into<String>) -> &mut Self {
+        let mut original_requestor = original_requestor.into();
+        original_requestor.make_ascii_lowercase();
+        if original_requestor.is_empty() {
+            self.original_requestor = None;
+        } else {
+            self.original_requestor = Some(original_requestor);
+        }
+        self
+    }
+
     /// Sets the token expiration duration.
     pub fn set_expiration(&mut self, expiration: Duration) -> &mut Self {
         self.expiration = expiration;
@@ -187,6 +215,9 @@ impl NTokenBuilder {
         }
         if let Some(ref ip) = self.ip {
             parts.push(format!("{TAG_IP}={ip}"));
+        }
+        if let Some(ref original_requestor) = self.original_requestor {
+            parts.push(format!("{TAG_ORIGINAL_REQUESTOR}={original_requestor}"));
         }
         parts.push(format!("{TAG_SALT}={salt}"));
         parts.push(format!("{TAG_GENERATION_TIME}={now}"));

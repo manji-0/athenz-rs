@@ -16,8 +16,8 @@ use url::Url;
 use super::super::token::{
     NToken, TAG_AUTHORIZED_SERVICES, TAG_AUTHORIZED_SERVICE_KEY_ID, TAG_AUTHORIZED_SERVICE_NAME,
     TAG_AUTHORIZED_SERVICE_SIGNATURE, TAG_DOMAIN, TAG_EXPIRE_TIME, TAG_GENERATION_TIME,
-    TAG_HOSTNAME, TAG_IP, TAG_KEY_SERVICE, TAG_KEY_VERSION, TAG_NAME, TAG_SALT, TAG_SIGNATURE,
-    TAG_VERSION,
+    TAG_HOSTNAME, TAG_IP, TAG_KEY_SERVICE, TAG_KEY_VERSION, TAG_NAME, TAG_ORIGINAL_REQUESTOR,
+    TAG_SALT, TAG_SIGNATURE, TAG_VERSION,
 };
 use super::{CachedKey, KeySource, NTokenValidatorConfig, NTokenVerifier};
 
@@ -236,6 +236,7 @@ pub(super) fn parse_claims(unsigned: &str) -> Result<NToken, Error> {
         key_service: None,
         hostname: None,
         ip: None,
+        original_requestor: None,
         authorized_services: None,
         authorized_service_key_id: None,
         authorized_service_name: None,
@@ -260,6 +261,10 @@ pub(super) fn parse_claims(unsigned: &str) -> Result<NToken, Error> {
             TAG_KEY_SERVICE => claims.key_service = Some(value.to_string()),
             TAG_HOSTNAME => claims.hostname = Some(value.to_string()),
             TAG_IP => claims.ip = Some(value.to_string()),
+            TAG_ORIGINAL_REQUESTOR => {
+                claims.original_requestor =
+                    Some(validate_non_empty_value(TAG_ORIGINAL_REQUESTOR, value)?)
+            }
             TAG_AUTHORIZED_SERVICES => {
                 claims.authorized_services = Some(parse_authorized_services(value)?)
             }
@@ -310,6 +315,9 @@ pub(super) fn parse_claims(unsigned: &str) -> Result<NToken, Error> {
     }
     if let Some(ref mut key_service) = claims.key_service {
         key_service.make_ascii_lowercase();
+    }
+    if let Some(ref mut original_requestor) = claims.original_requestor {
+        original_requestor.make_ascii_lowercase();
     }
 
     Ok(claims)

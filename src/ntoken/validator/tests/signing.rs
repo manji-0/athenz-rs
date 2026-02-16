@@ -18,7 +18,9 @@ fn ntoken_sign_and_verify_rsa() {
 
 #[test]
 fn ntoken_builder_lowercases_fields() {
-    let builder = NTokenBuilder::new("Sports", "API", "V1").with_key_service("ZTS");
+    let builder = NTokenBuilder::new("Sports", "API", "V1")
+        .with_key_service("ZTS")
+        .with_original_requestor("User.Alice");
     let token = builder.sign(RSA_PRIVATE_KEY.as_bytes()).expect("token");
     let validator =
         NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
@@ -27,15 +29,25 @@ fn ntoken_builder_lowercases_fields() {
     assert_eq!(claims.name, "api");
     assert_eq!(claims.key_version, "v1");
     assert_eq!(claims.key_service.as_deref(), Some("zts"));
+    assert_eq!(claims.original_requestor.as_deref(), Some("user.alice"));
 }
 
 #[test]
 fn ntoken_parse_claims_lowercases_domain_and_service() {
-    let unsigned = "v=S1;d=Sports;n=API;k=v1;z=ZTS;a=abc;t=1;e=2";
+    let unsigned = "v=S1;d=Sports;n=API;k=v1;z=ZTS;o=User.Alice;a=abc;t=1;e=2";
     let claims = super::super::helpers::parse_claims(unsigned).expect("claims");
     assert_eq!(claims.domain, "sports");
     assert_eq!(claims.name, "api");
     assert_eq!(claims.key_service.as_deref(), Some("zts"));
+    assert_eq!(claims.original_requestor.as_deref(), Some("user.alice"));
+}
+
+#[test]
+fn ntoken_parse_claims_rejects_empty_original_requestor() {
+    let unsigned = "v=S1;d=Sports;n=API;k=v1;o=;a=abc;t=1;e=2";
+    let err = super::super::helpers::parse_claims(unsigned)
+        .expect_err("empty original requestor should fail");
+    assert!(err.to_string().contains("invalid ntoken field: o"));
 }
 
 #[test]
@@ -75,6 +87,7 @@ fn ntoken_signer_builder_mut_updates_fields() {
         .builder_mut()
         .set_hostname("host.example")
         .set_ip("127.0.0.1")
+        .set_original_requestor("User.Alice")
         .set_key_service("ZTS")
         .set_version("S2")
         .set_expiration(Duration::from_secs(90));
@@ -84,9 +97,40 @@ fn ntoken_signer_builder_mut_updates_fields() {
     let claims = validator.validate(&token).expect("validate");
     assert_eq!(claims.hostname.as_deref(), Some("host.example"));
     assert_eq!(claims.ip.as_deref(), Some("127.0.0.1"));
+    assert_eq!(claims.original_requestor.as_deref(), Some("user.alice"));
     assert_eq!(claims.key_service.as_deref(), Some("zts"));
     assert_eq!(claims.version, "S2");
     assert_eq!(claims.expiry_time - claims.generation_time, 90);
+}
+
+#[test]
+fn ntoken_builder_ignores_empty_original_requestor() {
+    let builder = NTokenBuilder::new("sports", "api", "v1").with_original_requestor("");
+    let token = builder.sign(RSA_PRIVATE_KEY.as_bytes()).expect("token");
+    assert!(!token.contains(";o="));
+
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let claims = validator.validate(&token).expect("validate");
+    assert_eq!(claims.original_requestor, None);
+}
+
+#[test]
+fn ntoken_signer_builder_mut_empty_original_requestor_unsets_claim() {
+    let mut signer =
+        NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes()).expect("signer");
+    signer.builder_mut().set_original_requestor("User.Alice");
+    let token_with_claim = signer.sign_once().expect("token");
+    assert!(token_with_claim.contains(";o=user.alice"));
+
+    signer.builder_mut().set_original_requestor("");
+    let token_without_claim = signer.sign_once().expect("token");
+    assert!(!token_without_claim.contains(";o="));
+
+    let validator =
+        NTokenValidator::new_with_public_key(RSA_PUBLIC_KEY.as_bytes()).expect("validator");
+    let claims = validator.validate(&token_without_claim).expect("validate");
+    assert_eq!(claims.original_requestor, None);
 }
 
 #[test]

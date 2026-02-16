@@ -1,6 +1,7 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
-    PrincipalState, ProviderResourceGroupRoles, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
+    PrincipalState, ProviderResourceGroupRoles, Quota, Tenancy, TenantResourceGroupRoles,
+    TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
 use std::collections::HashMap;
@@ -328,6 +329,99 @@ fn get_domain_stats_calls_domain_stats_endpoint() {
     let req = rx.recv().expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/stats");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_quota_calls_domain_quota_endpoint() {
+    let body = r#"{"name":"sports","subdomain":1,"role":2,"roleMember":3,"policy":4,"assertion":5,"entity":6,"service":7,"serviceHost":8,"publicKey":9,"group":10,"groupMember":11,"modified":"2026-02-10T00:00:00Z"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let quota = client.get_quota("sports").expect("quota");
+    assert_eq!(quota.name, "sports");
+    assert_eq!(quota.subdomain, 1);
+    assert_eq!(quota.role_member, 3);
+    assert_eq!(quota.service_host, 8);
+    assert_eq!(quota.public_key, 9);
+    assert_eq!(quota.group_member, 11);
+    assert_eq!(quota.modified.as_deref(), Some("2026-02-10T00:00:00Z"));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/quota");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_quota_calls_domain_quota_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let quota = Quota {
+        name: "sports".to_string(),
+        subdomain: 1,
+        role: 2,
+        role_member: 3,
+        policy: 4,
+        assertion: 5,
+        entity: 6,
+        service: 7,
+        service_host: 8,
+        public_key: 9,
+        group: 10,
+        group_member: 11,
+        modified: None,
+    };
+    client
+        .put_quota("sports", &quota, Some("update domain quota"))
+        .expect("put quota");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/quota");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("update domain quota")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn delete_quota_calls_domain_quota_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_quota("sports", Some("delete domain quota"))
+        .expect("delete quota");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/domain/sports/quota");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete domain quota")
+    );
 
     handle.join().expect("server");
 }

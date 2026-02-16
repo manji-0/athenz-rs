@@ -15,7 +15,7 @@ pub use zms::{
     DomainList, DomainMeta, DomainMetric, DomainMetricType, DomainMetrics, DomainPolicies,
     DomainTemplateDetailsList, Group, GroupAuditLog, GroupMember, GroupMembership, GroupMeta,
     Groups, JWSDomain, Membership, Policies, Policy, PolicyList, PrincipalMember, PrincipalState,
-    ProviderResourceGroupRoles, ResourceDomainOwnership, ResourceGroupOwnership,
+    ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourceGroupOwnership,
     ResourcePolicyOwnership, ResourceRoleOwnership, ResourceServiceIdentityOwnership, Role,
     RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles, ServerTemplateList, ServiceIdentities,
     ServiceIdentity, ServiceIdentityList, ServicePrincipal, SignedDomain, SignedDomains,

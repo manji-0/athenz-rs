@@ -243,6 +243,127 @@ fn get_domain_data_check_calls_domain_check_endpoint() {
 }
 
 #[test]
+fn template_get_server_template_list_calls_endpoint() {
+    let body = r#"{"templateNames":["base","tenant"]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let templates = client
+        .get_server_template_list()
+        .expect("server template list");
+    assert_eq!(
+        templates.template_names,
+        vec!["base".to_string(), "tenant".to_string()]
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/template");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn template_get_template_calls_endpoint() {
+    let body = r#"{"roles":[{"name":"sports:role.reader"}],"policies":[{"name":"sports:policy.reader","assertions":[{"role":"sports:role.reader","resource":"sports:*","action":"read"}]}],"groups":[{"name":"sports:group.ops"}],"services":[{"name":"sports.api"}],"metadata":{"templateName":"base","description":"base template","currentVersion":1,"latestVersion":2,"keywordsToReplace":"_service_","timestamp":"2026-02-10T00:00:00Z","autoUpdate":true}}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let template = client.get_template("base").expect("template");
+    assert_eq!(template.roles.len(), 1);
+    assert_eq!(template.roles[0].name, "sports:role.reader");
+    assert_eq!(template.policies.len(), 1);
+    assert_eq!(template.policies[0].name, "sports:policy.reader");
+    assert_eq!(
+        template
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.template_name.as_deref()),
+        Some("base")
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/template/base");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn template_get_domain_template_details_calls_endpoint() {
+    let body = r#"{"metaData":[{"templateName":"base","description":"base template","currentVersion":1,"latestVersion":2,"autoUpdate":true}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let details = client
+        .get_domain_template_details("sports")
+        .expect("domain template details");
+    assert_eq!(details.meta_data.len(), 1);
+    assert_eq!(details.meta_data[0].template_name.as_deref(), Some("base"));
+    assert_eq!(details.meta_data[0].current_version, Some(1));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/templatedetails");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn template_get_server_template_details_list_calls_endpoint() {
+    let body = r#"{"metaData":[{"templateName":"tenant"}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let details = client
+        .get_server_template_details_list()
+        .expect("server template details");
+    assert_eq!(details.meta_data.len(), 1);
+    assert_eq!(
+        details.meta_data[0].template_name.as_deref(),
+        Some("tenant")
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/templatedetails");
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn tenancy_put_tenancy_calls_endpoint() {
     let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
     let (base_url, rx, handle) = serve_once(response);

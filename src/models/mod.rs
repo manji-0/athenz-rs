@@ -12,14 +12,15 @@ pub use policy::{
 pub use zms::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
     AssertionConditions, AssertionEffect, DanglingPolicy, Domain, DomainDataCheck, DomainList,
-    DomainMeta, DomainMetric, DomainMetricType, DomainMetrics, Group, GroupAuditLog, GroupMember,
-    GroupMembership, GroupMeta, Groups, Membership, Policies, Policy, PolicyList, PrincipalMember,
-    PrincipalState, ProviderResourceGroupRoles, ResourceDomainOwnership, ResourceGroupOwnership,
-    ResourcePolicyOwnership, ResourceRoleOwnership, ResourceServiceIdentityOwnership, Role,
-    RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles, ServiceIdentities, ServiceIdentity,
-    ServiceIdentityList, ServicePrincipal, Stats, SubDomain, Tenancy, TenantResourceGroupRoles,
-    TenantRoleAction, TopLevelDomain, UserAuthorityAttributeMap, UserAuthorityAttributes,
-    UserDomain, UserToken,
+    DomainMeta, DomainMetric, DomainMetricType, DomainMetrics, DomainTemplateDetailsList, Group,
+    GroupAuditLog, GroupMember, GroupMembership, GroupMeta, Groups, Membership, Policies, Policy,
+    PolicyList, PrincipalMember, PrincipalState, ProviderResourceGroupRoles,
+    ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership,
+    ResourceRoleOwnership, ResourceServiceIdentityOwnership, Role, RoleAuditLog, RoleList,
+    RoleMember, RoleMeta, Roles, ServerTemplateList, ServiceIdentities, ServiceIdentity,
+    ServiceIdentityList, ServicePrincipal, Stats, SubDomain, Template, TemplateMeta, Tenancy,
+    TenantResourceGroupRoles, TenantRoleAction, TopLevelDomain, UserAuthorityAttributeMap,
+    UserAuthorityAttributes, UserDomain, UserToken,
 };
 pub use zts::{
     AccessTokenResponse, AthenzJwkConfig, CertificateAuthorityBundle, ExternalCredentialsRequest,

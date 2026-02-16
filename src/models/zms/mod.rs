@@ -8,6 +8,7 @@ mod principal;
 mod role;
 mod service;
 mod stats;
+mod token;
 
 pub use assertion::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
@@ -31,3 +32,4 @@ pub use service::{
     ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity, ServiceIdentityList,
 };
 pub use stats::Stats;
+pub use token::{ServicePrincipal, UserToken};

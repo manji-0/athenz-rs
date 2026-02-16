@@ -18,6 +18,7 @@ mod principal;
 mod roles;
 mod services;
 mod stats;
+mod token;
 
 /// Builder for [`ZmsAsyncClient`].
 ///

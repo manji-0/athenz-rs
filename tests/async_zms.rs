@@ -266,6 +266,137 @@ async fn put_principal_state_calls_principal_state_endpoint() {
 }
 
 #[tokio::test]
+async fn get_user_token_calls_user_token_endpoint() {
+    let body = r#"{"token":"signed-user-token","header":"Athenz-Principal-Auth"}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let user_token = client
+        .get_user_token("jane", Some("sports.api,media.api"), Some(true))
+        .await
+        .expect("user token");
+    assert_eq!(user_token.token, "signed-user-token");
+    assert_eq!(user_token.header.as_deref(), Some("Athenz-Principal-Auth"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/user/jane/token");
+    assert_eq!(req.query_value("services"), Some("sports.api,media.api"));
+    assert_eq!(req.query_value("header"), Some("true"));
+}
+
+#[tokio::test]
+async fn options_user_token_calls_user_token_options_endpoint() {
+    let response = empty_response("200 OK");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .options_user_token("jane", Some("sports.api"))
+        .await
+        .expect("options user token");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "OPTIONS");
+    assert_eq!(req.path, "/zms/v1/user/jane/token");
+    assert_eq!(req.query_value("services"), Some("sports.api"));
+}
+
+#[tokio::test]
+async fn options_user_token_accepts_no_content_response() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .options_user_token("jane", Some("sports.api"))
+        .await
+        .expect("options user token");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "OPTIONS");
+    assert_eq!(req.path, "/zms/v1/user/jane/token");
+    assert_eq!(req.query_value("services"), Some("sports.api"));
+}
+
+#[tokio::test]
+async fn options_user_token_applies_auth_header() {
+    let response = empty_response("200 OK");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .follow_redirects(false)
+        .build()
+        .expect("build");
+
+    client
+        .options_user_token("jane", Some("sports.api"))
+        .await
+        .expect("options user token");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "OPTIONS");
+    assert_eq!(req.path, "/zms/v1/user/jane/token");
+    assert_eq!(req.query_value("services"), Some("sports.api"));
+    assert_eq!(req.header_value("Athenz-Principal-Auth"), Some("token"));
+}
+
+#[tokio::test]
+async fn get_service_principal_calls_principal_endpoint() {
+    let body = r#"{"domain":"sports","service":"api","token":"signed-service-token"}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let principal = client
+        .get_service_principal()
+        .await
+        .expect("service principal");
+    assert_eq!(principal.domain, "sports");
+    assert_eq!(principal.service, "api");
+    assert_eq!(principal.token, "signed-service-token");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/principal");
+}
+
+#[tokio::test]
 async fn get_system_stats_calls_system_stats_endpoint() {
     let body = r#"{"subdomain":1,"role":2,"roleMember":3,"policy":4,"assertion":5,"entity":6,"service":7,"serviceHost":8,"publicKey":9,"group":10,"groupMember":11}"#;
     let response = json_response("200 OK", body);

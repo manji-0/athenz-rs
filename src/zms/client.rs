@@ -19,6 +19,7 @@ mod principal;
 mod roles;
 mod services;
 mod stats;
+mod token;
 
 pub struct ZmsClientBuilder {
     base_url: Url,

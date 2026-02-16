@@ -26,6 +26,7 @@ If you add new endpoints, update this list.
   - Get domain, list domains
   - Get modified signed domains (`/sys/modified_domains`)
   - Get signed domain JWS (`/domain/{name}/signed`)
+  - Get/update/delete domain quota (`/domain/{name}/quota`)
   - Create top-level, sub-, and user domains
   - Delete top-level, sub-, and user domains
   - Update domain metadata

@@ -5,6 +5,7 @@ mod domain_data_check;
 mod group;
 mod policy;
 mod principal;
+mod quota;
 mod role;
 mod service;
 mod signed_domain;
@@ -28,6 +29,7 @@ pub use group::{
 };
 pub use policy::{Policies, Policy, PolicyList, ResourcePolicyOwnership};
 pub use principal::{PrincipalMember, PrincipalState};
+pub use quota::Quota;
 pub use role::{
     Membership, ResourceRoleOwnership, Role, RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles,
 };

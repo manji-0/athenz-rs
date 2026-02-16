@@ -1,7 +1,7 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{
-    DomainListOptions, NTokenSigner, PrincipalState, ProviderResourceGroupRoles,
+    DomainListOptions, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota,
     SignedDomainsOptions, Tenancy, TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
 };
 use rand::thread_rng;
@@ -320,6 +320,100 @@ async fn get_domain_stats_calls_domain_stats_endpoint() {
         .expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/stats");
+}
+
+#[tokio::test]
+async fn get_quota_calls_domain_quota_endpoint() {
+    let body = r#"{"name":"sports","subdomain":1,"role":2,"roleMember":3,"policy":4,"assertion":5,"entity":6,"service":7,"serviceHost":8,"publicKey":9,"group":10,"groupMember":11,"modified":"2026-02-10T00:00:00Z"}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let quota = client.get_quota("sports").await.expect("quota");
+    assert_eq!(quota.name, "sports");
+    assert_eq!(quota.subdomain, 1);
+    assert_eq!(quota.role_member, 3);
+    assert_eq!(quota.service_host, 8);
+    assert_eq!(quota.public_key, 9);
+    assert_eq!(quota.group_member, 11);
+    assert_eq!(quota.modified.as_deref(), Some("2026-02-10T00:00:00Z"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/quota");
+}
+
+#[tokio::test]
+async fn put_quota_calls_domain_quota_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let quota = Quota {
+        name: "sports".to_string(),
+        subdomain: 1,
+        role: 2,
+        role_member: 3,
+        policy: 4,
+        assertion: 5,
+        entity: 6,
+        service: 7,
+        service_host: 8,
+        public_key: 9,
+        group: 10,
+        group_member: 11,
+        modified: None,
+    };
+    client
+        .put_quota("sports", &quota, Some("update domain quota"))
+        .await
+        .expect("put quota");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/quota");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("update domain quota"));
+    let payload: serde_json::Value = serde_json::from_slice(&req.body).expect("request json");
+    assert_eq!(payload.get("serviceHost").and_then(|v| v.as_i64()), Some(8));
+    assert_eq!(payload.get("roleMember").and_then(|v| v.as_i64()), Some(3));
+}
+
+#[tokio::test]
+async fn delete_quota_calls_domain_quota_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_quota("sports", Some("delete domain quota"))
+        .await
+        .expect("delete quota");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/domain/sports/quota");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("delete domain quota"));
 }
 
 #[tokio::test]

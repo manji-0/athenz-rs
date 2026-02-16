@@ -11,16 +11,17 @@ pub use policy::{
 };
 pub use zms::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
-    AssertionConditions, AssertionEffect, DanglingPolicy, Domain, DomainDataCheck, DomainList,
-    DomainMeta, DomainMetric, DomainMetricType, DomainMetrics, DomainTemplateDetailsList, Group,
-    GroupAuditLog, GroupMember, GroupMembership, GroupMeta, Groups, Membership, Policies, Policy,
-    PolicyList, PrincipalMember, PrincipalState, ProviderResourceGroupRoles,
-    ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership,
-    ResourceRoleOwnership, ResourceServiceIdentityOwnership, Role, RoleAuditLog, RoleList,
-    RoleMember, RoleMeta, Roles, ServerTemplateList, ServiceIdentities, ServiceIdentity,
-    ServiceIdentityList, ServicePrincipal, Stats, SubDomain, Template, TemplateMeta, Tenancy,
-    TenantResourceGroupRoles, TenantRoleAction, TopLevelDomain, UserAuthorityAttributeMap,
-    UserAuthorityAttributes, UserDomain, UserToken,
+    AssertionConditions, AssertionEffect, DanglingPolicy, Domain, DomainData, DomainDataCheck,
+    DomainList, DomainMeta, DomainMetric, DomainMetricType, DomainMetrics, DomainPolicies,
+    DomainTemplateDetailsList, Group, GroupAuditLog, GroupMember, GroupMembership, GroupMeta,
+    Groups, JWSDomain, Membership, Policies, Policy, PolicyList, PrincipalMember, PrincipalState,
+    ProviderResourceGroupRoles, ResourceDomainOwnership, ResourceGroupOwnership,
+    ResourcePolicyOwnership, ResourceRoleOwnership, ResourceServiceIdentityOwnership, Role,
+    RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles, ServerTemplateList, ServiceIdentities,
+    ServiceIdentity, ServiceIdentityList, ServicePrincipal, SignedDomain, SignedDomains,
+    SignedPolicies, Stats, SubDomain, Template, TemplateMeta, Tenancy, TenantResourceGroupRoles,
+    TenantRoleAction, TopLevelDomain, UserAuthorityAttributeMap, UserAuthorityAttributes,
+    UserDomain, UserToken,
 };
 pub use zts::{
     AccessTokenResponse, AthenzJwkConfig, CertificateAuthorityBundle, ExternalCredentialsRequest,

@@ -2,7 +2,7 @@ use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
     PrincipalState, ProviderResourceGroupRoles, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
 };
-use crate::zms::{DomainListOptions, ZmsClient};
+use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -61,6 +61,143 @@ fn get_domain_list_returns_none_on_not_modified() {
     let options = DomainListOptions::default();
     let list = client.get_domain_list(&options).expect("request");
     assert!(list.is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_modified_domains_sets_query_and_etag() {
+    let body = r#"{"domains":[{"domain":{"name":"sports","roles":[],"policies":{"contents":{"domain":"sports","policies":[]},"signature":"pol-sig","keyId":"0"},"services":[],"entities":[],"groups":[],"modified":"2026-02-01T00:00:00Z"},"signature":"dom-sig","keyId":"0"}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nETag: etag-1\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = SignedDomainsOptions {
+        domain: Some("sports".to_string()),
+        meta_only: Some(true),
+        meta_attr: Some("all".to_string()),
+        master: Some(true),
+        conditions: Some(true),
+    };
+
+    let response = client
+        .get_modified_domains(&options, Some("etag-0"))
+        .expect("request");
+    assert_eq!(response.etag.as_deref(), Some("etag-1"));
+    let domains = response.data.expect("domains");
+    assert_eq!(domains.domains.len(), 1);
+    assert_eq!(domains.domains[0].domain.name, "sports");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/sys/modified_domains");
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+    assert_eq!(req.query.get("metaonly").map(String::as_str), Some("true"));
+    assert_eq!(req.query.get("metaattr").map(String::as_str), Some("all"));
+    assert_eq!(req.query.get("master").map(String::as_str), Some("true"));
+    assert_eq!(
+        req.query.get("conditions").map(String::as_str),
+        Some("true")
+    );
+    assert_eq!(
+        req.headers.get("if-none-match").map(String::as_str),
+        Some("etag-0")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_modified_domains_returns_none_on_not_modified() {
+    let response =
+        "HTTP/1.1 304 Not Modified\r\nETag: etag-2\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let response = client
+        .get_modified_domains(&SignedDomainsOptions::default(), Some("etag-2"))
+        .expect("request");
+    assert!(response.data.is_none());
+    assert_eq!(response.etag.as_deref(), Some("etag-2"));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(
+        req.headers.get("if-none-match").map(String::as_str),
+        Some("etag-2")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_signed_domain_sets_query_and_etag() {
+    let body = r#"{"payload":"payload","protected":"protected","header":{"alg":"ES256","kid":"0"},"signature":"sig"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nETag: etag-3\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let response = client
+        .get_signed_domain("sports", Some(true), Some("etag-2"))
+        .expect("request");
+    assert_eq!(response.etag.as_deref(), Some("etag-3"));
+    let data = response.data.expect("jws domain");
+    assert_eq!(data.payload, "payload");
+    assert_eq!(data.protected_header, "protected");
+    assert_eq!(data.signature, "sig");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/signed");
+    assert_eq!(
+        req.query.get("signaturep1363format").map(String::as_str),
+        Some("true")
+    );
+    assert_eq!(
+        req.headers.get("if-none-match").map(String::as_str),
+        Some("etag-2")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_signed_domain_returns_none_on_not_modified() {
+    let response =
+        "HTTP/1.1 304 Not Modified\r\nETag: etag-4\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let response = client
+        .get_signed_domain("sports", None, Some("etag-4"))
+        .expect("request");
+    assert!(response.data.is_none());
+    assert_eq!(response.etag.as_deref(), Some("etag-4"));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(
+        req.headers.get("if-none-match").map(String::as_str),
+        Some("etag-4")
+    );
 
     handle.join().expect("server");
 }

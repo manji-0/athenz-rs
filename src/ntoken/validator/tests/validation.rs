@@ -3,6 +3,8 @@ use crate::ntoken::keys::load_private_key;
 use crate::ntoken::token::{sign_with_key_at, unix_time_now};
 use crate::ntoken::validator::checks::validate_authorized_service_claims;
 use crate::ntoken::NToken;
+#[cfg(feature = "async-validate")]
+use crate::ntoken::NTokenValidatorAsync;
 use crate::ntoken::{
     NTokenBuilder, NTokenSigner, NTokenValidationOptions, NTokenValidator, NTokenValidatorConfig,
 };
@@ -396,6 +398,38 @@ fn ntoken_validate_limits_zts_key_cache_entries() {
         .validate(&token_v1)
         .expect("v1 after eviction validate");
     assert_eq!(request_count.load(Ordering::SeqCst), 3);
+
+    handle
+        .join()
+        .expect("mock zts key server thread should exit");
+}
+
+#[cfg(feature = "async-validate")]
+#[tokio::test]
+async fn ntoken_validate_async_fetches_zts_public_key() {
+    let response_body = format!(
+        r#"{{"key":"{}","id":"v1"}}"#,
+        ybase64_encode(RSA_PUBLIC_KEY.as_bytes())
+    );
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        response_body.len(),
+        response_body
+    );
+    let (base_url, request_count, handle) =
+        spawn_zts_key_server(response, 1, Duration::from_secs(5));
+
+    let mut config = NTokenValidatorConfig::default();
+    config.zts_base_url = format!("{}/zts/v1", base_url);
+    let validator = NTokenValidatorAsync::new_with_zts(config).expect("validator");
+
+    let token = NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes())
+        .expect("signer")
+        .sign_once()
+        .expect("token");
+
+    validator.validate(&token).await.expect("validate");
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
 
     handle
         .join()

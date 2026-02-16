@@ -16,7 +16,7 @@ async fn get_status_uses_status_path() {
     let body = r#"{"code":200,"message":"ok"}"#;
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-        body.as_bytes().len(),
+        body.len(),
         body
     );
     let (base_url, rx) = serve_once(response).await;
@@ -42,7 +42,7 @@ async fn get_status_handles_trailing_slash_base_url() {
     let body = r#"{"code":200,"message":"ok"}"#;
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-        body.as_bytes().len(),
+        body.len(),
         body
     );
     let (base_url, rx) = serve_once(response).await;
@@ -67,7 +67,7 @@ async fn get_domain_signed_policy_data_returns_etag_on_ok() {
     let body = r#"{"signedPolicyData":{"policyData":{"domain":"sports","policies":[{"name":"p","assertions":[]}]},"modified":"2020-01-01T00:00:00Z","expires":"2099-01-01T00:00:00Z"},"signature":"sig","keyId":"0"}"#;
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nETag: v1\r\nContent-Length: {}\r\n\r\n{}",
-        body.as_bytes().len(),
+        body.len(),
         body
     );
     let (base_url, rx) = serve_once(response).await;
@@ -240,7 +240,7 @@ async fn register_instance_returns_location_on_created() {
     let body = r#"{"provider":"prov","name":"sports.api","instanceId":"i-123"}"#;
     let response = format!(
         "HTTP/1.1 201 Created\r\nLocation: https://example.com/instance/i-123\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-        body.as_bytes().len(),
+        body.len(),
         body
     );
     let (base_url, rx) = serve_once(response).await;
@@ -298,7 +298,7 @@ async fn get_roles_require_role_cert_sends_principal() {
     let body = r#"{"roles":["sports:role.reader"]}"#;
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-        body.as_bytes().len(),
+        body.len(),
         body
     );
     let (base_url, rx) = serve_once(response).await;
@@ -516,7 +516,7 @@ async fn get_status_truncates_large_error_body() {
     let body = "x".repeat(MAX_ERROR_BODY_BYTES + 10);
     let response = format!(
         "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-        body.as_bytes().len(),
+        body.len(),
         body
     );
     let (base_url, _rx) = serve_once(response).await;

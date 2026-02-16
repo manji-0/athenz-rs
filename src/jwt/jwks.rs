@@ -670,7 +670,7 @@ mod tests {
                         let _ = stream.read(&mut buf);
                         let response = format!(
                             "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                            body.as_bytes().len(),
+                            body.len(),
                             body
                         );
                         let _ = stream.write_all(response.as_bytes());

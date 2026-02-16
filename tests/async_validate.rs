@@ -278,8 +278,10 @@ async fn ntoken_validator_async_uses_cache() {
     );
     let (base_url, rx) = serve_once(response).await;
 
-    let mut config = NTokenValidatorConfig::default();
-    config.zts_base_url = format!("{}/zts/v1", base_url);
+    let config = NTokenValidatorConfig {
+        zts_base_url: format!("{}/zts/v1", base_url),
+        ..Default::default()
+    };
     let validator = NTokenValidatorAsync::new_with_zts(config).expect("validator");
 
     validator.validate(&token).await.expect("first validate");
@@ -309,12 +311,14 @@ async fn ntoken_validator_async_sends_auth_header_when_fetching_zts_public_key()
     );
     let (base_url, rx) = serve_once(response).await;
 
-    let mut config = NTokenValidatorConfig::default();
-    config.zts_base_url = format!("{}/zts/v1", base_url);
-    config.public_key_fetch_auth_header = Some((
-        "Athenz-Principal-Auth".to_string(),
-        "NToken dummy".to_string(),
-    ));
+    let config = NTokenValidatorConfig {
+        zts_base_url: format!("{}/zts/v1", base_url),
+        public_key_fetch_auth_header: Some((
+            "Athenz-Principal-Auth".to_string(),
+            "NToken dummy".to_string(),
+        )),
+        ..Default::default()
+    };
     let validator = NTokenValidatorAsync::new_with_zts(config).expect("validator");
 
     validator.validate(&token).await.expect("validate");
@@ -336,9 +340,11 @@ async fn ntoken_validator_async_limits_zts_key_cache_entries() {
     let (base_url, request_count, handle) =
         spawn_zts_key_server(response, 3, Duration::from_secs(2)).await;
 
-    let mut config = NTokenValidatorConfig::default();
-    config.zts_base_url = format!("{}/zts/v1", base_url);
-    config.max_cache_entries = 1;
+    let config = NTokenValidatorConfig {
+        zts_base_url: format!("{}/zts/v1", base_url),
+        max_cache_entries: 1,
+        ..Default::default()
+    };
     let validator = NTokenValidatorAsync::new_with_zts(config).expect("validator");
 
     let token_v1 = NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes())

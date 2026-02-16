@@ -127,6 +127,7 @@ impl NTokenValidator {
 
 #[cfg(feature = "async-validate")]
 #[allow(private_interfaces)]
+#[allow(clippy::large_enum_variant)]
 pub enum NTokenValidatorAsync {
     Static(NTokenVerifier),
     Zts {

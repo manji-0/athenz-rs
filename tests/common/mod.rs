@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -55,11 +57,7 @@ pub fn response_with_body(status: &str, headers: &[(&str, &str)], body: &str) ->
     for (name, value) in headers {
         response.push_str(&format!("{name}: {value}\r\n"));
     }
-    response.push_str(&format!(
-        "Content-Length: {}\r\n\r\n{}",
-        body.as_bytes().len(),
-        body
-    ));
+    response.push_str(&format!("Content-Length: {}\r\n\r\n{}", body.len(), body));
     response
 }
 

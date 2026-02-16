@@ -1,6 +1,9 @@
 #![cfg(feature = "async-client")]
 
-use athenz_rs::{DomainListOptions, NTokenSigner, PrincipalState, ZmsAsyncClient};
+use athenz_rs::{
+    DomainListOptions, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Tenancy,
+    TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
+};
 use rand::thread_rng;
 use rsa::pkcs1::EncodeRsaPrivateKey;
 use rsa::RsaPrivateKey;
@@ -21,10 +24,12 @@ async fn get_domain_list_sets_query_and_modified_since() {
         .build()
         .expect("build");
 
-    let mut options = DomainListOptions::default();
-    options.limit = Some(5);
-    options.prefix = Some("core".to_string());
-    options.modified_since = Some("Wed, 21 Oct 2015 07:28:00 GMT".to_string());
+    let options = DomainListOptions {
+        limit: Some(5),
+        prefix: Some("core".to_string()),
+        modified_since: Some("Wed, 21 Oct 2015 07:28:00 GMT".to_string()),
+        ..Default::default()
+    };
 
     let list = client
         .get_domain_list(&options)
@@ -230,6 +235,458 @@ async fn get_domain_data_check_calls_domain_check_endpoint() {
         .expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/check");
+}
+
+#[tokio::test]
+async fn tenancy_put_tenancy_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let detail = Tenancy {
+        domain: "sports".to_string(),
+        service: "storage".to_string(),
+        resource_groups: Some(vec!["core".to_string()]),
+        create_admin_role: Some(true),
+    };
+    client
+        .put_tenancy(
+            "sports",
+            "storage",
+            &detail,
+            Some("register tenant service"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("put tenancy");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/tenancy/storage");
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("register tenant service")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"domain":"sports","service":"storage","resourceGroups":["core"],"createAdminRole":true}"#
+    );
+}
+
+#[tokio::test]
+async fn tenancy_delete_tenancy_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_tenancy(
+            "sports",
+            "storage",
+            Some("delete tenant service"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("delete tenancy");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/domain/sports/tenancy/storage");
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("delete tenant service")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+}
+
+#[tokio::test]
+async fn tenancy_put_tenant_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let detail = Tenancy {
+        domain: "sports.tenant".to_string(),
+        service: "storage".to_string(),
+        resource_groups: Some(vec!["core".to_string()]),
+        create_admin_role: Some(true),
+    };
+    client
+        .put_tenant(
+            "sports",
+            "storage",
+            "sports.tenant",
+            &detail,
+            Some("register tenant domain"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("put tenant");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/storage/tenant/sports.tenant"
+    );
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("register tenant domain")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"domain":"sports.tenant","service":"storage","resourceGroups":["core"],"createAdminRole":true}"#
+    );
+}
+
+#[tokio::test]
+async fn tenancy_delete_tenant_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_tenant(
+            "sports",
+            "storage",
+            "sports.tenant",
+            Some("delete tenant domain"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("delete tenant");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/storage/tenant/sports.tenant"
+    );
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("delete tenant domain")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+}
+
+#[tokio::test]
+async fn tenancy_put_tenant_resource_group_roles_calls_endpoint() {
+    let body = r#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core"}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let detail = TenantResourceGroupRoles {
+        domain: "sports".to_string(),
+        service: "storage".to_string(),
+        tenant: "sports.tenant".to_string(),
+        roles: vec![TenantRoleAction {
+            role: "reader".to_string(),
+            action: "read".to_string(),
+        }],
+        resource_group: "core".to_string(),
+    };
+    let result = client
+        .put_tenant_resource_group_roles(
+            "sports",
+            "storage",
+            "sports.tenant",
+            "core",
+            &detail,
+            Some("upsert tenant roles"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("put tenant resource group roles");
+    assert_eq!(result.domain, "sports");
+    assert_eq!(result.service, "storage");
+    assert_eq!(result.tenant, "sports.tenant");
+    assert_eq!(result.roles.len(), 1);
+    assert_eq!(result.roles[0].role, "reader");
+    assert_eq!(result.roles[0].action, "read");
+    assert_eq!(result.resource_group, "core");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/storage/tenant/sports.tenant/resourceGroup/core"
+    );
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("upsert tenant roles"));
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core"}"#
+    );
+}
+
+#[tokio::test]
+async fn tenancy_get_tenant_resource_group_roles_calls_endpoint() {
+    let body = r#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core"}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let result = client
+        .get_tenant_resource_group_roles("sports", "storage", "sports.tenant", "core")
+        .await
+        .expect("get tenant resource group roles");
+    assert_eq!(result.domain, "sports");
+    assert_eq!(result.service, "storage");
+    assert_eq!(result.tenant, "sports.tenant");
+    assert_eq!(result.roles.len(), 1);
+    assert_eq!(result.roles[0].role, "reader");
+    assert_eq!(result.roles[0].action, "read");
+    assert_eq!(result.resource_group, "core");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/storage/tenant/sports.tenant/resourceGroup/core"
+    );
+}
+
+#[tokio::test]
+async fn tenancy_delete_tenant_resource_group_roles_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_tenant_resource_group_roles(
+            "sports",
+            "storage",
+            "sports.tenant",
+            "core",
+            Some("delete tenant roles"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("delete tenant resource group roles");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/storage/tenant/sports.tenant/resourceGroup/core"
+    );
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("delete tenant roles"));
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+}
+
+#[tokio::test]
+async fn tenancy_put_provider_resource_group_roles_calls_endpoint() {
+    let body = r#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core","createAdminRole":true,"skipPrincipalMember":false}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let detail = ProviderResourceGroupRoles {
+        domain: "sports".to_string(),
+        service: "storage".to_string(),
+        tenant: "sports.tenant".to_string(),
+        roles: vec![TenantRoleAction {
+            role: "reader".to_string(),
+            action: "read".to_string(),
+        }],
+        resource_group: "core".to_string(),
+        create_admin_role: Some(true),
+        skip_principal_member: Some(false),
+    };
+    let result = client
+        .put_provider_resource_group_roles(
+            "sports.tenant",
+            "sports",
+            "storage",
+            "core",
+            &detail,
+            Some("upsert provider roles"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("put provider resource group roles");
+    assert_eq!(result.domain, "sports");
+    assert_eq!(result.service, "storage");
+    assert_eq!(result.tenant, "sports.tenant");
+    assert_eq!(result.roles.len(), 1);
+    assert_eq!(result.roles[0].role, "reader");
+    assert_eq!(result.roles[0].action, "read");
+    assert_eq!(result.resource_group, "core");
+    assert_eq!(result.create_admin_role, Some(true));
+    assert_eq!(result.skip_principal_member, Some(false));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports.tenant/provDomain/sports/provService/storage/resourceGroup/core"
+    );
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("upsert provider roles")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core","createAdminRole":true,"skipPrincipalMember":false}"#
+    );
+}
+
+#[tokio::test]
+async fn tenancy_get_provider_resource_group_roles_calls_endpoint() {
+    let body = r#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core","createAdminRole":true,"skipPrincipalMember":false}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let result = client
+        .get_provider_resource_group_roles("sports.tenant", "sports", "storage", "core")
+        .await
+        .expect("get provider resource group roles");
+    assert_eq!(result.domain, "sports");
+    assert_eq!(result.service, "storage");
+    assert_eq!(result.tenant, "sports.tenant");
+    assert_eq!(result.roles.len(), 1);
+    assert_eq!(result.roles[0].role, "reader");
+    assert_eq!(result.roles[0].action, "read");
+    assert_eq!(result.resource_group, "core");
+    assert_eq!(result.create_admin_role, Some(true));
+    assert_eq!(result.skip_principal_member, Some(false));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports.tenant/provDomain/sports/provService/storage/resourceGroup/core"
+    );
+}
+
+#[tokio::test]
+async fn tenancy_delete_provider_resource_group_roles_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_provider_resource_group_roles(
+            "sports.tenant",
+            "sports",
+            "storage",
+            "core",
+            Some("delete provider roles"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("delete provider resource group roles");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports.tenant/provDomain/sports/provService/storage/resourceGroup/core"
+    );
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("delete provider roles")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
 }
 
 #[tokio::test]

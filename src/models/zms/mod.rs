@@ -8,6 +8,7 @@ mod principal;
 mod role;
 mod service;
 mod stats;
+mod tenancy;
 mod token;
 
 pub use assertion::{
@@ -32,4 +33,7 @@ pub use service::{
     ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity, ServiceIdentityList,
 };
 pub use stats::Stats;
+pub use tenancy::{
+    ProviderResourceGroupRoles, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
+};
 pub use token::{ServicePrincipal, UserToken};

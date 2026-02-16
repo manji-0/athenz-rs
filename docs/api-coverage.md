@@ -13,7 +13,7 @@ If you add new endpoints, update this list.
 - Instance identity: register, refresh, delete instance, get register token
 - Certificate authority: fetch CA bundle
 - SSH certificates: post SSH certificate request
-- Workloads: query by service or IP
+- Workloads / host mapping: query by service or IP, enumerate host services
 - Transport rules: fetch transport rules
 - External credentials: post external credentials
 - Status / info / schema: ZTS health and RDL schema

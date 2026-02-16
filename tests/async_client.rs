@@ -63,6 +63,35 @@ async fn get_status_handles_trailing_slash_base_url() {
 }
 
 #[tokio::test]
+async fn get_host_services_uses_host_services_path() {
+    let body = r#"{"host":"host1.example","names":["sports.api","sports.ui"]}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    let services = client
+        .get_host_services("host1.example")
+        .await
+        .expect("host services");
+    assert_eq!(services.host, "host1.example");
+    assert_eq!(services.names, vec!["sports.api", "sports.ui"]);
+
+    let req = timeout(REQUEST_TIMEOUT, rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zts/v1/host/host1.example/services");
+    assert_eq!(req.header_value("Athenz-Principal-Auth"), Some("token"));
+}
+
+#[tokio::test]
 async fn get_domain_signed_policy_data_returns_etag_on_ok() {
     let body = r#"{"signedPolicyData":{"policyData":{"domain":"sports","policies":[{"name":"p","assertions":[]}]},"modified":"2020-01-01T00:00:00Z","expires":"2099-01-01T00:00:00Z"},"signature":"sig","keyId":"0"}"#;
     let response = format!(

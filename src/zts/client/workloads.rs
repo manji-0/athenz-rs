@@ -1,10 +1,20 @@
 use super::ZtsClient;
 use crate::error::Error;
 use crate::models::{
-    ExternalCredentialsRequest, ExternalCredentialsResponse, TransportRules, Workloads,
+    ExternalCredentialsRequest, ExternalCredentialsResponse, HostServices, TransportRules,
+    Workloads,
 };
 
 impl ZtsClient {
+    /// Retrieves services provisioned on a host.
+    pub fn get_host_services(&self, host: &str) -> Result<HostServices, Error> {
+        let url = self.build_url(&["host", host, "services"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
     /// Retrieves workloads for a service.
     pub fn get_workloads_by_service(
         &self,

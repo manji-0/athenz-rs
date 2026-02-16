@@ -1,6 +1,7 @@
 mod access_token;
 mod ca;
 mod external_credentials;
+mod host_services;
 mod instance;
 mod jwk;
 mod oidc;
@@ -12,6 +13,7 @@ mod workload;
 pub use access_token::AccessTokenResponse;
 pub use ca::CertificateAuthorityBundle;
 pub use external_credentials::{ExternalCredentialsRequest, ExternalCredentialsResponse};
+pub use host_services::HostServices;
 pub use instance::{
     InstanceIdentity, InstanceRefreshInformation, InstanceRegisterInformation,
     InstanceRegisterResponse, InstanceRegisterToken,

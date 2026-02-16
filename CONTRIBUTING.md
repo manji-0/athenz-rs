@@ -6,19 +6,21 @@ Thanks for helping improve `athenz-rs`.
 
 - Rust toolchain (stable)
 - Optional: `rustfmt`, `clippy`
+- Recommended: `cargo-nextest` (`cargo install cargo-nextest --locked`)
 
 ## Build and test
 
 ```sh
 cargo build
-cargo test
+cargo nextest run --all-features
+cargo test --doc --all-features
 ```
 
 ## Formatting and linting
 
 ```sh
 cargo fmt
-cargo clippy
+cargo clippy --all-features
 ```
 
 ## Documentation updates
@@ -29,5 +31,5 @@ cargo clippy
 ## Example test invocation
 
 ```sh
-cargo test policy::tests
+cargo nextest run --all-features
 ```

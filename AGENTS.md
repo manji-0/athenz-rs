@@ -42,10 +42,11 @@ Examples:
 ## Build, test, and lint
 
 - Build: `cargo build`
-- Test: `cargo test`
+- Test: `cargo nextest run --all-features`
+- Doc tests: `cargo test --doc --all-features`
 - Format: `cargo fmt`
-- Lint: `cargo clippy`
-- Example test target: `cargo test policy::tests`
+- Lint: `cargo clippy --all-features`
+- Example test target: `cargo nextest run --all-features`
 
 ## Examples
 

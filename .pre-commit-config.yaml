@@ -5,16 +5,16 @@ repos:
       - id: fmt
         args: ["--", "--check"]
       - id: clippy
-        args: ["--", "-D", "warnings"]
+        args: ["--all-features", "--", "-D", "warnings"]
   - repo: local
     hooks:
-      - id: cargo-test
-        name: cargo test
-        entry: cargo test
+      - id: cargo-nextest
+        name: cargo nextest run --all-features
+        entry: cargo nextest run --all-features
         language: system
         pass_filenames: false
-      - id: cargo-test-async-client
-        name: cargo test --features async-client
-        entry: cargo test --features async-client
+      - id: cargo-doc-tests
+        name: cargo test --doc --all-features
+        entry: cargo test --doc --all-features
         language: system
         pass_filenames: false

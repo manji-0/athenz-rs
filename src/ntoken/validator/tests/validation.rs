@@ -14,7 +14,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -401,6 +401,52 @@ fn ntoken_validate_limits_zts_key_cache_entries() {
         .expect("v1 after eviction validate");
     assert_eq!(request_count.load(Ordering::SeqCst), 3);
 
+    handle
+        .join()
+        .expect("mock zts key server thread should exit");
+}
+
+#[test]
+fn ntoken_validate_avoids_thundering_herd_on_zts_public_key_fetch() {
+    let response_body = format!(
+        r#"{{"key":"{}","id":"v1"}}"#,
+        ybase64_encode(RSA_PUBLIC_KEY.as_bytes())
+    );
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        response_body.len(),
+        response_body
+    );
+    let (base_url, request_count, handle) =
+        spawn_zts_key_server(response, 1, Duration::from_secs(5));
+
+    let config = NTokenValidatorConfig {
+        zts_base_url: format!("{}/zts/v1", base_url),
+        ..Default::default()
+    };
+    let validator = Arc::new(NTokenValidator::new_with_zts(config).expect("validator"));
+    let token = NTokenSigner::new("sports", "api", "v1", RSA_PRIVATE_KEY.as_bytes())
+        .expect("signer")
+        .sign_once()
+        .expect("token");
+
+    let workers = 8;
+    let barrier = Arc::new(Barrier::new(workers));
+    let mut workers_handles = Vec::with_capacity(workers);
+    for _ in 0..workers {
+        let validator = Arc::clone(&validator);
+        let barrier = Arc::clone(&barrier);
+        let token = token.clone();
+        workers_handles.push(thread::spawn(move || {
+            barrier.wait();
+            validator.validate(&token).expect("validate");
+        }));
+    }
+    for worker in workers_handles {
+        worker.join().expect("worker thread should exit");
+    }
+
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
     handle
         .join()
         .expect("mock zts key server thread should exit");

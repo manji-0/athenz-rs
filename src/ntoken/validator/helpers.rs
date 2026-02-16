@@ -5,9 +5,8 @@ use reqwest::blocking::Client as HttpClient;
 #[cfg(feature = "async-validate")]
 use reqwest::Client as AsyncHttpClient;
 use std::collections::HashMap;
-#[cfg(feature = "async-validate")]
 use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 #[cfg(feature = "async-validate")]
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
@@ -45,6 +44,7 @@ pub(super) fn build_zts_public_key_url(
 
 pub(super) fn get_cached_verifier(
     cache: &RwLock<HashMap<KeySource, CachedKey>>,
+    fetch_locks: &Mutex<HashMap<KeySource, Arc<Mutex<()>>>>,
     http: &HttpClient,
     config: &NTokenValidatorConfig,
     src: &KeySource,
@@ -56,32 +56,59 @@ pub(super) fn get_cached_verifier(
         }
     }
 
-    let url = build_zts_public_key_url(config, src)?;
-    let mut req = http.get(url);
-    if let Some((header, value)) = &config.public_key_fetch_auth_header {
-        req = req.header(header.as_str(), value.as_str());
-    }
-    let resp = req.send()?;
-    if !resp.status().is_success() {
-        return Err(Error::Crypto(format!(
-            "unable to fetch public key: status {}",
-            resp.status()
-        )));
-    }
-    let entry: PublicKeyEntry = resp.json()?;
-    let pem_bytes = ybase64_decode(&entry.key)?;
-    let verifier = NTokenVerifier::from_public_key_pem(&pem_bytes)?;
-    let now = Instant::now();
-
-    let cached = CachedKey {
-        verifier: verifier.clone(),
-        expires_at: now + config.cache_ttl,
-        created_at: now,
+    let fetch_lock = {
+        let mut locks = fetch_locks.lock().expect("ntoken fetch lock map poisoned");
+        locks
+            .entry(src.clone())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
     };
-    let mut cache = cache.write().unwrap();
-    cache.insert(src.clone(), cached);
-    enforce_cache_limit(&mut cache, config.max_cache_entries);
-    Ok(verifier)
+    let result = {
+        let _guard = fetch_lock.lock().expect("ntoken fetch lock poisoned");
+        (|| -> Result<NTokenVerifier, Error> {
+            let now = Instant::now();
+            if let Some(entry) = cache.read().unwrap().get(src) {
+                if entry.expires_at > now {
+                    return Ok(entry.verifier.clone());
+                }
+            }
+
+            let url = build_zts_public_key_url(config, src)?;
+            let mut req = http.get(url);
+            if let Some((header, value)) = &config.public_key_fetch_auth_header {
+                req = req.header(header.as_str(), value.as_str());
+            }
+            let resp = req.send()?;
+            if !resp.status().is_success() {
+                return Err(Error::Crypto(format!(
+                    "unable to fetch public key: status {}",
+                    resp.status()
+                )));
+            }
+            let entry: PublicKeyEntry = resp.json()?;
+            let pem_bytes = ybase64_decode(&entry.key)?;
+            let verifier = NTokenVerifier::from_public_key_pem(&pem_bytes)?;
+            let now = Instant::now();
+
+            let cached = CachedKey {
+                verifier: verifier.clone(),
+                expires_at: now + config.cache_ttl,
+                created_at: now,
+            };
+            let mut cache = cache.write().unwrap();
+            cache.insert(src.clone(), cached);
+            enforce_cache_limit(&mut cache, config.max_cache_entries);
+            Ok(verifier)
+        })()
+    };
+
+    let mut locks = fetch_locks.lock().expect("ntoken fetch lock map poisoned");
+    if let Some(existing) = locks.get(src) {
+        if Arc::ptr_eq(existing, &fetch_lock) && Arc::strong_count(existing) == 2 {
+            locks.remove(src);
+        }
+    }
+    result
 }
 
 #[cfg(feature = "async-validate")]
@@ -109,45 +136,47 @@ pub(super) async fn get_cached_verifier_async(
             .or_insert_with(|| Arc::new(AsyncMutex::new(())))
             .clone()
     };
-    let _guard = fetch_lock.lock().await;
-    let result = async {
-        {
-            let cache = cache.read().await;
-            if let Some(entry) = cache.get(src) {
-                if entry.expires_at > Instant::now() {
-                    return Ok(entry.verifier.clone());
+    let result = {
+        let _guard = fetch_lock.lock().await;
+        async {
+            {
+                let cache = cache.read().await;
+                if let Some(entry) = cache.get(src) {
+                    if entry.expires_at > Instant::now() {
+                        return Ok(entry.verifier.clone());
+                    }
                 }
             }
-        }
 
-        let url = build_zts_public_key_url(config, src)?;
-        let mut req = http.get(url);
-        if let Some((header, value)) = &config.public_key_fetch_auth_header {
-            req = req.header(header.as_str(), value.as_str());
-        }
-        let resp = req.send().await?;
-        if !resp.status().is_success() {
-            return Err(Error::Crypto(format!(
-                "unable to fetch public key: status {}",
-                resp.status()
-            )));
-        }
-        let entry: PublicKeyEntry = resp.json().await?;
-        let pem_bytes = ybase64_decode(&entry.key)?;
-        let verifier = NTokenVerifier::from_public_key_pem(&pem_bytes)?;
-        let now = Instant::now();
+            let url = build_zts_public_key_url(config, src)?;
+            let mut req = http.get(url);
+            if let Some((header, value)) = &config.public_key_fetch_auth_header {
+                req = req.header(header.as_str(), value.as_str());
+            }
+            let resp = req.send().await?;
+            if !resp.status().is_success() {
+                return Err(Error::Crypto(format!(
+                    "unable to fetch public key: status {}",
+                    resp.status()
+                )));
+            }
+            let entry: PublicKeyEntry = resp.json().await?;
+            let pem_bytes = ybase64_decode(&entry.key)?;
+            let verifier = NTokenVerifier::from_public_key_pem(&pem_bytes)?;
+            let now = Instant::now();
 
-        let cached = CachedKey {
-            verifier: verifier.clone(),
-            expires_at: now + config.cache_ttl,
-            created_at: now,
-        };
-        let mut cache = cache.write().await;
-        cache.insert(src.clone(), cached);
-        enforce_cache_limit(&mut cache, config.max_cache_entries);
-        Ok(verifier)
-    }
-    .await;
+            let cached = CachedKey {
+                verifier: verifier.clone(),
+                expires_at: now + config.cache_ttl,
+                created_at: now,
+            };
+            let mut cache = cache.write().await;
+            cache.insert(src.clone(), cached);
+            enforce_cache_limit(&mut cache, config.max_cache_entries);
+            Ok(verifier)
+        }
+        .await
+    };
 
     let mut locks = fetch_locks.lock().await;
     if let Some(existing) = locks.get(src) {

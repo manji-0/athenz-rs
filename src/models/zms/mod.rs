@@ -8,6 +8,7 @@ mod principal;
 mod role;
 mod service;
 mod stats;
+mod template;
 mod tenancy;
 mod token;
 
@@ -33,6 +34,7 @@ pub use service::{
     ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity, ServiceIdentityList,
 };
 pub use stats::Stats;
+pub use template::{DomainTemplateDetailsList, ServerTemplateList, Template, TemplateMeta};
 pub use tenancy::{
     ProviderResourceGroupRoles, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
 };

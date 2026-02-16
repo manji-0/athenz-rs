@@ -238,6 +238,122 @@ async fn get_domain_data_check_calls_domain_check_endpoint() {
 }
 
 #[tokio::test]
+async fn template_get_server_template_list_calls_endpoint() {
+    let body = r#"{"templateNames":["base","tenant"]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let templates = client
+        .get_server_template_list()
+        .await
+        .expect("server template list");
+    assert_eq!(
+        templates.template_names,
+        vec!["base".to_string(), "tenant".to_string()]
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/template");
+}
+
+#[tokio::test]
+async fn template_get_template_calls_endpoint() {
+    let body = r#"{"roles":[{"name":"sports:role.reader"}],"policies":[{"name":"sports:policy.reader","assertions":[{"role":"sports:role.reader","resource":"sports:*","action":"read"}]}],"groups":[{"name":"sports:group.ops"}],"services":[{"name":"sports.api"}],"metadata":{"templateName":"base","description":"base template","currentVersion":1,"latestVersion":2,"keywordsToReplace":"_service_","timestamp":"2026-02-10T00:00:00Z","autoUpdate":true}}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let template = client.get_template("base").await.expect("template");
+    assert_eq!(template.roles.len(), 1);
+    assert_eq!(template.roles[0].name, "sports:role.reader");
+    assert_eq!(template.policies.len(), 1);
+    assert_eq!(template.policies[0].name, "sports:policy.reader");
+    assert_eq!(
+        template
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.template_name.as_deref()),
+        Some("base")
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/template/base");
+}
+
+#[tokio::test]
+async fn template_get_domain_template_details_calls_endpoint() {
+    let body = r#"{"metaData":[{"templateName":"base","description":"base template","currentVersion":1,"latestVersion":2,"autoUpdate":true}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let details = client
+        .get_domain_template_details("sports")
+        .await
+        .expect("domain template details");
+    assert_eq!(details.meta_data.len(), 1);
+    assert_eq!(details.meta_data[0].template_name.as_deref(), Some("base"));
+    assert_eq!(details.meta_data[0].current_version, Some(1));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/templatedetails");
+}
+
+#[tokio::test]
+async fn template_get_server_template_details_list_calls_endpoint() {
+    let body = r#"{"metaData":[{"templateName":"tenant"}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let details = client
+        .get_server_template_details_list()
+        .await
+        .expect("server template details");
+    assert_eq!(details.meta_data.len(), 1);
+    assert_eq!(
+        details.meta_data[0].template_name.as_deref(),
+        Some("tenant")
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/templatedetails");
+}
+
+#[tokio::test]
 async fn tenancy_put_tenancy_calls_endpoint() {
     let response = empty_response("204 No Content");
     let (base_url, rx) = serve_once(response).await;

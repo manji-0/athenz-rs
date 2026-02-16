@@ -19,6 +19,7 @@ mod principal;
 mod roles;
 mod services;
 mod stats;
+mod templates;
 mod tenancy;
 mod token;
 

@@ -3,9 +3,8 @@ use reqwest::blocking::Client as HttpClient;
 #[cfg(feature = "async-validate")]
 use reqwest::Client as AsyncHttpClient;
 use std::collections::HashMap;
-#[cfg(feature = "async-validate")]
 use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 #[cfg(feature = "async-validate")]
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
@@ -26,6 +25,7 @@ pub enum NTokenValidator {
     Zts {
         config: NTokenValidatorConfig,
         cache: RwLock<HashMap<KeySource, CachedKey>>,
+        fetch_locks: Mutex<HashMap<KeySource, Arc<Mutex<()>>>>,
         http: HttpClient,
     },
 }
@@ -60,6 +60,7 @@ impl NTokenValidator {
         Ok(NTokenValidator::Zts {
             config,
             cache: RwLock::new(HashMap::new()),
+            fetch_locks: Mutex::new(HashMap::new()),
             http,
         })
     }
@@ -107,10 +108,11 @@ impl NTokenValidator {
             NTokenValidator::Zts {
                 config,
                 cache,
+                fetch_locks,
                 http,
             } => {
                 let src = key_source_from_claims(&claims, config);
-                let verifier = get_cached_verifier(cache, http, config, &src)?;
+                let verifier = get_cached_verifier(cache, fetch_locks, http, config, &src)?;
                 verifier.verify(&unsigned, &signature)?;
                 validate_version_domain(&claims)?;
                 validate_time_bounds(&claims, options)?;

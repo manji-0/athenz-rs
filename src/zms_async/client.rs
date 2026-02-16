@@ -17,6 +17,7 @@ mod policies;
 mod principal;
 mod roles;
 mod services;
+mod signed_domains;
 mod stats;
 mod templates;
 mod tenancy;
@@ -231,6 +232,29 @@ impl ZmsAsyncClient {
         match resp.status() {
             StatusCode::NO_CONTENT => Ok(None),
             StatusCode::OK => resp.json::<T>().await.map(Some).map_err(Error::from),
+            _ => self.parse_error(resp).await,
+        }
+    }
+
+    async fn expect_conditional_json<T: serde::de::DeserializeOwned>(
+        &self,
+        resp: Response,
+    ) -> Result<crate::zts::ConditionalResponse<T>, Error> {
+        let status = resp.status();
+        let etag = resp
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.to_string());
+        match status {
+            StatusCode::OK => {
+                let data = resp.json::<T>().await?;
+                Ok(crate::zts::ConditionalResponse {
+                    data: Some(data),
+                    etag,
+                })
+            }
+            StatusCode::NOT_MODIFIED => Ok(crate::zts::ConditionalResponse { data: None, etag }),
             _ => self.parse_error(resp).await,
         }
     }

@@ -264,3 +264,34 @@ impl GroupGetOptions {
         pairs
     }
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct SignedDomainsOptions {
+    pub domain: Option<String>,
+    pub meta_only: Option<bool>,
+    pub meta_attr: Option<String>,
+    pub master: Option<bool>,
+    pub conditions: Option<bool>,
+}
+
+impl SignedDomainsOptions {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+        let mut pairs = Vec::new();
+        if let Some(ref domain) = self.domain {
+            pairs.push(("domain", domain.clone()));
+        }
+        if let Some(meta_only) = self.meta_only {
+            pairs.push(("metaonly", meta_only.to_string()));
+        }
+        if let Some(ref meta_attr) = self.meta_attr {
+            pairs.push(("metaattr", meta_attr.clone()));
+        }
+        if let Some(master) = self.master {
+            pairs.push(("master", master.to_string()));
+        }
+        if let Some(conditions) = self.conditions {
+            pairs.push(("conditions", conditions.to_string()));
+        }
+        pairs
+    }
+}

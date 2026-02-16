@@ -7,6 +7,7 @@ mod policy;
 mod principal;
 mod role;
 mod service;
+mod signed_domain;
 mod stats;
 mod template;
 mod tenancy;
@@ -32,6 +33,9 @@ pub use role::{
 };
 pub use service::{
     ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity, ServiceIdentityList,
+};
+pub use signed_domain::{
+    DomainData, DomainPolicies, JWSDomain, SignedDomain, SignedDomains, SignedPolicies,
 };
 pub use stats::Stats;
 pub use template::{DomainTemplateDetailsList, ServerTemplateList, Template, TemplateMeta};

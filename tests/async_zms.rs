@@ -1,8 +1,8 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{
-    DomainListOptions, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Tenancy,
-    TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
+    DomainListOptions, NTokenSigner, PrincipalState, ProviderResourceGroupRoles,
+    SignedDomainsOptions, Tenancy, TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
 };
 use rand::thread_rng;
 use rsa::pkcs1::EncodeRsaPrivateKey;
@@ -65,6 +65,137 @@ async fn get_domain_list_returns_none_on_not_modified() {
     let options = DomainListOptions::default();
     let list = client.get_domain_list(&options).await.expect("request");
     assert!(list.is_none());
+}
+
+#[tokio::test]
+async fn get_modified_domains_sets_query_and_etag() {
+    let body = r#"{"domains":[{"domain":{"name":"sports","roles":[],"policies":{"contents":{"domain":"sports","policies":[]},"signature":"pol-sig","keyId":"0"},"services":[],"entities":[],"groups":[],"modified":"2026-02-01T00:00:00Z"},"signature":"dom-sig","keyId":"0"}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nETag: etag-1\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = SignedDomainsOptions {
+        domain: Some("sports".to_string()),
+        meta_only: Some(true),
+        meta_attr: Some("all".to_string()),
+        master: Some(true),
+        conditions: Some(true),
+    };
+
+    let response = client
+        .get_modified_domains(&options, Some("etag-0"))
+        .await
+        .expect("request");
+    assert_eq!(response.etag.as_deref(), Some("etag-1"));
+    let domains = response.data.expect("domains");
+    assert_eq!(domains.domains.len(), 1);
+    assert_eq!(domains.domains[0].domain.name, "sports");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/sys/modified_domains");
+    assert_eq!(req.query_value("domain"), Some("sports"));
+    assert_eq!(req.query_value("metaonly"), Some("true"));
+    assert_eq!(req.query_value("metaattr"), Some("all"));
+    assert_eq!(req.query_value("master"), Some("true"));
+    assert_eq!(req.query_value("conditions"), Some("true"));
+    assert_eq!(req.header_value("If-None-Match"), Some("etag-0"));
+}
+
+#[tokio::test]
+async fn get_modified_domains_returns_none_on_not_modified() {
+    let response =
+        "HTTP/1.1 304 Not Modified\r\nETag: etag-2\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let response = client
+        .get_modified_domains(&SignedDomainsOptions::default(), Some("etag-2"))
+        .await
+        .expect("request");
+    assert!(response.data.is_none());
+    assert_eq!(response.etag.as_deref(), Some("etag-2"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.header_value("If-None-Match"), Some("etag-2"));
+}
+
+#[tokio::test]
+async fn get_signed_domain_sets_query_and_etag() {
+    let body = r#"{"payload":"payload","protected":"protected","header":{"alg":"ES256"},"signature":"sig"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nETag: etag-3\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let response = client
+        .get_signed_domain("sports", Some(true), Some("etag-2"))
+        .await
+        .expect("request");
+    assert_eq!(response.etag.as_deref(), Some("etag-3"));
+    let data = response.data.expect("jws");
+    assert_eq!(data.payload, "payload");
+    assert_eq!(data.protected_header, "protected");
+    assert_eq!(data.signature, "sig");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/signed");
+    assert_eq!(req.query_value("signaturep1363format"), Some("true"));
+    assert_eq!(req.header_value("If-None-Match"), Some("etag-2"));
+}
+
+#[tokio::test]
+async fn get_signed_domain_returns_none_on_not_modified() {
+    let response =
+        "HTTP/1.1 304 Not Modified\r\nETag: etag-4\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let response = client
+        .get_signed_domain("sports", None, Some("etag-4"))
+        .await
+        .expect("request");
+    assert!(response.data.is_none());
+    assert_eq!(response.etag.as_deref(), Some("etag-4"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.header_value("If-None-Match"), Some("etag-4"));
 }
 
 #[tokio::test]

@@ -30,7 +30,7 @@ pub use group::{
     DomainGroupMember, DomainGroupMembers, DomainGroupMembership, Group, GroupAuditLog,
     GroupMember, GroupMembership, GroupMeta, Groups, ResourceGroupOwnership,
 };
-pub use policy::{Policies, Policy, PolicyList, ResourcePolicyOwnership};
+pub use policy::{Policies, Policy, PolicyList, PolicyOptions, ResourcePolicyOwnership};
 pub use principal::{PrincipalMember, PrincipalState};
 pub use quota::Quota;
 pub use role::{

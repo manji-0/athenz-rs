@@ -1,9 +1,10 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
-    PrincipalState, ProviderResourceGroupRoles, Quota, Tenancy, TenantResourceGroupRoles,
+    Entity, PrincipalState, ProviderResourceGroupRoles, Quota, Tenancy, TenantResourceGroupRoles,
     TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
+use serde_json::json;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -422,6 +423,141 @@ fn delete_quota_calls_domain_quota_endpoint() {
         req.headers.get("y-audit-ref").map(String::as_str),
         Some("delete domain quota")
     );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_entity_calls_domain_entity_endpoint() {
+    let body = r#"{"name":"sports.entity.config","value":{"enabled":true,"limit":100}}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let entity = client
+        .get_entity("sports", "entity.config")
+        .expect("get entity");
+    assert_eq!(entity.name, "sports.entity.config");
+    assert_eq!(
+        entity.value.get("enabled").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        entity.value.get("limit").and_then(|v| v.as_i64()),
+        Some(100)
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/entity/entity.config");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_entity_calls_domain_entity_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let entity = Entity {
+        name: "sports.entity.config".to_string(),
+        value: json!({
+            "enabled": true,
+            "limit": 100
+        }),
+    };
+    client
+        .put_entity(
+            "sports",
+            "entity.config",
+            &entity,
+            Some("upsert domain entity"),
+            Some("sports-admin"),
+        )
+        .expect("put entity");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/entity/entity.config");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("upsert domain entity")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports-admin")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn delete_entity_calls_domain_entity_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_entity(
+            "sports",
+            "entity.config",
+            Some("delete domain entity"),
+            Some("sports-admin"),
+        )
+        .expect("delete entity");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/domain/sports/entity/entity.config");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete domain entity")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports-admin")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_entity_list_calls_domain_entity_list_endpoint() {
+    let body = r#"{"names":["entity.config","entity.flags"]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let entities = client.get_entity_list("sports").expect("entity list");
+    assert_eq!(
+        entities.names,
+        vec!["entity.config".to_string(), "entity.flags".to_string()]
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/entity");
 
     handle.join().expect("server");
 }

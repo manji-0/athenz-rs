@@ -12,6 +12,7 @@ use super::common;
 
 mod authority;
 mod domain;
+mod entities;
 mod groups;
 mod meta;
 mod policies;

@@ -141,6 +141,42 @@ async fn jwt_rs256_async_validate_success() {
 }
 
 #[tokio::test]
+async fn jwt_rs256_async_honors_required_spec_claims_option() {
+    let exp = jsonwebtoken::get_current_timestamp() + 3600;
+    let token = build_rs256_token_with_claims(
+        json!({
+            "iss": "athenz",
+            "sub": "service.sports.api",
+            "exp": exp,
+        }),
+        Some("good-key"),
+    );
+    let (n, e, _) = rs256_public_components();
+    let jwks = build_rs256_jwks(&n, &e, "good-key");
+    let provider = JwksProviderAsync::new("https://example.com/jwks")
+        .expect("provider")
+        .with_preloaded(jwks);
+
+    let mut options = JwtValidationOptions::athenz_default();
+    options.issuer = Some("athenz".to_string());
+    options.required_spec_claims = vec!["exp".to_string(), "nbf".to_string()];
+
+    let validator = JwtValidatorAsync::new(provider).with_options(options);
+    let err = validator
+        .validate_access_token(&token)
+        .await
+        .expect_err("should fail without nbf");
+
+    match err {
+        Error::Jwt(err) => match err.kind() {
+            ErrorKind::MissingRequiredClaim(claim) => assert_eq!(claim, "nbf"),
+            other => panic!("unexpected error kind: {:?}", other),
+        },
+        other => panic!("unexpected error: {:?}", other),
+    }
+}
+
+#[tokio::test]
 async fn jwt_rs256_async_rejects_invalid_typ() {
     let header = json!({
         "alg": "RS256",
@@ -597,6 +633,10 @@ fn build_rs256_token(kid: Option<&str>) -> String {
         "sub": "principal",
         "exp": exp,
     });
+    build_rs256_token_with_claims(claims, kid)
+}
+
+fn build_rs256_token_with_claims(claims: serde_json::Value, kid: Option<&str>) -> String {
     let mut header = Header::new(Algorithm::RS256);
     header.kid = kid.map(|value| value.to_string());
     encode(

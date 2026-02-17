@@ -932,6 +932,34 @@ mod tests {
     }
 
     #[test]
+    fn jwt_rs256_honors_required_spec_claims_option() {
+        let now = jsonwebtoken::get_current_timestamp();
+        let claims = json!({
+            "iss": "athenz",
+            "sub": "principal",
+            "exp": now + 3600,
+        });
+        let (token, jwks) = build_rs256_token_with_kid_and_claims("good-key", claims);
+        let jwks_provider = jwks_provider_with_seeded_cache(jwks);
+
+        let mut options = JwtValidationOptions::rsa_only();
+        options.issuer = Some("athenz".to_string());
+        options.required_spec_claims = vec!["exp".to_string(), "nbf".to_string()];
+
+        let validator = JwtValidator::new(jwks_provider).with_options(options);
+        let err = validator
+            .validate_access_token(&token)
+            .expect_err("should fail without nbf");
+        match err {
+            Error::Jwt(jwt_err) => match jwt_err.kind() {
+                ErrorKind::MissingRequiredClaim(claim) => assert_eq!(claim, "nbf"),
+                other => panic!("unexpected error kind: {:?}", other),
+            },
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
     fn jwt_rs256_rejects_jwk_use_enc() {
         let (token, _jwks) = build_rs256_token_with_kid("good-key");
         let (n, e, _) = rs256_public_components();

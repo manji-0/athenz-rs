@@ -44,6 +44,7 @@ If you add new endpoints, update this list.
   - Public key entry get/put/delete
 - Groups:
   - Get groups, list groups
+  - Get principal groups (`/group?principal=&domain=`)
   - Create/update group, delete group
   - Group membership get/put/delete
 

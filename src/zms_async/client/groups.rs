@@ -1,6 +1,6 @@
 use super::ZmsAsyncClient;
 use crate::error::Error;
-use crate::models::{Group, GroupMembership, Groups};
+use crate::models::{DomainGroupMember, Group, GroupMembership, Groups};
 use crate::zms::common;
 use crate::zms::{GroupGetOptions, GroupsQueryOptions};
 
@@ -84,6 +84,27 @@ impl ZmsAsyncClient {
         if let Some(expiration) = expiration {
             req = req.query(&[("expiration", expiration)]);
         }
+        req = self.apply_auth(req)?;
+        let resp = req.send().await?;
+        self.expect_ok_json(resp).await
+    }
+
+    /// Lists groups for a principal across domains, optionally scoped to one domain.
+    pub async fn get_principal_groups(
+        &self,
+        principal: Option<&str>,
+        domain: Option<&str>,
+    ) -> Result<DomainGroupMember, Error> {
+        let url = self.build_url(&["group"])?;
+        let mut req = self.http.get(url);
+        let mut query = Vec::new();
+        if let Some(principal) = principal {
+            query.push(("principal", principal.to_string()));
+        }
+        if let Some(domain) = domain {
+            query.push(("domain", domain.to_string()));
+        }
+        req = common::apply_query_params(req, query);
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await

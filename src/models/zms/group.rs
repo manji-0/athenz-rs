@@ -144,3 +144,23 @@ pub struct Group {
 pub struct Groups {
     pub list: Vec<Group>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainGroupMember {
+    pub member_name: String,
+    pub member_groups: Vec<GroupMember>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainGroupMembers {
+    pub domain_name: String,
+    pub members: Vec<DomainGroupMember>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainGroupMembership {
+    pub domain_group_members_list: Vec<DomainGroupMembers>,
+}

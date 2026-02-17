@@ -1025,6 +1025,134 @@ fn tenancy_delete_provider_resource_group_roles_calls_endpoint() {
 }
 
 #[test]
+fn get_principal_groups_calls_group_endpoint() {
+    let body = r#"{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let groups = client
+        .get_principal_groups(Some("user.jane"), Some("sports"))
+        .expect("principal groups");
+    assert_eq!(groups.member_name, "user.jane");
+    assert_eq!(groups.member_groups.len(), 1);
+    assert_eq!(groups.member_groups[0].group_name.as_deref(), Some("devs"));
+    assert_eq!(
+        groups.member_groups[0].domain_name.as_deref(),
+        Some("sports")
+    );
+    assert_eq!(groups.member_groups[0].active, Some(true));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/group");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_principal_groups_without_filters_omits_query_params() {
+    let body = r#"{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let groups = client
+        .get_principal_groups(None, None)
+        .expect("principal groups");
+    assert_eq!(groups.member_name, "user.jane");
+    assert_eq!(groups.member_groups.len(), 1);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/group");
+    assert!(req.query.get("principal").is_none());
+    assert!(req.query.get("domain").is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_principal_groups_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let groups = client
+        .get_principal_groups(Some("user.jane"), None)
+        .expect("principal groups");
+    assert_eq!(groups.member_name, "user.jane");
+    assert_eq!(groups.member_groups.len(), 1);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/group");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert!(req.query.get("domain").is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_principal_groups_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let groups = client
+        .get_principal_groups(None, Some("sports"))
+        .expect("principal groups");
+    assert_eq!(groups.member_name, "user.jane");
+    assert_eq!(groups.member_groups.len(), 1);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/group");
+    assert!(req.query.get("principal").is_none());
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn put_principal_state_calls_principal_state_endpoint() {
     let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
     let (base_url, rx, handle) = serve_once(response);

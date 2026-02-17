@@ -1031,6 +1031,124 @@ async fn tenancy_delete_provider_resource_group_roles_calls_endpoint() {
 }
 
 #[tokio::test]
+async fn get_principal_groups_calls_group_endpoint() {
+    let body = r#"{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let groups = client
+        .get_principal_groups(Some("user.jane"), Some("sports"))
+        .await
+        .expect("principal groups");
+    assert_eq!(groups.member_name, "user.jane");
+    assert_eq!(groups.member_groups.len(), 1);
+    assert_eq!(groups.member_groups[0].group_name.as_deref(), Some("devs"));
+    assert_eq!(
+        groups.member_groups[0].domain_name.as_deref(),
+        Some("sports")
+    );
+    assert_eq!(groups.member_groups[0].active, Some(true));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/group");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("domain"), Some("sports"));
+}
+
+#[tokio::test]
+async fn get_principal_groups_without_filters_omits_query_params() {
+    let body = r#"{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let groups = client
+        .get_principal_groups(None, None)
+        .await
+        .expect("principal groups");
+    assert_eq!(groups.member_name, "user.jane");
+    assert_eq!(groups.member_groups.len(), 1);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/group");
+    assert_eq!(req.query_value("principal"), None);
+    assert_eq!(req.query_value("domain"), None);
+}
+
+#[tokio::test]
+async fn get_principal_groups_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let groups = client
+        .get_principal_groups(Some("user.jane"), None)
+        .await
+        .expect("principal groups");
+    assert_eq!(groups.member_name, "user.jane");
+    assert_eq!(groups.member_groups.len(), 1);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/group");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("domain"), None);
+}
+
+#[tokio::test]
+async fn get_principal_groups_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let groups = client
+        .get_principal_groups(None, Some("sports"))
+        .await
+        .expect("principal groups");
+    assert_eq!(groups.member_name, "user.jane");
+    assert_eq!(groups.member_groups.len(), 1);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/group");
+    assert_eq!(req.query_value("principal"), None);
+    assert_eq!(req.query_value("domain"), Some("sports"));
+}
+
+#[tokio::test]
 async fn put_principal_state_calls_principal_state_endpoint() {
     let response = empty_response("204 No Content");
     let (base_url, rx) = serve_once(response).await;

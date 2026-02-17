@@ -1,12 +1,13 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{
-    DomainListOptions, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota,
+    DomainListOptions, Entity, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota,
     SignedDomainsOptions, Tenancy, TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
 };
 use rand::thread_rng;
 use rsa::pkcs1::EncodeRsaPrivateKey;
 use rsa::RsaPrivateKey;
+use serde_json::json;
 use std::sync::OnceLock;
 use tokio::time::{timeout, Duration};
 
@@ -414,6 +415,148 @@ async fn delete_quota_calls_domain_quota_endpoint() {
     assert_eq!(req.method, "DELETE");
     assert_eq!(req.path, "/zms/v1/domain/sports/quota");
     assert_eq!(req.header_value("Y-Audit-Ref"), Some("delete domain quota"));
+}
+
+#[tokio::test]
+async fn get_entity_calls_domain_entity_endpoint() {
+    let body = r#"{"name":"sports.entity.config","value":{"enabled":true,"limit":100}}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let entity = client
+        .get_entity("sports", "entity.config")
+        .await
+        .expect("entity");
+    assert_eq!(entity.name, "sports.entity.config");
+    assert_eq!(
+        entity.value.get("enabled").and_then(|v| v.as_bool()),
+        Some(true)
+    );
+    assert_eq!(
+        entity.value.get("limit").and_then(|v| v.as_i64()),
+        Some(100)
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/entity/entity.config");
+}
+
+#[tokio::test]
+async fn put_entity_calls_domain_entity_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let entity = Entity {
+        name: "sports.entity.config".to_string(),
+        value: json!({
+            "enabled": true,
+            "limit": 100
+        }),
+    };
+    client
+        .put_entity(
+            "sports",
+            "entity.config",
+            &entity,
+            Some("upsert domain entity"),
+            Some("sports-admin"),
+        )
+        .await
+        .expect("put entity");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/entity/entity.config");
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("upsert domain entity")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports-admin")
+    );
+    assert_eq!(
+        std::str::from_utf8(&req.body).expect("utf8 body"),
+        r#"{"name":"sports.entity.config","value":{"enabled":true,"limit":100}}"#
+    );
+}
+
+#[tokio::test]
+async fn delete_entity_calls_domain_entity_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_entity(
+            "sports",
+            "entity.config",
+            Some("delete domain entity"),
+            Some("sports-admin"),
+        )
+        .await
+        .expect("delete entity");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/domain/sports/entity/entity.config");
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("delete domain entity")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports-admin")
+    );
+}
+
+#[tokio::test]
+async fn get_entity_list_calls_domain_entity_list_endpoint() {
+    let body = r#"{"names":["entity.config","entity.flags"]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let entities = client.get_entity_list("sports").await.expect("entity list");
+    assert_eq!(
+        entities.names,
+        vec!["entity.config".to_string(), "entity.flags".to_string()]
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/entity");
 }
 
 #[tokio::test]

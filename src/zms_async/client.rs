@@ -11,6 +11,7 @@ use url::Url;
 
 mod authority;
 mod domain;
+mod entities;
 mod groups;
 mod meta;
 mod policies;

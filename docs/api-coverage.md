@@ -42,6 +42,9 @@ If you add new endpoints, update this list.
   - Get service identity, list service identities
   - Create/update service identity, delete service identity
   - Public key entry get/put/delete
+- Entities:
+  - Get entity, list entities
+  - Create/update entity, delete entity
 - Groups:
   - Get groups, list groups
   - Get principal groups (`/group?principal=&domain=`)

@@ -2,6 +2,7 @@ mod assertion;
 mod authority;
 mod domain;
 mod domain_data_check;
+mod entity;
 mod group;
 mod policy;
 mod principal;
@@ -24,6 +25,7 @@ pub use domain::{
     ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,
 };
 pub use domain_data_check::{DanglingPolicy, DomainDataCheck};
+pub use entity::{Entity, EntityList};
 pub use group::{
     DomainGroupMember, DomainGroupMembers, DomainGroupMembership, Group, GroupAuditLog,
     GroupMember, GroupMembership, GroupMeta, Groups, ResourceGroupOwnership,

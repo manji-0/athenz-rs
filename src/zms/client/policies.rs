@@ -1,6 +1,6 @@
 use super::ZmsClient;
 use crate::error::Error;
-use crate::models::{Assertion, Policies, Policy, PolicyList};
+use crate::models::{Assertion, Policies, Policy, PolicyList, PolicyOptions};
 use crate::zms::common;
 use crate::zms::{PoliciesQueryOptions, PolicyListOptions};
 
@@ -40,6 +40,88 @@ impl ZmsClient {
         req = self.apply_auth(req)?;
         let resp = req.send()?;
         self.expect_ok_json(resp)
+    }
+
+    /// Lists versions of a specific policy.
+    pub fn get_policy_version_list(&self, domain: &str, policy: &str) -> Result<PolicyList, Error> {
+        let url = self.build_url(&["domain", domain, "policy", policy, "version"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Retrieves a specific policy version.
+    pub fn get_policy_version(
+        &self,
+        domain: &str,
+        policy: &str,
+        version: &str,
+    ) -> Result<Policy, Error> {
+        let url = self.build_url(&["domain", domain, "policy", policy, "version", version])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Creates a new policy version.
+    pub fn put_policy_version(
+        &self,
+        domain: &str,
+        policy: &str,
+        options: &PolicyOptions,
+        audit_ref: Option<&str>,
+        return_obj: Option<bool>,
+        resource_owner: Option<&str>,
+    ) -> Result<Option<Policy>, Error> {
+        let url = self.build_url(&["domain", domain, "policy", policy, "version", "create"])?;
+        let mut req = self.http.put(url).json(options);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        if let Some(return_obj) = return_obj {
+            req = req.header("Athenz-Return-Object", return_obj.to_string());
+        }
+        let resp = req.send()?;
+        self.expect_no_content_or_json(resp)
+    }
+
+    /// Marks a policy version as active.
+    pub fn set_active_policy_version(
+        &self,
+        domain: &str,
+        policy: &str,
+        options: &PolicyOptions,
+        audit_ref: Option<&str>,
+        return_obj: Option<bool>,
+        resource_owner: Option<&str>,
+    ) -> Result<Option<Policy>, Error> {
+        let url = self.build_url(&["domain", domain, "policy", policy, "version", "active"])?;
+        let mut req = self.http.put(url).json(options);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        if let Some(return_obj) = return_obj {
+            req = req.header("Athenz-Return-Object", return_obj.to_string());
+        }
+        let resp = req.send()?;
+        self.expect_no_content_or_json(resp)
+    }
+
+    /// Deletes a specific policy version.
+    pub fn delete_policy_version(
+        &self,
+        domain: &str,
+        policy: &str,
+        version: &str,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "policy", policy, "version", version])?;
+        let mut req = self.http.delete(url);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
     }
 
     /// Creates or updates a policy.

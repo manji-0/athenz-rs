@@ -47,3 +47,11 @@ pub struct PolicyList {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PolicyOptions {
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_version: Option<String>,
+}

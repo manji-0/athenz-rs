@@ -37,6 +37,7 @@ If you add new endpoints, update this list.
 - Policies:
   - List policies / policy list, get policy
   - Create/update policy, delete policy
+  - Policy version management: list/get/create/activate/delete version
   - Assertion get/put/delete
 - Service identities:
   - Get service identity, list service identities

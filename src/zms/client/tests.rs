@@ -1,7 +1,7 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
-    Entity, PrincipalState, ProviderResourceGroupRoles, Quota, Tenancy, TenantResourceGroupRoles,
-    TenantRoleAction,
+    Entity, PolicyOptions, PrincipalState, ProviderResourceGroupRoles, Quota, Tenancy,
+    TenantResourceGroupRoles, TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
@@ -1475,6 +1475,202 @@ fn get_system_stats_calls_system_stats_endpoint() {
     let req = rx.recv().expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/sys/stats");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_policy_version_list_calls_expected_endpoint() {
+    let body = r#"{"names":["0","v1"]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_policy_version_list("sports", "readers")
+        .expect("policy version list");
+    assert_eq!(list.names, vec!["0", "v1"]);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/policy/readers/version");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_policy_version_calls_expected_endpoint() {
+    let body = r#"{"name":"sports:policy.readers","version":"v1"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let policy = client
+        .get_policy_version("sports", "readers", "v1")
+        .expect("policy version");
+    assert_eq!(policy.name, "sports:policy.readers");
+    assert_eq!(policy.version.as_deref(), Some("v1"));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/policy/readers/version/v1");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_policy_version_calls_create_endpoint() {
+    let body = r#"{"name":"sports:policy.readers","version":"v2"}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+    let options = PolicyOptions {
+        version: "v2".to_string(),
+        from_version: Some("v1".to_string()),
+    };
+
+    let policy = client
+        .put_policy_version(
+            "sports",
+            "readers",
+            &options,
+            Some("create version"),
+            Some(true),
+            Some("sports.owner"),
+        )
+        .expect("put policy version")
+        .expect("policy");
+    assert_eq!(policy.name, "sports:policy.readers");
+    assert_eq!(policy.version.as_deref(), Some("v2"));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/version/create"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("create version")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.headers.get("athenz-return-object").map(String::as_str),
+        Some("true")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn set_active_policy_version_calls_active_endpoint() {
+    let body = r#"{"name":"sports:policy.readers","version":"v2","active":true}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+    let options = PolicyOptions {
+        version: "v2".to_string(),
+        from_version: None,
+    };
+
+    let policy = client
+        .set_active_policy_version(
+            "sports",
+            "readers",
+            &options,
+            Some("activate version"),
+            Some(true),
+            Some("sports.owner"),
+        )
+        .expect("set active policy version")
+        .expect("policy");
+    assert_eq!(policy.name, "sports:policy.readers");
+    assert_eq!(policy.version.as_deref(), Some("v2"));
+    assert_eq!(policy.active, Some(true));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/version/active"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("activate version")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.headers.get("athenz-return-object").map(String::as_str),
+        Some("true")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn delete_policy_version_calls_expected_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_policy_version(
+            "sports",
+            "readers",
+            "v2",
+            Some("delete version"),
+            Some("sports.owner"),
+        )
+        .expect("delete policy version");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/domain/sports/policy/readers/version/v2");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete version")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
 
     handle.join().expect("server");
 }

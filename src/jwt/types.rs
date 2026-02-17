@@ -43,6 +43,8 @@ pub struct JwtValidationOptions {
     pub leeway: u64,
     pub validate_exp: bool,
     pub validate_nbf: bool,
+    /// Required JWT registered claims (for example: `exp`, `nbf`, `iss`, `sub`, `aud`).
+    pub required_spec_claims: Vec<String>,
     pub allowed_algs: Vec<Algorithm>,
     /// When true, ES512 validation is permitted (requires EC algorithms in `allowed_algs`).
     pub allow_es512: bool,
@@ -57,6 +59,7 @@ impl JwtValidationOptions {
             leeway: 0,
             validate_exp: true,
             validate_nbf: true,
+            required_spec_claims: vec!["exp".to_string()],
             allowed_algs: ATHENZ_ALLOWED_ALGS.to_vec(),
             allow_es512: false,
         }
@@ -85,6 +88,16 @@ impl JwtValidationOptions {
                 self.allowed_algs.push(*alg);
             }
         }
+        self
+    }
+
+    /// Replaces required JWT registered claims used during validation.
+    pub fn with_required_spec_claims<I, S>(mut self, claims: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.required_spec_claims = claims.into_iter().map(Into::into).collect();
         self
     }
 }

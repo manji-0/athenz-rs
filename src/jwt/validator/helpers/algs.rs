@@ -27,6 +27,7 @@ pub(in crate::jwt::validator) fn apply_validation_options(
     validation.leeway = options.leeway;
     validation.validate_exp = options.validate_exp;
     validation.validate_nbf = options.validate_nbf;
+    validation.required_spec_claims = options.required_spec_claims.iter().cloned().collect();
     if let Some(ref issuer) = options.issuer {
         validation.set_issuer(&[issuer.as_str()]);
     }
@@ -43,4 +44,25 @@ pub(in crate::jwt::validator) fn allows_es512(options: &JwtValidationOptions) ->
     ATHENZ_EC_ALGS
         .iter()
         .all(|alg| options.allowed_algs.contains(alg))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_validation_options;
+    use crate::jwt::types::JwtValidationOptions;
+    use jsonwebtoken::{Algorithm, Validation};
+    use std::collections::HashSet;
+
+    #[test]
+    fn apply_validation_options_overrides_required_spec_claims() {
+        let mut validation = Validation::new(Algorithm::RS256);
+        let options = JwtValidationOptions::athenz_default()
+            .with_required_spec_claims(["nbf".to_string(), "aud".to_string()]);
+
+        apply_validation_options(&mut validation, &options);
+
+        let expected: HashSet<String> =
+            ["nbf".to_string(), "aud".to_string()].into_iter().collect();
+        assert_eq!(validation.required_spec_claims, expected);
+    }
 }

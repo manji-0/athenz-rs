@@ -27,7 +27,7 @@ present is configured separately (for example, via required-claims settings).
 
 ## Validation options
 
-You can customize issuer, audience, leeway, and allowed algorithms.
+You can customize issuer, audience, leeway, required claims, and allowed algorithms.
 
 ```rust
 use athenz_rs::{JwksProvider, JwtValidator, JwtValidationOptions};
@@ -39,6 +39,7 @@ let options = JwtValidationOptions {
     audience: vec!["my-audience".to_string()],
     leeway: 30,
     validate_exp: true,
+    required_spec_claims: vec!["exp".to_string(), "nbf".to_string()],
     ..JwtValidationOptions::athenz_default()
 };
 let validator = JwtValidator::new(jwks).with_options(options);
@@ -46,6 +47,9 @@ let _ = validator.validate_id_token(token)?;
 # Ok(())
 # }
 ```
+
+By default, `JwtValidationOptions::athenz_default()` requires the `exp` claim. Override
+`required_spec_claims` when you need a different set.
 
 The default algorithm allowlist is RS256/RS384/RS512/ES256/ES384.
 ES512 (P-521) is verified internally (not via jsonwebtoken) and is disabled by default.

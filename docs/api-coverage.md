@@ -16,6 +16,7 @@ If you add new endpoints, update this list.
 - Certificate authority: fetch CA bundle
 - SSH certificates: post SSH certificate request
 - Workloads / host mapping: query by service or IP, enumerate host services
+- Tenancy lookup: list tenant domains for provider/user
 - Transport rules: fetch transport rules
 - External credentials: post external credentials
 - Status / info / schema: ZTS health and RDL schema

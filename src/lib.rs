@@ -49,9 +49,9 @@ pub use models::{
     SSHCertificate, SSHCertificates, ServerTemplateList, ServiceIdentities, ServiceIdentity,
     ServiceIdentityList, ServicePrincipal, SignedDomain, SignedDomains, SignedPolicies,
     SignedPolicyData, SignedPolicyRequest, Stats, Status, SubDomain, Template, TemplateMeta,
-    Tenancy, TenantResourceGroupRoles, TenantRoleAction, TopLevelDomain, TransportDirection,
-    TransportRule, TransportRules, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain,
-    UserToken, Workload, Workloads,
+    Tenancy, TenantDomains, TenantResourceGroupRoles, TenantRoleAction, TopLevelDomain,
+    TransportDirection, TransportRule, TransportRules, UserAuthorityAttributeMap,
+    UserAuthorityAttributes, UserDomain, UserToken, Workload, Workloads,
 };
 
 #[cfg(feature = "async-validate")]

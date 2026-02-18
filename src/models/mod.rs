@@ -33,5 +33,5 @@ pub use zts::{
     InstanceRegisterResponse, InstanceRegisterToken, IntrospectResponse, OAuthConfig, OidcResponse,
     OpenIdConfig, ResourceAccess, RoleAccess, RoleCertificate, RoleCertificateRequest, RoleToken,
     SSHCertRequest, SSHCertRequestData, SSHCertRequestMeta, SSHCertificate, SSHCertificates,
-    TransportDirection, TransportRule, TransportRules, Workload, Workloads,
+    TenantDomains, TransportDirection, TransportRule, TransportRules, Workload, Workloads,
 };

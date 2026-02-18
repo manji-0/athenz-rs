@@ -10,6 +10,7 @@ mod oidc;
 mod role_cert;
 mod role_token;
 mod ssh;
+mod tenant_domains;
 mod transport;
 mod workload;
 
@@ -31,5 +32,6 @@ pub use role_token::RoleToken;
 pub use ssh::{
     SSHCertRequest, SSHCertRequestData, SSHCertRequestMeta, SSHCertificate, SSHCertificates,
 };
+pub use tenant_domains::TenantDomains;
 pub use transport::{TransportDirection, TransportRule, TransportRules};
 pub use workload::{Workload, Workloads};

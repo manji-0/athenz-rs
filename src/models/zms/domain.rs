@@ -145,6 +145,12 @@ pub struct DomainList {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DomainMetaStoreValidValuesList {
+    pub valid_values: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TopLevelDomain {
     pub name: String,
     pub admin_users: Vec<String>,

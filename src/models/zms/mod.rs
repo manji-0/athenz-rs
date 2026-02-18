@@ -22,8 +22,8 @@ pub use assertion::{
 };
 pub use authority::{UserAuthorityAttributeMap, UserAuthorityAttributes};
 pub use domain::{
-    Domain, DomainList, DomainMeta, DomainMetric, DomainMetricType, DomainMetrics,
-    ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,
+    Domain, DomainList, DomainMeta, DomainMetaStoreValidValuesList, DomainMetric, DomainMetricType,
+    DomainMetrics, ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,
 };
 pub use domain_data_check::{DanglingPolicy, DomainDataCheck};
 pub use entity::{Entity, EntityList};

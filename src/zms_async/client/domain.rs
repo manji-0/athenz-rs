@@ -1,7 +1,8 @@
 use super::ZmsAsyncClient;
 use crate::error::Error;
 use crate::models::{
-    Domain, DomainDataCheck, DomainList, DomainMeta, SubDomain, TopLevelDomain, UserDomain,
+    Domain, DomainDataCheck, DomainList, DomainMeta, DomainMetaStoreValidValuesList,
+    ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,
 };
 use crate::zms::common;
 use crate::zms::DomainListOptions;
@@ -151,6 +152,55 @@ impl ZmsAsyncClient {
         let mut req = self.http.put(url).json(meta);
         req = self.apply_auth(req)?;
         req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        let resp = req.send().await?;
+        self.expect_no_content(resp).await
+    }
+
+    /// Updates domain system metadata for a specific attribute.
+    pub async fn put_domain_system_meta(
+        &self,
+        name: &str,
+        attribute: &str,
+        meta: &DomainMeta,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", name, "meta", "system", attribute])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send().await?;
+        self.expect_no_content(resp).await
+    }
+
+    /// Lists valid values for a domain meta-store attribute.
+    pub async fn get_domain_meta_store(
+        &self,
+        attribute_name: &str,
+        user_name: Option<&str>,
+    ) -> Result<DomainMetaStoreValidValuesList, Error> {
+        let url = self.build_url(&["domain", "metastore"])?;
+        let mut req = self.http.get(url);
+        let mut query = vec![("attribute", attribute_name.to_string())];
+        if let Some(user_name) = user_name {
+            query.push(("user", user_name.to_string()));
+        }
+        req = common::apply_query_params(req, query);
+        req = self.apply_auth(req)?;
+        let resp = req.send().await?;
+        self.expect_ok_json(resp).await
+    }
+
+    /// Sets resource ownership for a domain.
+    pub async fn put_domain_ownership(
+        &self,
+        name: &str,
+        ownership: &ResourceDomainOwnership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", name, "ownership"])?;
+        let mut req = self.http.put(url).json(ownership);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }

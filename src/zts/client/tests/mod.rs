@@ -6,3 +6,4 @@ mod instance;
 mod resource_access;
 mod role_access;
 mod role_token;
+mod service_identity;

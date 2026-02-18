@@ -18,11 +18,12 @@ pub use zms::{
     GroupMember, GroupMembership, GroupMeta, Groups, JWSDomain, MemberRole, Membership, Policies,
     Policy, PolicyList, PolicyOptions, PrincipalMember, PrincipalState, ProviderResourceGroupRoles,
     Quota, ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership,
-    ResourceRoleOwnership, ResourceServiceIdentityOwnership, Role, RoleAuditLog, RoleList,
-    RoleMember, RoleMeta, Roles, ServerTemplateList, ServiceIdentities, ServiceIdentity,
-    ServiceIdentityList, ServicePrincipal, SignedDomain, SignedDomains, SignedPolicies, Stats,
-    SubDomain, Template, TemplateMeta, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
-    TopLevelDomain, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain, UserToken,
+    ResourceRoleOwnership, ResourceServiceIdentityOwnership, ReviewObject, ReviewObjects, Role,
+    RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles, ServerTemplateList, ServiceIdentities,
+    ServiceIdentity, ServiceIdentityList, ServicePrincipal, SignedDomain, SignedDomains,
+    SignedPolicies, Stats, SubDomain, Template, TemplateMeta, Tenancy, TenantResourceGroupRoles,
+    TenantRoleAction, TopLevelDomain, UserAuthorityAttributeMap, UserAuthorityAttributes,
+    UserDomain, UserToken,
 };
 pub use zts::{
     Access, AccessTokenResponse, AthenzJwkConfig, CertificateAuthorityBundle,

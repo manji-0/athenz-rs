@@ -10,6 +10,7 @@ If you add new endpoints, update this list.
 - OAuth/OIDC: issue AccessToken, issue ID Token, introspect token
 - OpenID/OAuth config: `/.well-known/openid-configuration`, `/.well-known/oauth-authorization-server`
 - JWKS / public keys: get JWK list, get public key entry
+- Service identities: get service identity, list service identities
 - Instance identity: register, refresh, delete instance, get register token
 - Certificate authority: fetch CA bundle
 - SSH certificates: post SSH certificate request

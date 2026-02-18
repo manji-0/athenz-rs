@@ -1,11 +1,33 @@
 use super::ZtsClient;
 use crate::error::Error;
 use crate::models::{
-    ExternalCredentialsRequest, ExternalCredentialsResponse, HostServices, TransportRules,
-    Workloads,
+    ExternalCredentialsRequest, ExternalCredentialsResponse, HostServices, ServiceIdentity,
+    ServiceIdentityList, TransportRules, Workloads,
 };
 
 impl ZtsClient {
+    /// Retrieves a service identity.
+    pub fn get_service_identity(
+        &self,
+        domain: &str,
+        service: &str,
+    ) -> Result<ServiceIdentity, Error> {
+        let url = self.build_url(&["domain", domain, "service", service])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Lists service identity names within a domain.
+    pub fn get_service_identity_list(&self, domain: &str) -> Result<ServiceIdentityList, Error> {
+        let url = self.build_url(&["domain", domain, "service"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
     /// Retrieves services provisioned on a host.
     pub fn get_host_services(&self, host: &str) -> Result<HostServices, Error> {
         let url = self.build_url(&["host", host, "services"])?;

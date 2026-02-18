@@ -16,6 +16,7 @@ mod instance;
 mod meta;
 mod oauth;
 mod policy;
+mod tenancy;
 mod workloads;
 
 /// Sync ZTS client builder.

@@ -92,6 +92,39 @@ async fn get_host_services_uses_host_services_path() {
 }
 
 #[tokio::test]
+async fn get_tenant_domains_uses_expected_path_and_query() {
+    let body = r#"{"tenantDomainNames":["sports.tenant","media.tenant"]}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    let domains = client
+        .get_tenant_domains("sports", "user.jane", Some("reader"), Some("storage"))
+        .await
+        .expect("tenant domains");
+    assert_eq!(
+        domains.tenant_domain_names,
+        vec!["sports.tenant", "media.tenant"]
+    );
+
+    let req = timeout(REQUEST_TIMEOUT, rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zts/v1/providerdomain/sports/user/user.jane");
+    assert_eq!(req.query_value("roleName"), Some("reader"));
+    assert_eq!(req.query_value("serviceName"), Some("storage"));
+    assert_eq!(req.header_value("Athenz-Principal-Auth"), Some("token"));
+}
+
+#[tokio::test]
 async fn get_domain_signed_policy_data_returns_etag_on_ok() {
     let body = r#"{"signedPolicyData":{"policyData":{"domain":"sports","policies":[{"name":"p","assertions":[]}]},"modified":"2020-01-01T00:00:00Z","expires":"2099-01-01T00:00:00Z"},"signature":"sig","keyId":"0"}"#;
     let response = format!(

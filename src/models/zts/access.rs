@@ -5,3 +5,9 @@ use serde::{Deserialize, Serialize};
 pub struct Access {
     pub granted: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceAccess {
+    pub granted: bool,
+}

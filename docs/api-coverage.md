@@ -20,6 +20,7 @@ If you add new endpoints, update this list.
 - Role access: check role access, list roles requiring certs
 - Role tokens: get role token, post deprecated role token endpoint
 - Role certificates: request role certificates
+- Resource access: check resource access, check resource access ext
 - Policy data: fetch signed policy data, fetch JWS policy data
 
 ## ZMS (management)

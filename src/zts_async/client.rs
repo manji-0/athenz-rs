@@ -360,6 +360,68 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_resource_access_calls_expected_endpoint() {
+        let body = r#"{"granted":true}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let access = client
+            .get_resource_access("read", "sports.resource", Some("sports"), Some("user.jane"))
+            .await
+            .expect("resource access");
+        assert!(access.granted);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/access/read/sports.resource?domain=sports&principal=user.jane"
+        );
+        assert!(req.headers.contains_key("host"));
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn get_resource_access_ext_calls_expected_endpoint() {
+        let body = r#"{"granted":false}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let access = client
+            .get_resource_access_ext("read", "sports.resource", Some("sports"), Some("user.jane"))
+            .await
+            .expect("resource access ext");
+        assert!(!access.granted);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/access/read?resource=sports.resource&domain=sports&principal=user.jane"
+        );
+        assert!(req.headers.contains_key("host"));
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
     async fn get_role_token_calls_expected_endpoint() {
         let body = r#"{"token":"v=Z1;d=sports;r=reader","expiryTime":1800}"#;
         let response = format!(

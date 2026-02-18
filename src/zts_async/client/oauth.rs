@@ -1,8 +1,8 @@
 use super::ZtsAsyncClient;
 use crate::error::{Error, ResourceError};
 use crate::models::{
-    AccessTokenResponse, IntrospectResponse, JwkList, OAuthConfig, OidcResponse, OpenIdConfig,
-    PublicKeyEntry, RoleCertificateRequest, RoleToken,
+    AWSTemporaryCredentials, AccessTokenResponse, IntrospectResponse, JwkList, OAuthConfig,
+    OidcResponse, OpenIdConfig, PublicKeyEntry, RoleCertificateRequest, RoleToken,
 };
 use crate::zts::common;
 use crate::zts::{AccessTokenRequest, IdTokenRequest, IdTokenResponse};
@@ -47,6 +47,29 @@ impl ZtsAsyncClient {
     ) -> Result<RoleToken, Error> {
         let url = self.build_url(&["domain", domain, "role", role, "token"])?;
         let mut req = self.http.post(url).json(request);
+        req = self.apply_auth(req)?;
+        let resp = req.send().await?;
+        self.expect_ok_json(resp).await
+    }
+
+    /// Retrieves AWS temporary credentials for the specified role.
+    pub async fn get_aws_temporary_credentials(
+        &self,
+        domain: &str,
+        role: &str,
+        duration_seconds: Option<i32>,
+        external_id: Option<&str>,
+    ) -> Result<AWSTemporaryCredentials, Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "creds"])?;
+        let mut req = self.http.get(url);
+        let mut params = Vec::new();
+        if let Some(duration_seconds) = duration_seconds {
+            params.push(("durationSeconds", duration_seconds.to_string()));
+        }
+        if let Some(external_id) = external_id {
+            params.push(("externalId", external_id.to_string()));
+        }
+        req = common::apply_query_params(req, params);
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await

@@ -20,7 +20,7 @@ If you add new endpoints, update this list.
 - External credentials: post external credentials
 - Status / info / schema: ZTS health and RDL schema
 - Role access: check role access, list roles requiring certs
-- Role tokens: get role token, post deprecated role token endpoint
+- Role tokens: get role token, get AWS temporary credentials, post deprecated role token endpoint
 - Role certificates: request role certificates
 - Resource access: check resource access, check resource access ext
 - Policy data: fetch signed policy data, fetch JWS policy data

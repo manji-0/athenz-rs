@@ -1,5 +1,6 @@
 mod access;
 mod access_token;
+mod aws_temporary_credentials;
 mod ca;
 mod external_credentials;
 mod host_services;
@@ -14,6 +15,7 @@ mod workload;
 
 pub use access::{Access, ResourceAccess};
 pub use access_token::AccessTokenResponse;
+pub use aws_temporary_credentials::AWSTemporaryCredentials;
 pub use ca::CertificateAuthorityBundle;
 pub use external_credentials::{ExternalCredentialsRequest, ExternalCredentialsResponse};
 pub use host_services::HostServices;

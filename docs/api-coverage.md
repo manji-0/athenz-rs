@@ -31,6 +31,9 @@ If you add new endpoints, update this list.
   - Get modified signed domains (`/sys/modified_domains`)
   - Get signed domain JWS (`/domain/{name}/signed`)
   - Get/update/delete domain quota (`/domain/{name}/quota`)
+  - Update domain system meta (`/domain/{name}/meta/system/{attribute}`)
+  - Get domain metastore valid values (`/domain/metastore?attribute=&user=`)
+  - Set domain ownership (`/domain/{name}/ownership`)
   - Create top-level, sub-, and user domains
   - Delete top-level, sub-, and user domains
   - Update domain metadata

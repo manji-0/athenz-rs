@@ -1,7 +1,8 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
-    Entity, PolicyOptions, PrincipalState, ProviderResourceGroupRoles, Quota,
-    ResourcePolicyOwnership, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
+    DomainMeta, Entity, PolicyOptions, PrincipalState, ProviderResourceGroupRoles, Quota,
+    ResourceDomainOwnership, ResourcePolicyOwnership, Tenancy, TenantResourceGroupRoles,
+    TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
@@ -330,6 +331,142 @@ fn get_domain_stats_calls_domain_stats_endpoint() {
     let req = rx.recv().expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/stats");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_domain_system_meta_calls_domain_meta_system_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let meta = DomainMeta {
+        product_id: Some("prod-1".to_string()),
+        ..Default::default()
+    };
+    client
+        .put_domain_system_meta("sports", "product-id", &meta, Some("set product id"))
+        .expect("put domain system meta");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/meta/system/product-id");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set product id")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("json body for put_domain_system_meta");
+    assert_eq!(body_json, json!({ "productId": "prod-1" }));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_domain_meta_store_calls_metastore_endpoint() {
+    let body = r#"{"validValues":["prod-1","prod-2"]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let values = client
+        .get_domain_meta_store("product-id", Some("user.jane"))
+        .expect("meta store values");
+    assert_eq!(
+        values.valid_values,
+        vec!["prod-1".to_string(), "prod-2".to_string()]
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/metastore");
+    assert_eq!(
+        req.query.get("attribute").map(String::as_str),
+        Some("product-id")
+    );
+    assert_eq!(req.query.get("user").map(String::as_str), Some("user.jane"));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_domain_meta_store_without_user_omits_user_query() {
+    let body = r#"{"validValues":["prod-1","prod-2"]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let values = client
+        .get_domain_meta_store("product-id", None)
+        .expect("meta store values");
+    assert_eq!(
+        values.valid_values,
+        vec!["prod-1".to_string(), "prod-2".to_string()]
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/metastore");
+    assert_eq!(
+        req.query.get("attribute").map(String::as_str),
+        Some("product-id")
+    );
+    assert!(req.query.get("user").is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_domain_ownership_calls_domain_ownership_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let ownership = ResourceDomainOwnership {
+        meta_owner: Some("sports.meta_owner".to_string()),
+        object_owner: Some("sports.object_owner".to_string()),
+    };
+    client
+        .put_domain_ownership("sports", &ownership, Some("set domain ownership"))
+        .expect("put domain ownership");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/ownership");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set domain ownership")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({
+            "metaOwner": "sports.meta_owner",
+            "objectOwner": "sports.object_owner",
+        })
+    );
 
     handle.join().expect("server");
 }
@@ -1967,6 +2104,7 @@ struct CapturedRequest {
     path: String,
     headers: HashMap<String, String>,
     query: HashMap<String, String>,
+    body: Vec<u8>,
 }
 
 fn serve_once(
@@ -2029,11 +2167,27 @@ fn read_request(stream: &mut TcpStream) -> CapturedRequest {
             headers.insert(key.trim().to_ascii_lowercase(), value.trim().to_string());
         }
     }
+    let content_length = headers
+        .get("content-length")
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0);
+    let mut body = buf[header_end..].to_vec();
+    while body.len() < content_length {
+        let read = stream.read(&mut chunk).unwrap_or(0);
+        if read == 0 {
+            break;
+        }
+        body.extend_from_slice(&chunk[..read]);
+    }
+    if body.len() > content_length {
+        body.truncate(content_length);
+    }
 
     CapturedRequest {
         method,
         path,
         headers,
         query,
+        body,
     }
 }

@@ -1,9 +1,9 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{
-    DomainListOptions, Entity, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota,
-    ResourcePolicyOwnership, SignedDomainsOptions, Tenancy, TenantResourceGroupRoles,
-    TenantRoleAction, ZmsAsyncClient,
+    DomainListOptions, DomainMeta, Entity, NTokenSigner, PrincipalState,
+    ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourcePolicyOwnership,
+    SignedDomainsOptions, Tenancy, TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
 };
 use rand::thread_rng;
 use rsa::pkcs1::EncodeRsaPrivateKey;
@@ -322,6 +322,134 @@ async fn get_domain_stats_calls_domain_stats_endpoint() {
         .expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/stats");
+}
+
+#[tokio::test]
+async fn put_domain_system_meta_calls_domain_meta_system_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let meta = DomainMeta {
+        product_id: Some("prod-1".to_string()),
+        ..Default::default()
+    };
+    client
+        .put_domain_system_meta("sports", "product-id", &meta, Some("set product id"))
+        .await
+        .expect("put domain system meta");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/meta/system/product-id");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("set product id"));
+    let payload: serde_json::Value = serde_json::from_slice(&req.body).expect("request json");
+    assert_eq!(
+        payload.get("productId").and_then(|v| v.as_str()),
+        Some("prod-1")
+    );
+}
+
+#[tokio::test]
+async fn get_domain_meta_store_calls_metastore_endpoint() {
+    let body = r#"{"validValues":["prod-1","prod-2"]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let values = client
+        .get_domain_meta_store("product-id", Some("user.jane"))
+        .await
+        .expect("meta store values");
+    assert_eq!(
+        values.valid_values,
+        vec!["prod-1".to_string(), "prod-2".to_string()]
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/metastore");
+    assert_eq!(req.query_value("attribute"), Some("product-id"));
+    assert_eq!(req.query_value("user"), Some("user.jane"));
+}
+
+#[tokio::test]
+async fn get_domain_meta_store_without_user_omits_user_query() {
+    let body = r#"{"validValues":["prod-1","prod-2"]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let values = client
+        .get_domain_meta_store("product-id", None)
+        .await
+        .expect("meta store values");
+    assert_eq!(
+        values.valid_values,
+        vec!["prod-1".to_string(), "prod-2".to_string()]
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/metastore");
+    assert_eq!(req.query_value("attribute"), Some("product-id"));
+    assert_eq!(req.query_value("user"), None);
+}
+
+#[tokio::test]
+async fn put_domain_ownership_calls_domain_ownership_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let ownership = ResourceDomainOwnership {
+        meta_owner: Some("sports.meta_owner".to_string()),
+        object_owner: Some("sports.object_owner".to_string()),
+    };
+    client
+        .put_domain_ownership("sports", &ownership, Some("set domain ownership"))
+        .await
+        .expect("put domain ownership");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/ownership");
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("set domain ownership")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"metaOwner":"sports.meta_owner","objectOwner":"sports.object_owner"}"#
+    );
 }
 
 #[tokio::test]

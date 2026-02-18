@@ -87,6 +87,36 @@ pub struct InstanceRefreshInformation {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct InstanceRefreshRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub csr: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expiry_time: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceRefreshIdentity {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub certificate: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ca_cert_bundle: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_certificate: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_certificate_signer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub service_token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InstanceRegisterToken {
     pub provider: String,
     pub domain: String,

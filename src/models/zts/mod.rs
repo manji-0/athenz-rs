@@ -15,8 +15,8 @@ pub use ca::CertificateAuthorityBundle;
 pub use external_credentials::{ExternalCredentialsRequest, ExternalCredentialsResponse};
 pub use host_services::HostServices;
 pub use instance::{
-    InstanceIdentity, InstanceRefreshInformation, InstanceRegisterInformation,
-    InstanceRegisterResponse, InstanceRegisterToken,
+    InstanceIdentity, InstanceRefreshIdentity, InstanceRefreshInformation, InstanceRefreshRequest,
+    InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken,
 };
 pub use jwk::AthenzJwkConfig;
 pub use oidc::{IntrospectResponse, OAuthConfig, OidcResponse, OpenIdConfig};

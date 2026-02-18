@@ -1,8 +1,8 @@
 use super::ZtsAsyncClient;
 use crate::error::Error;
 use crate::models::{
-    InstanceIdentity, InstanceRefreshInformation, InstanceRegisterInformation,
-    InstanceRegisterResponse, InstanceRegisterToken,
+    InstanceIdentity, InstanceRefreshIdentity, InstanceRefreshInformation, InstanceRefreshRequest,
+    InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken,
 };
 use reqwest::StatusCode;
 
@@ -41,6 +41,20 @@ impl ZtsAsyncClient {
     ) -> Result<InstanceIdentity, Error> {
         let url = self.build_url(&["instance", provider, domain, service, instance_id])?;
         let mut req = self.http.post(url).json(info);
+        req = self.apply_auth(req)?;
+        let resp = req.send().await?;
+        self.expect_ok_json(resp).await
+    }
+
+    /// Refreshes service credentials and certificate for the specified service.
+    pub async fn refresh_instance_credentials(
+        &self,
+        domain: &str,
+        service: &str,
+        request: &InstanceRefreshRequest,
+    ) -> Result<InstanceRefreshIdentity, Error> {
+        let url = self.build_url(&["instance", domain, service, "refresh"])?;
+        let mut req = self.http.post(url).json(request);
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await

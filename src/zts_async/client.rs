@@ -258,6 +258,8 @@ impl ZtsAsyncClient {
 
 #[cfg(test)]
 mod tests {
+    use crate::models::InstanceRefreshRequest;
+
     use super::ZtsAsyncClient;
     use std::collections::HashMap;
     use std::io::{Read, Write};
@@ -286,6 +288,41 @@ mod tests {
         let req = rx.recv().expect("request");
         assert_eq!(req.method, "GET");
         assert_eq!(req.path, "/zts/v1/status");
+        assert!(req.headers.contains_key("host"));
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn refresh_instance_credentials_calls_refresh_endpoint() {
+        let body = r#"{"name":"sports.api","certificate":"x509-cert"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let request = InstanceRefreshRequest {
+            csr: Some("csr".to_string()),
+            expiry_time: Some(120),
+            key_id: Some("v1".to_string()),
+        };
+        let identity = client
+            .refresh_instance_credentials("sports", "api", &request)
+            .await
+            .expect("refresh");
+
+        assert_eq!(identity.name.as_deref(), Some("sports.api"));
+        assert_eq!(identity.certificate.as_deref(), Some("x509-cert"));
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.path, "/zts/v1/instance/sports/api/refresh");
         assert!(req.headers.contains_key("host"));
 
         handle.join().expect("server");

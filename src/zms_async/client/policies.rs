@@ -1,6 +1,8 @@
 use super::ZmsAsyncClient;
 use crate::error::Error;
-use crate::models::{Assertion, Policies, Policy, PolicyList, PolicyOptions};
+use crate::models::{
+    Assertion, Policies, Policy, PolicyList, PolicyOptions, ResourcePolicyOwnership,
+};
 use crate::zms::common;
 use crate::zms::{PoliciesQueryOptions, PolicyListOptions};
 
@@ -147,6 +149,22 @@ impl ZmsAsyncClient {
         }
         let resp = req.send().await?;
         self.expect_no_content_or_json(resp).await
+    }
+
+    /// Sets resource ownership for a policy.
+    pub async fn put_policy_ownership(
+        &self,
+        domain: &str,
+        policy: &str,
+        ownership: &ResourcePolicyOwnership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "policy", policy, "ownership"])?;
+        let mut req = self.http.put(url).json(ownership);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send().await?;
+        self.expect_no_content(resp).await
     }
 
     /// Deletes a policy.

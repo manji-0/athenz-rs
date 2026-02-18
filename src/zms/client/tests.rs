@@ -1,7 +1,7 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
-    Entity, PolicyOptions, PrincipalState, ProviderResourceGroupRoles, Quota, Tenancy,
-    TenantResourceGroupRoles, TenantRoleAction,
+    Entity, PolicyOptions, PrincipalState, ProviderResourceGroupRoles, Quota,
+    ResourcePolicyOwnership, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
@@ -1885,6 +1885,39 @@ fn delete_policy_version_calls_expected_endpoint() {
     assert_eq!(
         req.headers.get("athenz-resource-owner").map(String::as_str),
         Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_policy_ownership_calls_expected_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let ownership = ResourcePolicyOwnership {
+        assertions_owner: Some("sports.assertions_owner".to_string()),
+        object_owner: Some("sports.object_owner".to_string()),
+    };
+    client
+        .put_policy_ownership(
+            "sports",
+            "readers",
+            &ownership,
+            Some("set policy ownership"),
+        )
+        .expect("put policy ownership");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/policy/readers/ownership");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set policy ownership")
     );
 
     handle.join().expect("server");

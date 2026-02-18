@@ -2,7 +2,8 @@
 
 use athenz_rs::{
     DomainListOptions, Entity, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota,
-    SignedDomainsOptions, Tenancy, TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
+    ResourcePolicyOwnership, SignedDomainsOptions, Tenancy, TenantResourceGroupRoles,
+    TenantRoleAction, ZmsAsyncClient,
 };
 use rand::thread_rng;
 use rsa::pkcs1::EncodeRsaPrivateKey;
@@ -1683,6 +1684,46 @@ async fn get_system_stats_calls_system_stats_endpoint() {
         .expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/sys/stats");
+}
+
+#[tokio::test]
+async fn put_policy_ownership_calls_expected_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let ownership = ResourcePolicyOwnership {
+        assertions_owner: Some("sports.assertions_owner".to_string()),
+        object_owner: Some("sports.object_owner".to_string()),
+    };
+    client
+        .put_policy_ownership(
+            "sports",
+            "readers",
+            &ownership,
+            Some("set policy ownership"),
+        )
+        .await
+        .expect("put policy ownership");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/policy/readers/ownership");
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("set policy ownership")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"assertionsOwner":"sports.assertions_owner","objectOwner":"sports.object_owner"}"#
+    );
 }
 
 #[tokio::test]

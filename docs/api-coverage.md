@@ -41,6 +41,7 @@ If you add new endpoints, update this list.
   - Role membership get/put/delete
 - Policies:
   - List policies / policy list, get policy
+  - Set policy ownership (`/domain/{name}/policy/{policy}/ownership`)
   - Create/update policy, delete policy
   - Policy version management: list/get/create/activate/delete version
   - Assertion get/put/delete

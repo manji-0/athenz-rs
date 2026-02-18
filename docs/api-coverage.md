@@ -12,6 +12,7 @@ If you add new endpoints, update this list.
 - JWKS / public keys: get JWK list, get public key entry
 - Service identities: get service identity, list service identities
 - Instance identity: register, refresh, delete instance, get register token
+- Instance provider confirmation: post instance confirmation, post refresh confirmation
 - Certificate authority: fetch CA bundle
 - SSH certificates: post SSH certificate request
 - Workloads / host mapping: query by service or IP, enumerate host services

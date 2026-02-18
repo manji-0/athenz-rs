@@ -128,6 +128,17 @@ pub struct InstanceRegisterToken {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct InstanceConfirmation {
+    pub provider: String,
+    pub domain: String,
+    pub service: String,
+    pub attestation_data: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct InstanceIdentity {
     pub provider: String,
     pub name: String,

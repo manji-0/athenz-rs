@@ -27,8 +27,8 @@ pub use zms::{
 };
 pub use zts::{
     Access, AccessTokenResponse, AthenzJwkConfig, CertificateAuthorityBundle,
-    ExternalCredentialsRequest, ExternalCredentialsResponse, HostServices, InstanceIdentity,
-    InstanceRefreshIdentity, InstanceRefreshInformation, InstanceRefreshRequest,
+    ExternalCredentialsRequest, ExternalCredentialsResponse, HostServices, InstanceConfirmation,
+    InstanceIdentity, InstanceRefreshIdentity, InstanceRefreshInformation, InstanceRefreshRequest,
     InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken,
     IntrospectResponse, OAuthConfig, OidcResponse, OpenIdConfig, ResourceAccess, RoleAccess,
     RoleCertificate, RoleCertificateRequest, RoleToken, SSHCertRequest, SSHCertRequestData,

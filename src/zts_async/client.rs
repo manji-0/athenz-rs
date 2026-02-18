@@ -1,6 +1,7 @@
 use crate::client_defaults::DEFAULT_TIMEOUT;
 use crate::error::{
-    read_body_with_limit_async, Error, CONFIG_ERROR_REDIRECT_WITH_AUTH, MAX_ERROR_BODY_BYTES,
+    read_body_with_limit_async, Error, CONFIG_ERROR_INSTANCE_PROVIDER_BASE_URL,
+    CONFIG_ERROR_REDIRECT_WITH_AUTH, MAX_ERROR_BODY_BYTES,
 };
 use crate::ntoken::NTokenSigner;
 use crate::zts::{common, ConditionalResponse};
@@ -18,7 +19,9 @@ mod workloads;
 
 /// Async ZTS client builder.
 ///
-/// `base_url` should point to the ZTS v1 root (e.g., `https://zts.example/zts/v1`).
+/// `base_url` should point to the API root used by this client:
+/// `.../zts/v1` for standard ZTS endpoints, or
+/// `.../instanceprovider/v1` for instance provider confirmation endpoints.
 /// Trailing slashes are allowed. Redirects default to disabled
 /// (`follow_redirects(false)`) to observe `Location` headers and avoid leaking
 /// auth on redirects; this differs from the sync client.
@@ -34,7 +37,8 @@ pub struct ZtsAsyncClientBuilder {
 impl ZtsAsyncClientBuilder {
     /// Create a new async client builder.
     ///
-    /// `base_url` should point to the ZTS v1 root (e.g., `https://zts.example/zts/v1`).
+    /// `base_url` should point to `.../zts/v1` for standard ZTS APIs, or to
+    /// `.../instanceprovider/v1` when calling instance provider confirmation APIs.
     pub fn new(base_url: impl AsRef<str>) -> Result<Self, Error> {
         Ok(Self {
             base_url: Url::parse(base_url.as_ref())?,
@@ -181,6 +185,22 @@ impl ZtsAsyncClient {
         common::build_url(&self.base_url, segments, common::BuildUrlOptions::REQUEST)
     }
 
+    fn ensure_instance_provider_base_url(&self) -> Result<(), Error> {
+        let segments = self
+            .base_url
+            .path_segments()
+            .ok_or_else(|| Error::InvalidBaseUrl(self.base_url.to_string()))?
+            .filter(|segment| !segment.is_empty())
+            .collect::<Vec<_>>();
+        if segments.ends_with(&["instanceprovider", "v1"]) {
+            Ok(())
+        } else {
+            Err(Error::Crypto(
+                CONFIG_ERROR_INSTANCE_PROVIDER_BASE_URL.to_string(),
+            ))
+        }
+    }
+
     fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, Error> {
         common::apply_auth(req, &self.auth, |req, header, value, ctx| {
             let header_name = HeaderName::from_bytes(header.as_bytes()).map_err(|e| {
@@ -258,7 +278,8 @@ impl ZtsAsyncClient {
 
 #[cfg(test)]
 mod tests {
-    use crate::models::{InstanceRefreshRequest, RoleCertificateRequest};
+    use crate::error::{Error, CONFIG_ERROR_INSTANCE_PROVIDER_BASE_URL};
+    use crate::models::{InstanceConfirmation, InstanceRefreshRequest, RoleCertificateRequest};
 
     use super::ZtsAsyncClient;
     use std::collections::HashMap;
@@ -391,6 +412,117 @@ mod tests {
         );
 
         handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn post_instance_confirmation_calls_expected_endpoint() {
+        let body = r#"{"provider":"sports.provider","domain":"sports","service":"api","attestationData":"doc"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/instanceprovider/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let confirmation = InstanceConfirmation {
+            provider: "sports.provider".to_string(),
+            domain: "sports".to_string(),
+            service: "api".to_string(),
+            attestation_data: "doc".to_string(),
+            attributes: None,
+        };
+        let result = client
+            .post_instance_confirmation(&confirmation)
+            .await
+            .expect("instance confirmation");
+
+        assert_eq!(result.provider, "sports.provider");
+        assert_eq!(result.domain, "sports");
+        assert_eq!(result.service, "api");
+        assert_eq!(result.attestation_data, "doc");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.path, "/instanceprovider/v1/instance");
+        assert!(req.headers.contains_key("host"));
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn post_refresh_confirmation_applies_auth_header() {
+        let body = r#"{"provider":"sports.provider","domain":"sports","service":"api","attestationData":"doc"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/instanceprovider/v1", base_url))
+            .expect("builder")
+            .ntoken_auth("Athenz-Principal-Auth", "token")
+            .expect("ntoken auth")
+            .build()
+            .expect("build");
+
+        let confirmation = InstanceConfirmation {
+            provider: "sports.provider".to_string(),
+            domain: "sports".to_string(),
+            service: "api".to_string(),
+            attestation_data: "doc".to_string(),
+            attributes: None,
+        };
+        client
+            .post_refresh_confirmation(&confirmation)
+            .await
+            .expect("refresh confirmation");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.path, "/instanceprovider/v1/refresh");
+        assert_eq!(
+            req.headers.get("athenz-principal-auth").map(String::as_str),
+            Some("token")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn confirmation_endpoints_require_instance_provider_base_path() {
+        let client = ZtsAsyncClient::builder("https://zts.example.com/zts/v1")
+            .expect("builder")
+            .build()
+            .expect("build");
+        let confirmation = InstanceConfirmation {
+            provider: "sports.provider".to_string(),
+            domain: "sports".to_string(),
+            service: "api".to_string(),
+            attestation_data: "doc".to_string(),
+            attributes: None,
+        };
+
+        let err = client
+            .post_instance_confirmation(&confirmation)
+            .await
+            .expect_err("expected base path validation error");
+        match err {
+            Error::Crypto(message) => assert_eq!(message, CONFIG_ERROR_INSTANCE_PROVIDER_BASE_URL),
+            other => panic!("unexpected error: {other:?}"),
+        }
+
+        let err = client
+            .post_refresh_confirmation(&confirmation)
+            .await
+            .expect_err("expected base path validation error");
+        match err {
+            Error::Crypto(message) => assert_eq!(message, CONFIG_ERROR_INSTANCE_PROVIDER_BASE_URL),
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[tokio::test]

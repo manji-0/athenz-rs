@@ -1,8 +1,9 @@
 use super::ZtsAsyncClient;
 use crate::error::Error;
 use crate::models::{
-    InstanceIdentity, InstanceRefreshIdentity, InstanceRefreshInformation, InstanceRefreshRequest,
-    InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken,
+    InstanceConfirmation, InstanceIdentity, InstanceRefreshIdentity, InstanceRefreshInformation,
+    InstanceRefreshRequest, InstanceRegisterInformation, InstanceRegisterResponse,
+    InstanceRegisterToken,
 };
 use reqwest::StatusCode;
 
@@ -28,6 +29,38 @@ impl ZtsAsyncClient {
             }
             _ => self.parse_error(resp).await,
         }
+    }
+
+    /// Confirms an instance registration request.
+    ///
+    /// This endpoint belongs to the Instance Provider API and expects a base
+    /// URL such as `https://host/instanceprovider/v1`.
+    pub async fn post_instance_confirmation(
+        &self,
+        confirmation: &InstanceConfirmation,
+    ) -> Result<InstanceConfirmation, Error> {
+        self.ensure_instance_provider_base_url()?;
+        let url = self.build_url(&["instance"])?;
+        let mut req = self.http.post(url).json(confirmation);
+        req = self.apply_auth(req)?;
+        let resp = req.send().await?;
+        self.expect_ok_json(resp).await
+    }
+
+    /// Confirms an instance refresh request.
+    ///
+    /// This endpoint belongs to the Instance Provider API and expects a base
+    /// URL such as `https://host/instanceprovider/v1`.
+    pub async fn post_refresh_confirmation(
+        &self,
+        confirmation: &InstanceConfirmation,
+    ) -> Result<InstanceConfirmation, Error> {
+        self.ensure_instance_provider_base_url()?;
+        let url = self.build_url(&["refresh"])?;
+        let mut req = self.http.post(url).json(confirmation);
+        req = self.apply_auth(req)?;
+        let resp = req.send().await?;
+        self.expect_ok_json(resp).await
     }
 
     /// Refreshes the identity for a registered instance.

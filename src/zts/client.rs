@@ -1,6 +1,7 @@
 use crate::client_defaults::DEFAULT_TIMEOUT;
 use crate::error::{
-    read_body_with_limit, Error, CONFIG_ERROR_REDIRECT_WITH_AUTH, MAX_ERROR_BODY_BYTES,
+    read_body_with_limit, Error, CONFIG_ERROR_INSTANCE_PROVIDER_BASE_URL,
+    CONFIG_ERROR_REDIRECT_WITH_AUTH, MAX_ERROR_BODY_BYTES,
 };
 use crate::ntoken::NTokenSigner;
 use reqwest::blocking::{Client as HttpClient, RequestBuilder, Response};
@@ -17,6 +18,11 @@ mod oauth;
 mod policy;
 mod workloads;
 
+/// Sync ZTS client builder.
+///
+/// `base_url` should point to the API root used by this client:
+/// `.../zts/v1` for standard ZTS endpoints, or
+/// `.../instanceprovider/v1` for instance provider confirmation endpoints.
 pub struct ZtsClientBuilder {
     base_url: Url,
     timeout: Option<Duration>,
@@ -28,6 +34,9 @@ pub struct ZtsClientBuilder {
 
 impl ZtsClientBuilder {
     /// Creates a builder for the provided base URL.
+    ///
+    /// `base_url` should point to `.../zts/v1` for standard ZTS APIs, or to
+    /// `.../instanceprovider/v1` when calling instance provider confirmation APIs.
     pub fn new(base_url: impl AsRef<str>) -> Result<Self, Error> {
         Ok(Self {
             base_url: Url::parse(base_url.as_ref())?,
@@ -150,6 +159,22 @@ impl ZtsClient {
             segments,
             common::BuildUrlOptions::SYNC_CLIENT,
         )
+    }
+
+    fn ensure_instance_provider_base_url(&self) -> Result<(), Error> {
+        let segments = self
+            .base_url
+            .path_segments()
+            .ok_or_else(|| Error::InvalidBaseUrl(self.base_url.to_string()))?
+            .filter(|segment| !segment.is_empty())
+            .collect::<Vec<_>>();
+        if segments.ends_with(&["instanceprovider", "v1"]) {
+            Ok(())
+        } else {
+            Err(Error::Crypto(
+                CONFIG_ERROR_INSTANCE_PROVIDER_BASE_URL.to_string(),
+            ))
+        }
     }
 
     fn apply_auth(&self, req: RequestBuilder) -> Result<RequestBuilder, Error> {

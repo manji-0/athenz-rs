@@ -43,7 +43,7 @@ pub use models::{
     ProviderResourceGroupRoles, PublicKeyEntry, Quota, RdlSchema, ResourceDomainOwnership,
     ResourceGroupOwnership, ResourcePolicyOwnership, ResourceRoleOwnership,
     ResourceServiceIdentityOwnership, Role, RoleAccess, RoleAuditLog, RoleCertificate,
-    RoleCertificateRequest, RoleList, RoleMember, RoleMeta, Roles, SSHCertRequest,
+    RoleCertificateRequest, RoleList, RoleMember, RoleMeta, RoleToken, Roles, SSHCertRequest,
     SSHCertRequestData, SSHCertRequestMeta, SSHCertificate, SSHCertificates, ServerTemplateList,
     ServiceIdentities, ServiceIdentity, ServiceIdentityList, ServicePrincipal, SignedDomain,
     SignedDomains, SignedPolicies, SignedPolicyData, SignedPolicyRequest, Stats, Status, SubDomain,

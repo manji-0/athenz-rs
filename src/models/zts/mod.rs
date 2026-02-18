@@ -7,6 +7,7 @@ mod instance;
 mod jwk;
 mod oidc;
 mod role_cert;
+mod role_token;
 mod ssh;
 mod transport;
 mod workload;
@@ -23,6 +24,7 @@ pub use instance::{
 pub use jwk::AthenzJwkConfig;
 pub use oidc::{IntrospectResponse, OAuthConfig, OidcResponse, OpenIdConfig};
 pub use role_cert::{RoleAccess, RoleCertificate, RoleCertificateRequest};
+pub use role_token::RoleToken;
 pub use ssh::{
     SSHCertRequest, SSHCertRequestData, SSHCertRequestMeta, SSHCertificate, SSHCertificates,
 };

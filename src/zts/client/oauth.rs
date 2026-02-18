@@ -2,12 +2,56 @@ use super::ZtsClient;
 use crate::error::{Error, ResourceError};
 use crate::models::{
     AccessTokenResponse, IntrospectResponse, JwkList, OAuthConfig, OidcResponse, OpenIdConfig,
-    PublicKeyEntry,
+    PublicKeyEntry, RoleCertificateRequest, RoleToken,
 };
 use crate::zts::common;
 use crate::zts::{AccessTokenRequest, IdTokenRequest, IdTokenResponse};
 use reqwest::StatusCode;
 impl ZtsClient {
+    /// Retrieves a role token for roles in the given domain.
+    pub fn get_role_token(
+        &self,
+        domain: &str,
+        role: Option<&str>,
+        min_expiry_time: Option<i32>,
+        max_expiry_time: Option<i32>,
+        proxy_for_principal: Option<&str>,
+    ) -> Result<RoleToken, Error> {
+        let url = self.build_url(&["domain", domain, "token"])?;
+        let mut req = self.http.get(url);
+        let mut params = Vec::new();
+        if let Some(role) = role {
+            params.push(("role", role.to_string()));
+        }
+        if let Some(min_expiry_time) = min_expiry_time {
+            params.push(("minExpiryTime", min_expiry_time.to_string()));
+        }
+        if let Some(max_expiry_time) = max_expiry_time {
+            params.push(("maxExpiryTime", max_expiry_time.to_string()));
+        }
+        if let Some(proxy_for_principal) = proxy_for_principal {
+            params.push(("proxyForPrincipal", proxy_for_principal.to_string()));
+        }
+        req = common::apply_query_params(req, params);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Requests a role token for a specific role using the deprecated endpoint.
+    pub fn post_role_token(
+        &self,
+        domain: &str,
+        role: &str,
+        request: &RoleCertificateRequest,
+    ) -> Result<RoleToken, Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "token"])?;
+        let mut req = self.http.post(url).json(request);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
     /// Issues an OAuth access token.
     pub fn issue_access_token(
         &self,

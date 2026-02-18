@@ -258,7 +258,7 @@ impl ZtsAsyncClient {
 
 #[cfg(test)]
 mod tests {
-    use crate::models::InstanceRefreshRequest;
+    use crate::models::{InstanceRefreshRequest, RoleCertificateRequest};
 
     use super::ZtsAsyncClient;
     use std::collections::HashMap;
@@ -354,6 +354,81 @@ mod tests {
             req.path,
             "/zts/v1/access/domain/sports/role/reader/principal/user.jane"
         );
+        assert!(req.headers.contains_key("host"));
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn get_role_token_calls_expected_endpoint() {
+        let body = r#"{"token":"v=Z1;d=sports;r=reader","expiryTime":1800}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let token = client
+            .get_role_token(
+                "sports",
+                Some("reader"),
+                Some(60),
+                Some(120),
+                Some("user.jane"),
+            )
+            .await
+            .expect("role token");
+        assert_eq!(token.token, "v=Z1;d=sports;r=reader");
+        assert_eq!(token.expiry_time, 1800);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/domain/sports/token?role=reader&minExpiryTime=60&maxExpiryTime=120&proxyForPrincipal=user.jane"
+        );
+        assert!(req.headers.contains_key("host"));
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn post_role_token_calls_expected_endpoint() {
+        let body = r#"{"token":"v=Z1;d=sports;r=reader","expiryTime":1800}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let request = RoleCertificateRequest {
+            csr: "csr".to_string(),
+            proxy_for_principal: None,
+            expiry_time: 1800,
+            prev_cert_not_before: None,
+            prev_cert_not_after: None,
+            x509_cert_signer_key_id: None,
+        };
+        let token = client
+            .post_role_token("sports", "reader", &request)
+            .await
+            .expect("role token");
+        assert_eq!(token.token, "v=Z1;d=sports;r=reader");
+        assert_eq!(token.expiry_time, 1800);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.path, "/zts/v1/domain/sports/role/reader/token");
         assert!(req.headers.contains_key("host"));
 
         handle.join().expect("server");

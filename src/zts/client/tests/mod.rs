@@ -4,3 +4,4 @@ mod host_services;
 mod id_token;
 mod instance;
 mod role_access;
+mod role_token;

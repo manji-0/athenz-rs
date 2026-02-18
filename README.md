@@ -3,12 +3,11 @@
 Rust client for Athenz token issuance (tenant side) and token validation (provider side).
 Crate name: `athenz-rs`.
 
-RoleToken is intentionally not included (deprecated).
-
 ## Features
 
 - Issue **AccessToken** via `POST /oauth2/token`
 - Issue **ID Token** via `GET /oauth2/auth`
+- Get **RoleToken** via `GET /domain/{domain}/token` (plus deprecated `POST /domain/{domain}/role/{role}/token`)
 - Validate **Access/ID Tokens** using JWKS (offline)
 - **Introspect** AccessToken via `POST /oauth2/introspect`
 - Validate **NToken** (service token) using local public key or ZTS public key endpoint

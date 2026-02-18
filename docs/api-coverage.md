@@ -17,7 +17,9 @@ If you add new endpoints, update this list.
 - Transport rules: fetch transport rules
 - External credentials: post external credentials
 - Status / info / schema: ZTS health and RDL schema
-- Role certificates: request role certificates, list roles requiring certs
+- Role access: check role access, list roles requiring certs
+- Role tokens: get role token, post deprecated role token endpoint
+- Role certificates: request role certificates
 - Policy data: fetch signed policy data, fetch JWS policy data
 
 ## ZMS (management)

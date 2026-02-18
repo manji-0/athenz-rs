@@ -29,8 +29,8 @@ pub use zts::{
     ExternalCredentialsRequest, ExternalCredentialsResponse, HostServices, InstanceIdentity,
     InstanceRefreshIdentity, InstanceRefreshInformation, InstanceRefreshRequest,
     InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken,
-    IntrospectResponse, OAuthConfig, OidcResponse, OpenIdConfig, RoleAccess, RoleCertificate,
-    RoleCertificateRequest, RoleToken, SSHCertRequest, SSHCertRequestData, SSHCertRequestMeta,
-    SSHCertificate, SSHCertificates, TransportDirection, TransportRule, TransportRules, Workload,
-    Workloads,
+    IntrospectResponse, OAuthConfig, OidcResponse, OpenIdConfig, ResourceAccess, RoleAccess,
+    RoleCertificate, RoleCertificateRequest, RoleToken, SSHCertRequest, SSHCertRequestData,
+    SSHCertRequestMeta, SSHCertificate, SSHCertificates, TransportDirection, TransportRule,
+    TransportRules, Workload, Workloads,
 };

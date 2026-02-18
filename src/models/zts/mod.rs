@@ -12,7 +12,7 @@ mod ssh;
 mod transport;
 mod workload;
 
-pub use access::Access;
+pub use access::{Access, ResourceAccess};
 pub use access_token::AccessTokenResponse;
 pub use ca::CertificateAuthorityBundle;
 pub use external_credentials::{ExternalCredentialsRequest, ExternalCredentialsResponse};

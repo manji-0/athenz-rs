@@ -3,5 +3,6 @@ mod helpers;
 mod host_services;
 mod id_token;
 mod instance;
+mod resource_access;
 mod role_access;
 mod role_token;

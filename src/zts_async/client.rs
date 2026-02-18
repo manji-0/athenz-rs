@@ -328,6 +328,37 @@ mod tests {
         handle.join().expect("server");
     }
 
+    #[tokio::test]
+    async fn get_role_access_calls_expected_endpoint() {
+        let body = r#"{"granted":true}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let access = client
+            .get_role_access("sports", "reader", "user.jane")
+            .await
+            .expect("access");
+        assert!(access.granted);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/access/domain/sports/role/reader/principal/user.jane"
+        );
+        assert!(req.headers.contains_key("host"));
+
+        handle.join().expect("server");
+    }
+
     struct CapturedRequest {
         method: String,
         path: String,

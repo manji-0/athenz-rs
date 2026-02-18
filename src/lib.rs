@@ -28,7 +28,7 @@ pub use jwt::{
 pub use jwt::{JwksProviderAsync, JwtValidatorAsync};
 
 pub use models::{
-    AccessTokenResponse, Assertion, AssertionCondition, AssertionConditionData,
+    Access, AccessTokenResponse, Assertion, AssertionCondition, AssertionConditionData,
     AssertionConditionOperator, AssertionConditions, AssertionEffect, AthenzJwkConfig,
     CertificateAuthorityBundle, DanglingPolicy, Domain, DomainData, DomainDataCheck,
     DomainGroupMember, DomainGroupMembers, DomainGroupMembership, DomainList, DomainMeta,

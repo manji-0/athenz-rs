@@ -1,6 +1,6 @@
 use super::ZmsClient;
 use crate::error::Error;
-use crate::models::{Membership, Role, RoleList, Roles};
+use crate::models::{DomainRoleMembers, Membership, Role, RoleList, Roles};
 use crate::zms::common;
 use crate::zms::{RoleGetOptions, RoleListOptions, RolesQueryOptions};
 
@@ -94,6 +94,27 @@ impl ZmsClient {
         if let Some(expiration) = expiration {
             req = req.query(&[("expiration", expiration)]);
         }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Lists members with overdue review in a domain.
+    pub fn get_overdue_domain_role_members(
+        &self,
+        domain: &str,
+    ) -> Result<DomainRoleMembers, Error> {
+        let url = self.build_url(&["domain", domain, "overdue"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Lists role memberships by member in a domain.
+    pub fn get_domain_role_members(&self, domain: &str) -> Result<DomainRoleMembers, Error> {
+        let url = self.build_url(&["domain", domain, "member"])?;
+        let mut req = self.http.get(url);
         req = self.apply_auth(req)?;
         let resp = req.send()?;
         self.expect_ok_json(resp)

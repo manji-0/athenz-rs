@@ -165,3 +165,49 @@ pub struct Membership {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_state: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemberRole {
+    pub role_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expiration: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub review_reminder: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audit_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_principal: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_time: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_disabled: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_state: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trust_role_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notify_roles: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notify_details: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainRoleMember {
+    pub member_name: String,
+    pub member_roles: Vec<MemberRole>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainRoleMembers {
+    pub domain_name: String,
+    pub members: Vec<DomainRoleMember>,
+}

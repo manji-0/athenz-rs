@@ -1292,6 +1292,102 @@ async fn get_principal_groups_with_domain_only_sets_domain_query_param() {
 }
 
 #[tokio::test]
+async fn get_overdue_domain_role_members_calls_overdue_endpoint() {
+    let body = r#"{"domainName":"sports","members":[{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader","domainName":"sports","memberName":"user.jane","active":true}]}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let members = client
+        .get_overdue_domain_role_members("sports")
+        .await
+        .expect("overdue members");
+    assert_eq!(members.domain_name, "sports");
+    assert_eq!(members.members.len(), 1);
+    assert_eq!(members.members[0].member_name, "user.jane");
+    assert_eq!(members.members[0].member_roles.len(), 1);
+    assert_eq!(
+        members.members[0].member_roles[0].role_name,
+        "sports:role.reader"
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/overdue");
+}
+
+#[tokio::test]
+async fn get_domain_role_members_calls_member_endpoint() {
+    let body = r#"{"domainName":"sports","members":[{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader","domainName":"sports","memberName":"user.jane","active":true}]}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let members = client
+        .get_domain_role_members("sports")
+        .await
+        .expect("role members");
+    assert_eq!(members.domain_name, "sports");
+    assert_eq!(members.members.len(), 1);
+    assert_eq!(members.members[0].member_name, "user.jane");
+    assert_eq!(members.members[0].member_roles.len(), 1);
+    assert_eq!(
+        members.members[0].member_roles[0].role_name,
+        "sports:role.reader"
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/member");
+}
+
+#[tokio::test]
+async fn get_domain_group_members_calls_group_member_endpoint() {
+    let body = r#"{"domainName":"sports","members":[{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let members = client
+        .get_domain_group_members("sports")
+        .await
+        .expect("group members");
+    assert_eq!(members.domain_name, "sports");
+    assert_eq!(members.members.len(), 1);
+    assert_eq!(members.members[0].member_name, "user.jane");
+    assert_eq!(members.members[0].member_groups.len(), 1);
+    assert_eq!(
+        members.members[0].member_groups[0].group_name.as_deref(),
+        Some("devs")
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/group/member");
+}
+
+#[tokio::test]
 async fn put_principal_state_calls_principal_state_endpoint() {
     let response = empty_response("204 No Content");
     let (base_url, rx) = serve_once(response).await;

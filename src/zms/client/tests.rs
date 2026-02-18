@@ -1289,6 +1289,105 @@ fn get_principal_groups_with_domain_only_sets_domain_query_param() {
 }
 
 #[test]
+fn get_overdue_domain_role_members_calls_overdue_endpoint() {
+    let body = r#"{"domainName":"sports","members":[{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader","domainName":"sports","memberName":"user.jane","active":true}]}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let members = client
+        .get_overdue_domain_role_members("sports")
+        .expect("overdue members");
+    assert_eq!(members.domain_name, "sports");
+    assert_eq!(members.members.len(), 1);
+    assert_eq!(members.members[0].member_name, "user.jane");
+    assert_eq!(members.members[0].member_roles.len(), 1);
+    assert_eq!(
+        members.members[0].member_roles[0].role_name,
+        "sports:role.reader"
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/overdue");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_domain_role_members_calls_member_endpoint() {
+    let body = r#"{"domainName":"sports","members":[{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader","domainName":"sports","memberName":"user.jane","active":true}]}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let members = client
+        .get_domain_role_members("sports")
+        .expect("role members");
+    assert_eq!(members.domain_name, "sports");
+    assert_eq!(members.members.len(), 1);
+    assert_eq!(members.members[0].member_name, "user.jane");
+    assert_eq!(members.members[0].member_roles.len(), 1);
+    assert_eq!(
+        members.members[0].member_roles[0].role_name,
+        "sports:role.reader"
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/member");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_domain_group_members_calls_group_member_endpoint() {
+    let body = r#"{"domainName":"sports","members":[{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let members = client
+        .get_domain_group_members("sports")
+        .expect("group members");
+    assert_eq!(members.domain_name, "sports");
+    assert_eq!(members.members.len(), 1);
+    assert_eq!(members.members[0].member_name, "user.jane");
+    assert_eq!(members.members[0].member_groups.len(), 1);
+    assert_eq!(
+        members.members[0].member_groups[0].group_name.as_deref(),
+        Some("devs")
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/group/member");
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn put_principal_state_calls_principal_state_endpoint() {
     let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
     let (base_url, rx, handle) = serve_once(response);

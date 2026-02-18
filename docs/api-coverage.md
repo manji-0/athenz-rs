@@ -36,6 +36,7 @@ If you add new endpoints, update this list.
   - Update domain metadata
 - Roles:
   - List roles / role list, get role
+  - List role members by domain (`/domain/{name}/member`) and overdue members (`/domain/{name}/overdue`)
   - Create/update role, delete role
   - Role membership get/put/delete
 - Policies:
@@ -53,6 +54,7 @@ If you add new endpoints, update this list.
 - Groups:
   - Get groups, list groups
   - Get principal groups (`/group?principal=&domain=`)
+  - List group members by domain (`/domain/{name}/group/member`)
   - Create/update group, delete group
   - Group membership get/put/delete
 

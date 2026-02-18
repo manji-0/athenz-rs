@@ -34,7 +34,8 @@ pub use policy::{Policies, Policy, PolicyList, PolicyOptions, ResourcePolicyOwne
 pub use principal::{PrincipalMember, PrincipalState};
 pub use quota::Quota;
 pub use role::{
-    Membership, ResourceRoleOwnership, Role, RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles,
+    DomainRoleMember, DomainRoleMembers, MemberRole, Membership, ResourceRoleOwnership, Role,
+    RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles,
 };
 pub use service::{
     ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity, ServiceIdentityList,

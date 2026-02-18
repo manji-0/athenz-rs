@@ -1,6 +1,6 @@
 use super::ZmsAsyncClient;
 use crate::error::Error;
-use crate::models::{DomainGroupMember, Group, GroupMembership, Groups};
+use crate::models::{DomainGroupMember, DomainGroupMembers, Group, GroupMembership, Groups};
 use crate::zms::common;
 use crate::zms::{GroupGetOptions, GroupsQueryOptions};
 
@@ -105,6 +105,18 @@ impl ZmsAsyncClient {
             query.push(("domain", domain.to_string()));
         }
         req = common::apply_query_params(req, query);
+        req = self.apply_auth(req)?;
+        let resp = req.send().await?;
+        self.expect_ok_json(resp).await
+    }
+
+    /// Lists group memberships by member in a domain.
+    pub async fn get_domain_group_members(
+        &self,
+        domain: &str,
+    ) -> Result<DomainGroupMembers, Error> {
+        let url = self.build_url(&["domain", domain, "group", "member"])?;
+        let mut req = self.http.get(url);
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await

@@ -11,6 +11,7 @@ use url::Url;
 use super::common;
 
 mod authority;
+mod dependency;
 mod domain;
 mod entities;
 mod groups;

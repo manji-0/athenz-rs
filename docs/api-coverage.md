@@ -66,6 +66,9 @@ If you add new endpoints, update this list.
   - Group membership get/put/delete
 - Review:
   - Get roles for review (`/review/role?principal=`)
+- Dependency:
+  - Register/unregister dependency (`/dependency/domain/{domainName}`)
+  - List dependent services, service resource groups, and domains
 
 ## Gaps / to be tracked
 

@@ -10,6 +10,7 @@ use std::time::Duration;
 use url::Url;
 
 mod authority;
+mod dependency;
 mod domain;
 mod entities;
 mod groups;

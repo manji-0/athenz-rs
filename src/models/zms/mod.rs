@@ -1,5 +1,6 @@
 mod assertion;
 mod authority;
+mod dependency;
 mod domain;
 mod domain_data_check;
 mod entity;
@@ -21,6 +22,9 @@ pub use assertion::{
     AssertionConditions, AssertionEffect,
 };
 pub use authority::{UserAuthorityAttributeMap, UserAuthorityAttributes};
+pub use dependency::{
+    DependentService, DependentServiceResourceGroup, DependentServiceResourceGroupList,
+};
 pub use domain::{
     Domain, DomainList, DomainMeta, DomainMetaStoreValidValuesList, DomainMetric, DomainMetricType,
     DomainMetrics, ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,

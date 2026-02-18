@@ -1,7 +1,7 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{
-    DomainListOptions, DomainMeta, Entity, NTokenSigner, PrincipalState,
+    DependentService, DomainListOptions, DomainMeta, Entity, NTokenSigner, PrincipalState,
     ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourcePolicyOwnership,
     SignedDomainsOptions, Tenancy, TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
 };
@@ -732,6 +732,167 @@ async fn get_domain_data_check_calls_domain_check_endpoint() {
         .expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/check");
+}
+
+#[tokio::test]
+async fn dependency_put_domain_dependency_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let detail = DependentService {
+        service: "sports.storage".to_string(),
+    };
+    client
+        .put_domain_dependency(
+            "sports",
+            &detail,
+            Some("register dependency"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("put domain dependency");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/dependency/domain/sports");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("register dependency"));
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+    let body: serde_json::Value = serde_json::from_slice(&req.body).expect("json body");
+    assert_eq!(body["service"], "sports.storage");
+}
+
+#[tokio::test]
+async fn dependency_delete_domain_dependency_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_domain_dependency(
+            "sports",
+            "sports.storage",
+            Some("delete dependency"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("delete domain dependency");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/dependency/domain/sports/service/sports.storage"
+    );
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("delete dependency"));
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+}
+
+#[tokio::test]
+async fn dependency_get_dependent_service_list_calls_endpoint() {
+    let body = r#"{"names":["sports.storage","media.publisher"]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_dependent_service_list("sports")
+        .await
+        .expect("dependent service list");
+    assert_eq!(
+        list.names,
+        vec!["sports.storage".to_string(), "media.publisher".to_string()]
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/dependency/domain/sports");
+}
+
+#[tokio::test]
+async fn dependency_get_dependent_service_resource_group_list_calls_endpoint() {
+    let body = r#"{"serviceAndResourceGroups":[{"service":"sports.storage","domain":"sports","resourceGroups":["core","db"]}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_dependent_service_resource_group_list("sports")
+        .await
+        .expect("dependent service resource groups");
+    assert_eq!(list.service_and_resource_groups.len(), 1);
+    assert_eq!(
+        list.service_and_resource_groups[0].service,
+        "sports.storage"
+    );
+    assert_eq!(list.service_and_resource_groups[0].domain, "sports");
+    assert_eq!(
+        list.service_and_resource_groups[0].resource_groups,
+        Some(vec!["core".to_string(), "db".to_string()])
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/dependency/domain/sports/resourceGroup");
+}
+
+#[tokio::test]
+async fn dependency_get_dependent_domain_list_calls_endpoint() {
+    let body = r#"{"names":["sports","media"]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_dependent_domain_list("sports.storage")
+        .await
+        .expect("dependent domain list");
+    assert_eq!(list.names, vec!["sports".to_string(), "media".to_string()]);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/dependency/service/sports.storage");
 }
 
 #[tokio::test]

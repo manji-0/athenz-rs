@@ -1,8 +1,8 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
-    DomainMeta, Entity, PolicyOptions, PrincipalState, ProviderResourceGroupRoles, Quota,
-    ResourceDomainOwnership, ResourcePolicyOwnership, Tenancy, TenantResourceGroupRoles,
-    TenantRoleAction,
+    DependentService, DomainMeta, Entity, PolicyOptions, PrincipalState,
+    ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourcePolicyOwnership, Tenancy,
+    TenantResourceGroupRoles, TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
@@ -742,6 +742,170 @@ fn get_domain_data_check_calls_domain_check_endpoint() {
     let req = rx.recv().expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/check");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn dependency_put_domain_dependency_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let detail = DependentService {
+        service: "sports.storage".to_string(),
+    };
+    client
+        .put_domain_dependency(
+            "sports",
+            &detail,
+            Some("register dependency"),
+            Some("sports.owner"),
+        )
+        .expect("put domain dependency");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/dependency/domain/sports");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("register dependency")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+    let body: serde_json::Value = serde_json::from_slice(&req.body).expect("json body");
+    assert_eq!(body["service"], "sports.storage");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn dependency_delete_domain_dependency_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_domain_dependency(
+            "sports",
+            "sports.storage",
+            Some("delete dependency"),
+            Some("sports.owner"),
+        )
+        .expect("delete domain dependency");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/dependency/domain/sports/service/sports.storage"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete dependency")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn dependency_get_dependent_service_list_calls_endpoint() {
+    let body = r#"{"names":["sports.storage","media.publisher"]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_dependent_service_list("sports")
+        .expect("dependent service list");
+    assert_eq!(
+        list.names,
+        vec!["sports.storage".to_string(), "media.publisher".to_string()]
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/dependency/domain/sports");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn dependency_get_dependent_service_resource_group_list_calls_endpoint() {
+    let body = r#"{"serviceAndResourceGroups":[{"service":"sports.storage","domain":"sports","resourceGroups":["core","db"]}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_dependent_service_resource_group_list("sports")
+        .expect("dependent service resource groups");
+    assert_eq!(list.service_and_resource_groups.len(), 1);
+    assert_eq!(
+        list.service_and_resource_groups[0].service,
+        "sports.storage"
+    );
+    assert_eq!(list.service_and_resource_groups[0].domain, "sports");
+    assert_eq!(
+        list.service_and_resource_groups[0].resource_groups,
+        Some(vec!["core".to_string(), "db".to_string()])
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/dependency/domain/sports/resourceGroup");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn dependency_get_dependent_domain_list_calls_endpoint() {
+    let body = r#"{"names":["sports","media"]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_dependent_domain_list("sports.storage")
+        .expect("dependent domain list");
+    assert_eq!(list.names, vec!["sports".to_string(), "media".to_string()]);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/dependency/service/sports.storage");
 
     handle.join().expect("server");
 }

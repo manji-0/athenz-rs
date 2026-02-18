@@ -26,9 +26,10 @@ pub use zms::{
 };
 pub use zts::{
     AccessTokenResponse, AthenzJwkConfig, CertificateAuthorityBundle, ExternalCredentialsRequest,
-    ExternalCredentialsResponse, HostServices, InstanceIdentity, InstanceRefreshInformation,
-    InstanceRegisterInformation, InstanceRegisterResponse, InstanceRegisterToken,
-    IntrospectResponse, OAuthConfig, OidcResponse, OpenIdConfig, RoleAccess, RoleCertificate,
-    RoleCertificateRequest, SSHCertRequest, SSHCertRequestData, SSHCertRequestMeta, SSHCertificate,
-    SSHCertificates, TransportDirection, TransportRule, TransportRules, Workload, Workloads,
+    ExternalCredentialsResponse, HostServices, InstanceIdentity, InstanceRefreshIdentity,
+    InstanceRefreshInformation, InstanceRefreshRequest, InstanceRegisterInformation,
+    InstanceRegisterResponse, InstanceRegisterToken, IntrospectResponse, OAuthConfig, OidcResponse,
+    OpenIdConfig, RoleAccess, RoleCertificate, RoleCertificateRequest, SSHCertRequest,
+    SSHCertRequestData, SSHCertRequestMeta, SSHCertificate, SSHCertificates, TransportDirection,
+    TransportRule, TransportRules, Workload, Workloads,
 };

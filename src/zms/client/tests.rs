@@ -2116,6 +2116,165 @@ fn get_principal_groups_with_domain_only_sets_domain_query_param() {
 }
 
 #[test]
+fn get_principal_roles_calls_role_endpoint() {
+    let body = r#"{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader","domainName":"sports","memberName":"user.jane","active":true}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let roles = client
+        .get_principal_roles(Some("user.jane"), Some("sports"), Some(true))
+        .expect("principal roles");
+    assert_eq!(roles.member_name, "user.jane");
+    assert_eq!(roles.member_roles.len(), 1);
+    assert_eq!(roles.member_roles[0].role_name, "sports:role.reader");
+    assert_eq!(roles.member_roles[0].domain_name.as_deref(), Some("sports"));
+    assert_eq!(roles.member_roles[0].active, Some(true));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/role");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+    assert_eq!(req.query.get("expand").map(String::as_str), Some("true"));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_principal_roles_without_filters_omits_query_params() {
+    let body = r#"{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader"}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let roles = client
+        .get_principal_roles(None, None, None)
+        .expect("principal roles");
+    assert_eq!(roles.member_name, "user.jane");
+    assert_eq!(roles.member_roles.len(), 1);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/role");
+    assert!(req.query.get("principal").is_none());
+    assert!(req.query.get("domain").is_none());
+    assert!(req.query.get("expand").is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_principal_roles_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader"}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let roles = client
+        .get_principal_roles(Some("user.jane"), None, None)
+        .expect("principal roles");
+    assert_eq!(roles.member_name, "user.jane");
+    assert_eq!(roles.member_roles.len(), 1);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/role");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert!(req.query.get("domain").is_none());
+    assert!(req.query.get("expand").is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_principal_roles_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader"}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let roles = client
+        .get_principal_roles(None, Some("sports"), None)
+        .expect("principal roles");
+    assert_eq!(roles.member_name, "user.jane");
+    assert_eq!(roles.member_roles.len(), 1);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/role");
+    assert!(req.query.get("principal").is_none());
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+    assert!(req.query.get("expand").is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_principal_roles_with_expand_only_sets_expand_query_param() {
+    let body = r#"{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader"}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let roles = client
+        .get_principal_roles(None, None, Some(false))
+        .expect("principal roles");
+    assert_eq!(roles.member_name, "user.jane");
+    assert_eq!(roles.member_roles.len(), 1);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/role");
+    assert!(req.query.get("principal").is_none());
+    assert!(req.query.get("domain").is_none());
+    assert_eq!(req.query.get("expand").map(String::as_str), Some("false"));
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn get_roles_for_review_calls_review_role_endpoint() {
     let body = r#"{"list":[{"domainName":"sports","name":"sports:role.reader","memberExpiryDays":30,"memberReviewDays":90,"serviceExpiryDays":0,"serviceReviewDays":0,"groupExpiryDays":0,"groupReviewDays":0,"lastReviewedDate":"2024-01-01T00:00:00Z","created":"2020-01-01T00:00:00Z"}]}"#;
     let response = format!(

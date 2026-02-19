@@ -30,7 +30,8 @@ pub use jwt::{JwksProviderAsync, JwtValidatorAsync};
 pub use models::{
     AWSTemporaryCredentials, Access, AccessTokenResponse, Assertion, AssertionCondition,
     AssertionConditionData, AssertionConditionOperator, AssertionConditions, AssertionEffect,
-    AthenzJwkConfig, CertificateAuthorityBundle, DanglingPolicy, Domain, DomainData,
+    AthenzJwkConfig, CertificateAuthorityBundle, DanglingPolicy, DependentService,
+    DependentServiceResourceGroup, DependentServiceResourceGroupList, Domain, DomainData,
     DomainDataCheck, DomainGroupMember, DomainGroupMembers, DomainGroupMembership, DomainList,
     DomainMeta, DomainMetaStoreValidValuesList, DomainMetric, DomainMetricType, DomainMetrics,
     DomainPolicies, DomainRoleMember, DomainRoleMembers, DomainSignedPolicyData,

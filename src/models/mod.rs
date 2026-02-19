@@ -24,7 +24,8 @@ pub use zms::{
     RoleMember, RoleMeta, Roles, ServerTemplateList, ServiceIdentities, ServiceIdentity,
     ServiceIdentityList, ServicePrincipal, SignedDomain, SignedDomains, SignedPolicies, Stats,
     SubDomain, Template, TemplateMeta, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
-    TopLevelDomain, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain, UserToken,
+    TopLevelDomain, User, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain, UserList,
+    UserToken,
 };
 pub use zts::{
     AWSTemporaryCredentials, Access, AccessTokenResponse, AthenzJwkConfig,

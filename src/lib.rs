@@ -51,8 +51,8 @@ pub use models::{
     ServiceIdentityList, ServicePrincipal, SignedDomain, SignedDomains, SignedPolicies,
     SignedPolicyData, SignedPolicyRequest, Stats, Status, SubDomain, Template, TemplateMeta,
     Tenancy, TenantDomains, TenantResourceGroupRoles, TenantRoleAction, TopLevelDomain,
-    TransportDirection, TransportRule, TransportRules, UserAuthorityAttributeMap,
-    UserAuthorityAttributes, UserDomain, UserToken, Workload, Workloads,
+    TransportDirection, TransportRule, TransportRules, User, UserAuthorityAttributeMap,
+    UserAuthorityAttributes, UserDomain, UserList, UserToken, Workload, Workloads,
 };
 
 #[cfg(feature = "async-validate")]

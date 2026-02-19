@@ -896,6 +896,119 @@ async fn dependency_get_dependent_domain_list_calls_endpoint() {
 }
 
 #[tokio::test]
+async fn user_get_user_list_calls_endpoint_with_domain_query() {
+    let body = r#"{"names":["jane","alex"]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let users = client
+        .get_user_list(Some("user"))
+        .await
+        .expect("user list with domain");
+    assert_eq!(users.names, vec!["jane".to_string(), "alex".to_string()]);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/user");
+    assert_eq!(req.query_value("domain"), Some("user"));
+}
+
+#[tokio::test]
+async fn user_get_user_list_without_domain_omits_query() {
+    let body = r#"{"names":["jane"]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let users = client.get_user_list(None).await.expect("user list");
+    assert_eq!(users.names, vec!["jane".to_string()]);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/user");
+    assert!(req.query_value("domain").is_none());
+}
+
+#[tokio::test]
+async fn user_delete_user_calls_endpoint_with_audit_headers() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_user("jane", Some("cleanup user"), Some("sports.owner"))
+        .await
+        .expect("delete user");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/user/jane");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("cleanup user"));
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+}
+
+#[tokio::test]
+async fn user_delete_domain_member_calls_endpoint_with_audit_headers() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_domain_member(
+            "sports",
+            "user.jane",
+            Some("remove user memberships"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("delete domain member");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/domain/sports/member/user.jane");
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("remove user memberships")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+}
+
+#[tokio::test]
 async fn template_get_server_template_list_calls_endpoint() {
     let body = r#"{"templateNames":["base","tenant"]}"#;
     let response = json_response("200 OK", body);

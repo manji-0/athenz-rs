@@ -16,6 +16,7 @@ mod stats;
 mod template;
 mod tenancy;
 mod token;
+mod user;
 
 pub use assertion::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
@@ -55,3 +56,4 @@ pub use tenancy::{
     ProviderResourceGroupRoles, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
 };
 pub use token::{ServicePrincipal, UserToken};
+pub use user::{User, UserList};

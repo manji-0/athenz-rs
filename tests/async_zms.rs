@@ -924,6 +924,87 @@ async fn access_get_access_calls_endpoint_with_query() {
 }
 
 #[tokio::test]
+async fn access_get_access_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"granted":true}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access("read", "sports.resource", None, Some("user.jane"))
+        .await
+        .expect("access");
+    assert!(access.granted);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read/sports.resource");
+    assert_eq!(req.query_value("domain"), None);
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+}
+
+#[tokio::test]
+async fn access_get_access_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"granted":true}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access("read", "sports.resource", Some("sports"), None)
+        .await
+        .expect("access");
+    assert!(access.granted);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read/sports.resource");
+    assert_eq!(req.query_value("domain"), Some("sports"));
+    assert_eq!(req.query_value("principal"), None);
+}
+
+#[tokio::test]
+async fn access_get_access_without_optional_filters_omits_query_params() {
+    let body = r#"{"granted":true}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access("read", "sports.resource", None, None)
+        .await
+        .expect("access");
+    assert!(access.granted);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read/sports.resource");
+    assert_eq!(req.query_value("domain"), None);
+    assert_eq!(req.query_value("principal"), None);
+}
+
+#[tokio::test]
 async fn access_get_access_ext_calls_endpoint_with_query() {
     let body = r#"{"granted":false}"#;
     let response = json_response("200 OK", body);
@@ -949,6 +1030,90 @@ async fn access_get_access_ext_calls_endpoint_with_query() {
     assert_eq!(req.query_value("resource"), Some("sports.resource"));
     assert_eq!(req.query_value("domain"), Some("sports"));
     assert_eq!(req.query_value("principal"), Some("user.jane"));
+}
+
+#[tokio::test]
+async fn access_get_access_ext_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"granted":true}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access_ext("read", "sports.resource", None, Some("user.jane"))
+        .await
+        .expect("access");
+    assert!(access.granted);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read");
+    assert_eq!(req.query_value("resource"), Some("sports.resource"));
+    assert_eq!(req.query_value("domain"), None);
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+}
+
+#[tokio::test]
+async fn access_get_access_ext_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"granted":true}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access_ext("read", "sports.resource", Some("sports"), None)
+        .await
+        .expect("access");
+    assert!(access.granted);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read");
+    assert_eq!(req.query_value("resource"), Some("sports.resource"));
+    assert_eq!(req.query_value("domain"), Some("sports"));
+    assert_eq!(req.query_value("principal"), None);
+}
+
+#[tokio::test]
+async fn access_get_access_ext_without_optional_filters_omits_query_params() {
+    let body = r#"{"granted":true}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access_ext("read", "sports.resource", None, None)
+        .await
+        .expect("access");
+    assert!(access.granted);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read");
+    assert_eq!(req.query_value("resource"), Some("sports.resource"));
+    assert_eq!(req.query_value("domain"), None);
+    assert_eq!(req.query_value("principal"), None);
 }
 
 #[tokio::test]
@@ -980,6 +1145,90 @@ async fn access_get_resource_access_list_calls_endpoint_with_query() {
     assert_eq!(req.query_value("principal"), Some("user.jane"));
     assert_eq!(req.query_value("action"), Some("read"));
     assert_eq!(req.query_value("filter"), Some("sports."));
+}
+
+#[tokio::test]
+async fn access_get_resource_access_list_with_action_only_sets_action_query_param() {
+    let body = r#"{"resources":[{"principal":"user.jane","assertions":[{"role":"sports:role.reader","resource":"sports.resource","action":"read"}]}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_resource_access_list("user.jane", Some("read"), None)
+        .await
+        .expect("resource access list");
+    assert_eq!(list.resources.len(), 1);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/resource");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("action"), Some("read"));
+    assert_eq!(req.query_value("filter"), None);
+}
+
+#[tokio::test]
+async fn access_get_resource_access_list_with_filter_only_sets_filter_query_param() {
+    let body = r#"{"resources":[{"principal":"user.jane","assertions":[{"role":"sports:role.reader","resource":"sports.resource","action":"read"}]}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_resource_access_list("user.jane", None, Some("sports."))
+        .await
+        .expect("resource access list");
+    assert_eq!(list.resources.len(), 1);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/resource");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("action"), None);
+    assert_eq!(req.query_value("filter"), Some("sports."));
+}
+
+#[tokio::test]
+async fn access_get_resource_access_list_without_optional_filters_omits_query_params() {
+    let body = r#"{"resources":[{"principal":"user.jane","assertions":[{"role":"sports:role.reader","resource":"sports.resource","action":"read"}]}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_resource_access_list("user.jane", None, None)
+        .await
+        .expect("resource access list");
+    assert_eq!(list.resources.len(), 1);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/resource");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("action"), None);
+    assert_eq!(req.query_value("filter"), None);
 }
 
 #[tokio::test]
@@ -2153,6 +2402,292 @@ async fn put_group_ownership_calls_group_ownership_endpoint() {
             "objectOwner": "sports.object_owner",
         })
     );
+}
+
+#[tokio::test]
+async fn get_pending_members_calls_endpoint_with_query() {
+    let body = r#"{"domainRoleMembersList":[{"domainName":"sports","members":[{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader","domainName":"sports","memberName":"user.jane","pendingState":"PENDING"}]}]}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_members(Some("user.jane"), Some("sports"))
+        .await
+        .expect("pending role memberships");
+    assert_eq!(memberships.domain_role_members_list.len(), 1);
+    assert_eq!(
+        memberships.domain_role_members_list[0].domain_name,
+        "sports"
+    );
+    assert_eq!(memberships.domain_role_members_list[0].members.len(), 1);
+    assert_eq!(
+        memberships.domain_role_members_list[0].members[0].member_name,
+        "user.jane"
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_members");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("domain"), Some("sports"));
+}
+
+#[tokio::test]
+async fn get_pending_group_members_calls_endpoint_with_query() {
+    let body = r#"{"domainGroupMembersList":[{"domainName":"sports","members":[{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","pendingState":"PENDING"}]}]}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_group_members(Some("user.jane"), Some("sports"))
+        .await
+        .expect("pending group memberships");
+    assert_eq!(memberships.domain_group_members_list.len(), 1);
+    assert_eq!(
+        memberships.domain_group_members_list[0].domain_name,
+        "sports"
+    );
+    assert_eq!(memberships.domain_group_members_list[0].members.len(), 1);
+    assert_eq!(
+        memberships.domain_group_members_list[0].members[0].member_name,
+        "user.jane"
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_group_members");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("domain"), Some("sports"));
+}
+
+#[tokio::test]
+async fn get_pending_members_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"domainRoleMembersList":[]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_members(Some("user.jane"), None)
+        .await
+        .expect("pending role memberships");
+    assert!(memberships.domain_role_members_list.is_empty());
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_members");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("domain"), None);
+}
+
+#[tokio::test]
+async fn get_pending_members_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"domainRoleMembersList":[]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_members(None, Some("sports"))
+        .await
+        .expect("pending role memberships");
+    assert!(memberships.domain_role_members_list.is_empty());
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_members");
+    assert_eq!(req.query_value("principal"), None);
+    assert_eq!(req.query_value("domain"), Some("sports"));
+}
+
+#[tokio::test]
+async fn get_pending_group_members_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"domainGroupMembersList":[]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_group_members(Some("user.jane"), None)
+        .await
+        .expect("pending group memberships");
+    assert!(memberships.domain_group_members_list.is_empty());
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_group_members");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("domain"), None);
+}
+
+#[tokio::test]
+async fn get_pending_group_members_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"domainGroupMembersList":[]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_group_members(None, Some("sports"))
+        .await
+        .expect("pending group memberships");
+    assert!(memberships.domain_group_members_list.is_empty());
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_group_members");
+    assert_eq!(req.query_value("principal"), None);
+    assert_eq!(req.query_value("domain"), Some("sports"));
+}
+
+#[tokio::test]
+async fn get_pending_group_members_without_filters_omits_query_params() {
+    let body = r#"{"domainGroupMembersList":[]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_group_members(None, None)
+        .await
+        .expect("pending group memberships");
+    assert!(memberships.domain_group_members_list.is_empty());
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_group_members");
+    assert_eq!(req.query_value("principal"), None);
+    assert_eq!(req.query_value("domain"), None);
+}
+
+#[tokio::test]
+async fn get_pending_members_without_filters_omits_query_params() {
+    let body = r#"{"domainRoleMembersList":[]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_members(None, None)
+        .await
+        .expect("pending role memberships");
+    assert!(memberships.domain_role_members_list.is_empty());
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_members");
+    assert_eq!(req.query_value("principal"), None);
+    assert_eq!(req.query_value("domain"), None);
+}
+
+#[tokio::test]
+async fn get_pending_group_members_applies_auth_header() {
+    let body = r#"{"domainGroupMembersList":[]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .follow_redirects(false)
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    client
+        .get_pending_group_members(None, None)
+        .await
+        .expect("pending group memberships");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.header_value("Athenz-Principal-Auth"), Some("token"));
+}
+
+#[tokio::test]
+async fn get_pending_members_applies_auth_header() {
+    let body = r#"{"domainRoleMembersList":[]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .follow_redirects(false)
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    client
+        .get_pending_members(None, None)
+        .await
+        .expect("pending role memberships");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.header_value("Athenz-Principal-Auth"), Some("token"));
 }
 
 #[tokio::test]

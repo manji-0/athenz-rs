@@ -42,6 +42,7 @@ If you add new endpoints, update this list.
 - Roles:
   - List roles / role list, get role
   - List role members by domain (`/domain/{name}/member`) and overdue members (`/domain/{name}/overdue`)
+  - List pending role memberships (`/pending_members?principal=&domain=`)
   - Create/update role, delete role
   - Role membership get/put/delete
 - Policies:
@@ -60,6 +61,7 @@ If you add new endpoints, update this list.
 - Groups:
   - Get groups, list groups
   - Get principal groups (`/group?principal=&domain=`)
+  - List pending group memberships (`/pending_group_members?principal=&domain=`)
   - Get groups for review (`/review/group?principal=`)
   - List group members by domain (`/domain/{name}/group/member`)
   - Update group meta/system meta, review state, and ownership

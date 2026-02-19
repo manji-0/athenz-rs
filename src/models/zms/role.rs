@@ -211,3 +211,9 @@ pub struct DomainRoleMembers {
     pub domain_name: String,
     pub members: Vec<DomainRoleMember>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainRoleMembership {
+    pub domain_role_members_list: Vec<DomainRoleMembers>,
+}

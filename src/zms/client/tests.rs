@@ -942,6 +942,93 @@ fn access_get_access_calls_endpoint_with_query() {
 }
 
 #[test]
+fn access_get_access_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"granted":true}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access("read", "sports.resource", None, Some("user.jane"))
+        .expect("access");
+    assert!(access.granted);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read/sports.resource");
+    assert_eq!(req.query.get("domain").map(String::as_str), None);
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn access_get_access_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"granted":true}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access("read", "sports.resource", Some("sports"), None)
+        .expect("access");
+    assert!(access.granted);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read/sports.resource");
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+    assert_eq!(req.query.get("principal").map(String::as_str), None);
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn access_get_access_without_optional_filters_omits_query_params() {
+    let body = r#"{"granted":true}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access("read", "sports.resource", None, None)
+        .expect("access");
+    assert!(access.granted);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read/sports.resource");
+    assert_eq!(req.query.get("domain").map(String::as_str), None);
+    assert_eq!(req.query.get("principal").map(String::as_str), None);
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn access_get_access_ext_calls_endpoint_with_query() {
     let body = r#"{"granted":false}"#;
     let response = format!(
@@ -977,6 +1064,105 @@ fn access_get_access_ext_calls_endpoint_with_query() {
 }
 
 #[test]
+fn access_get_access_ext_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"granted":true}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access_ext("read", "sports.resource", None, Some("user.jane"))
+        .expect("access");
+    assert!(access.granted);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read");
+    assert_eq!(
+        req.query.get("resource").map(String::as_str),
+        Some("sports.resource")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), None);
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn access_get_access_ext_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"granted":true}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access_ext("read", "sports.resource", Some("sports"), None)
+        .expect("access");
+    assert!(access.granted);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read");
+    assert_eq!(
+        req.query.get("resource").map(String::as_str),
+        Some("sports.resource")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+    assert_eq!(req.query.get("principal").map(String::as_str), None);
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn access_get_access_ext_without_optional_filters_omits_query_params() {
+    let body = r#"{"granted":true}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access_ext("read", "sports.resource", None, None)
+        .expect("access");
+    assert!(access.granted);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read");
+    assert_eq!(
+        req.query.get("resource").map(String::as_str),
+        Some("sports.resource")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), None);
+    assert_eq!(req.query.get("principal").map(String::as_str), None);
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn access_get_resource_access_list_calls_endpoint_with_query() {
     let body = r#"{"resources":[{"principal":"user.jane","assertions":[{"role":"sports:role.reader","resource":"sports.resource","action":"read"}]}]}"#;
     let response = format!(
@@ -1007,6 +1193,102 @@ fn access_get_resource_access_list_calls_endpoint_with_query() {
     );
     assert_eq!(req.query.get("action").map(String::as_str), Some("read"));
     assert_eq!(req.query.get("filter").map(String::as_str), Some("sports."));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn access_get_resource_access_list_with_action_only_sets_action_query_param() {
+    let body = r#"{"resources":[{"principal":"user.jane","assertions":[{"role":"sports:role.reader","resource":"sports.resource","action":"read"}]}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_resource_access_list("user.jane", Some("read"), None)
+        .expect("resource access list");
+    assert_eq!(list.resources.len(), 1);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/resource");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("action").map(String::as_str), Some("read"));
+    assert_eq!(req.query.get("filter").map(String::as_str), None);
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn access_get_resource_access_list_with_filter_only_sets_filter_query_param() {
+    let body = r#"{"resources":[{"principal":"user.jane","assertions":[{"role":"sports:role.reader","resource":"sports.resource","action":"read"}]}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_resource_access_list("user.jane", None, Some("sports."))
+        .expect("resource access list");
+    assert_eq!(list.resources.len(), 1);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/resource");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("action").map(String::as_str), None);
+    assert_eq!(req.query.get("filter").map(String::as_str), Some("sports."));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn access_get_resource_access_list_without_optional_filters_omits_query_params() {
+    let body = r#"{"resources":[{"principal":"user.jane","assertions":[{"role":"sports:role.reader","resource":"sports.resource","action":"read"}]}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_resource_access_list("user.jane", None, None)
+        .expect("resource access list");
+    assert_eq!(list.resources.len(), 1);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/resource");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("action").map(String::as_str), None);
+    assert_eq!(req.query.get("filter").map(String::as_str), None);
 
     handle.join().expect("server");
 }
@@ -2181,6 +2463,318 @@ fn put_group_ownership_calls_group_ownership_endpoint() {
             "membersOwner": "sports.members_owner",
             "objectOwner": "sports.object_owner",
         })
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_pending_members_calls_endpoint_with_query() {
+    let body = r#"{"domainRoleMembersList":[{"domainName":"sports","members":[{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader","domainName":"sports","memberName":"user.jane","pendingState":"PENDING"}]}]}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_members(Some("user.jane"), Some("sports"))
+        .expect("pending role memberships");
+    assert_eq!(memberships.domain_role_members_list.len(), 1);
+    assert_eq!(
+        memberships.domain_role_members_list[0].domain_name,
+        "sports"
+    );
+    assert_eq!(memberships.domain_role_members_list[0].members.len(), 1);
+    assert_eq!(
+        memberships.domain_role_members_list[0].members[0].member_name,
+        "user.jane"
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_members");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_pending_group_members_calls_endpoint_with_query() {
+    let body = r#"{"domainGroupMembersList":[{"domainName":"sports","members":[{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","pendingState":"PENDING"}]}]}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_group_members(Some("user.jane"), Some("sports"))
+        .expect("pending group memberships");
+    assert_eq!(memberships.domain_group_members_list.len(), 1);
+    assert_eq!(
+        memberships.domain_group_members_list[0].domain_name,
+        "sports"
+    );
+    assert_eq!(memberships.domain_group_members_list[0].members.len(), 1);
+    assert_eq!(
+        memberships.domain_group_members_list[0].members[0].member_name,
+        "user.jane"
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_group_members");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_pending_members_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"domainRoleMembersList":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_members(Some("user.jane"), None)
+        .expect("pending role memberships");
+    assert!(memberships.domain_role_members_list.is_empty());
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_members");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert!(req.query.get("domain").is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_pending_members_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"domainRoleMembersList":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_members(None, Some("sports"))
+        .expect("pending role memberships");
+    assert!(memberships.domain_role_members_list.is_empty());
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_members");
+    assert!(req.query.get("principal").is_none());
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_pending_group_members_with_principal_only_sets_principal_query_param() {
+    let body = r#"{"domainGroupMembersList":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_group_members(Some("user.jane"), None)
+        .expect("pending group memberships");
+    assert!(memberships.domain_group_members_list.is_empty());
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_group_members");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert!(req.query.get("domain").is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_pending_group_members_with_domain_only_sets_domain_query_param() {
+    let body = r#"{"domainGroupMembersList":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_group_members(None, Some("sports"))
+        .expect("pending group memberships");
+    assert!(memberships.domain_group_members_list.is_empty());
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_group_members");
+    assert!(req.query.get("principal").is_none());
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_pending_group_members_without_filters_omits_query_params() {
+    let body = r#"{"domainGroupMembersList":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_group_members(None, None)
+        .expect("pending group memberships");
+    assert!(memberships.domain_group_members_list.is_empty());
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_group_members");
+    assert!(req.query.get("principal").is_none());
+    assert!(req.query.get("domain").is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_pending_members_without_filters_omits_query_params() {
+    let body = r#"{"domainRoleMembersList":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let memberships = client
+        .get_pending_members(None, None)
+        .expect("pending role memberships");
+    assert!(memberships.domain_role_members_list.is_empty());
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_members");
+    assert!(req.query.get("principal").is_none());
+    assert!(req.query.get("domain").is_none());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_pending_group_members_applies_auth_header() {
+    let body = r#"{"domainGroupMembersList":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .disable_redirect(true)
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .build()
+        .expect("build");
+
+    client
+        .get_pending_group_members(None, None)
+        .expect("pending group memberships");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(
+        req.headers.get("athenz-principal-auth").map(String::as_str),
+        Some("token")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_pending_members_applies_auth_header() {
+    let body = r#"{"domainRoleMembersList":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .disable_redirect(true)
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .build()
+        .expect("build");
+
+    client
+        .get_pending_members(None, None)
+        .expect("pending role memberships");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(
+        req.headers.get("athenz-principal-auth").map(String::as_str),
+        Some("token")
     );
 
     handle.join().expect("server");

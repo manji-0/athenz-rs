@@ -125,6 +125,87 @@ async fn get_tenant_domains_uses_expected_path_and_query() {
 }
 
 #[tokio::test]
+async fn get_tenant_domains_with_role_name_only_sets_role_name_query_param() {
+    let body = r#"{"tenantDomainNames":["sports.tenant"]}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let domains = client
+        .get_tenant_domains("sports", "user.jane", Some("reader"), None)
+        .await
+        .expect("tenant domains");
+    assert_eq!(domains.tenant_domain_names, vec!["sports.tenant"]);
+
+    let req = timeout(REQUEST_TIMEOUT, rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zts/v1/providerdomain/sports/user/user.jane");
+    assert_eq!(req.query_value("roleName"), Some("reader"));
+    assert_eq!(req.query_value("serviceName"), None);
+}
+
+#[tokio::test]
+async fn get_tenant_domains_with_service_name_only_sets_service_name_query_param() {
+    let body = r#"{"tenantDomainNames":["sports.tenant"]}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let domains = client
+        .get_tenant_domains("sports", "user.jane", None, Some("storage"))
+        .await
+        .expect("tenant domains");
+    assert_eq!(domains.tenant_domain_names, vec!["sports.tenant"]);
+
+    let req = timeout(REQUEST_TIMEOUT, rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zts/v1/providerdomain/sports/user/user.jane");
+    assert_eq!(req.query_value("roleName"), None);
+    assert_eq!(req.query_value("serviceName"), Some("storage"));
+}
+
+#[tokio::test]
+async fn get_tenant_domains_without_optional_filters_omits_query_params() {
+    let body = r#"{"tenantDomainNames":["sports.tenant"]}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let domains = client
+        .get_tenant_domains("sports", "user.jane", None, None)
+        .await
+        .expect("tenant domains");
+    assert_eq!(domains.tenant_domain_names, vec!["sports.tenant"]);
+
+    let req = timeout(REQUEST_TIMEOUT, rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zts/v1/providerdomain/sports/user/user.jane");
+    assert_eq!(req.query_value("roleName"), None);
+    assert_eq!(req.query_value("serviceName"), None);
+}
+
+#[tokio::test]
 async fn get_domain_signed_policy_data_returns_etag_on_ok() {
     let body = r#"{"signedPolicyData":{"policyData":{"domain":"sports","policies":[{"name":"p","assertions":[]}]},"modified":"2020-01-01T00:00:00Z","expires":"2099-01-01T00:00:00Z"},"signature":"sig","keyId":"0"}"#;
     let response = format!(

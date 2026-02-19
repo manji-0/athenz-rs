@@ -9,6 +9,7 @@ use reqwest::{Certificate, Client as HttpClient, Identity, RequestBuilder, Respo
 use std::time::Duration;
 use url::Url;
 
+mod access;
 mod authority;
 mod dependency;
 mod domain;

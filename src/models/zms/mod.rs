@@ -1,3 +1,4 @@
+mod access;
 mod assertion;
 mod authority;
 mod dependency;
@@ -18,6 +19,10 @@ mod tenancy;
 mod token;
 mod user;
 
+pub use access::{
+    Access as ZmsAccess, ResourceAccess as ZmsResourceAccess,
+    ResourceAccessList as ZmsResourceAccessList,
+};
 pub use assertion::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
     AssertionConditions, AssertionEffect,

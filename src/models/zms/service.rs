@@ -14,6 +14,19 @@ pub struct ResourceServiceIdentityOwnership {
     pub object_owner: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceIdentitySystemMeta {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_endpoint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x509_cert_signer_key_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_cert_signer_key_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceIdentity {

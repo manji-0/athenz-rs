@@ -54,6 +54,7 @@ If you add new endpoints, update this list.
 - Service identities:
   - Get service identity, list service identities
   - Create/update service identity, delete service identity
+  - Update service system meta and ownership
   - Public key entry get/put/delete
 - Entities:
   - Get entity, list entities

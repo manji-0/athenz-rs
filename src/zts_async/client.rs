@@ -281,6 +281,7 @@ impl ZtsAsyncClient {
 mod tests {
     use crate::error::{Error, CONFIG_ERROR_INSTANCE_PROVIDER_BASE_URL};
     use crate::models::{InstanceConfirmation, InstanceRefreshRequest, RoleCertificateRequest};
+    use crate::zts::IdTokenRequest;
 
     use super::ZtsAsyncClient;
     use std::collections::HashMap;
@@ -940,10 +941,141 @@ mod tests {
         handle.join().expect("server");
     }
 
+    #[tokio::test]
+    async fn get_host_services_calls_expected_endpoint() {
+        let body = r#"{"host":"host1.example","names":["sports.api","sports.ui"]}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let services = client
+            .get_host_services("host1.example")
+            .await
+            .expect("host services");
+        assert_eq!(services.host, "host1.example");
+        assert_eq!(services.names, vec!["sports.api", "sports.ui"]);
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.path, "/zts/v1/host/host1.example/services");
+        assert!(req.body.is_empty());
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn get_tenant_domains_uses_expected_path_and_query() {
+        let body = r#"{"tenantDomainNames":["sports.tenant","media.tenant"]}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let domains = client
+            .get_tenant_domains("sports", "user.jane", Some("reader"), Some("storage"))
+            .await
+            .expect("tenant domains");
+        assert_eq!(
+            domains.tenant_domain_names,
+            vec!["sports.tenant", "media.tenant"]
+        );
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(
+            req.path,
+            "/zts/v1/providerdomain/sports/user/user.jane?roleName=reader&serviceName=storage"
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn issue_id_token_accepts_redirects() {
+        let response = concat!(
+            "HTTP/1.1 303 See Other\r\n",
+            "Location: https://example.com/callback?token=abc\r\n",
+            "Content-Length: 0\r\n",
+            "\r\n"
+        )
+        .to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .follow_redirects(false)
+            .build()
+            .expect("build");
+        let req = IdTokenRequest::new(
+            "sports.api",
+            "https://example.com/callback",
+            "openid",
+            "nonce-123",
+        );
+
+        let result = client.issue_id_token(&req).await.expect("request");
+        assert!(result.response.is_none());
+        assert_eq!(
+            result.location.as_deref(),
+            Some("https://example.com/callback?token=abc")
+        );
+
+        let captured = rx.recv().expect("request");
+        assert_eq!(captured.method, "GET");
+        assert!(
+            captured.path.starts_with("/zts/v1/oauth2/auth?"),
+            "unexpected path: {}",
+            captured.path
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn get_domain_signed_policy_data_sets_if_none_match() {
+        let response =
+            "HTTP/1.1 304 Not Modified\r\nETag: tag-1\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = client
+            .get_domain_signed_policy_data("sports", Some("tag-1"))
+            .await
+            .expect("request");
+        assert!(result.data.is_none());
+        assert_eq!(result.etag.as_deref(), Some("tag-1"));
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.path, "/zts/v1/domain/sports/signed_policy_data");
+        assert_eq!(
+            req.headers.get("if-none-match").map(String::as_str),
+            Some("tag-1")
+        );
+
+        handle.join().expect("server");
+    }
+
     struct CapturedRequest {
         method: String,
         path: String,
         headers: HashMap<String, String>,
+        body: Vec<u8>,
     }
 
     fn serve_once(
@@ -998,10 +1130,27 @@ mod tests {
             }
         }
 
+        let content_length = headers
+            .get("content-length")
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(0);
+        let mut body = buf[header_end..].to_vec();
+        while body.len() < content_length {
+            let read = stream.read(&mut chunk).unwrap_or(0);
+            if read == 0 {
+                break;
+            }
+            body.extend_from_slice(&chunk[..read]);
+        }
+        if body.len() > content_length {
+            body.truncate(content_length);
+        }
+
         CapturedRequest {
             method,
             path,
             headers,
+            body,
         }
     }
 }

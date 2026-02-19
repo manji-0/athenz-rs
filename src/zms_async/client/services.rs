@@ -1,6 +1,9 @@
 use super::ZmsAsyncClient;
 use crate::error::Error;
-use crate::models::{PublicKeyEntry, ServiceIdentities, ServiceIdentity, ServiceIdentityList};
+use crate::models::{
+    PublicKeyEntry, ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity,
+    ServiceIdentityList, ServiceIdentitySystemMeta,
+};
 use crate::zms::common;
 use crate::zms::{ServiceIdentitiesQueryOptions, ServiceListOptions};
 
@@ -37,6 +40,41 @@ impl ZmsAsyncClient {
         }
         let resp = req.send().await?;
         self.expect_no_content_or_json(resp).await
+    }
+
+    /// Updates service identity system metadata for a specific attribute.
+    pub async fn put_service_identity_system_meta(
+        &self,
+        domain: &str,
+        service: &str,
+        attribute: &str,
+        meta: &ServiceIdentitySystemMeta,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&[
+            "domain", domain, "service", service, "meta", "system", attribute,
+        ])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send().await?;
+        self.expect_no_content(resp).await
+    }
+
+    /// Sets resource ownership for a service identity.
+    pub async fn put_service_identity_ownership(
+        &self,
+        domain: &str,
+        service: &str,
+        ownership: &ResourceServiceIdentityOwnership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "service", service, "ownership"])?;
+        let mut req = self.http.put(url).json(ownership);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send().await?;
+        self.expect_no_content(resp).await
     }
 
     /// Deletes a service identity.

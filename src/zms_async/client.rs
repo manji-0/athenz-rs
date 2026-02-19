@@ -274,7 +274,15 @@ impl ZmsAsyncClient {
 #[cfg(test)]
 mod tests {
     use super::ZmsAsyncClient;
-    use crate::models::PolicyOptions;
+    use crate::error::Error;
+    use crate::models::{
+        DependentService, DomainMeta, Entity, GroupMeta, PolicyOptions, PrincipalState,
+        ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourceGroupOwnership,
+        ResourcePolicyOwnership, ResourceServiceIdentityOwnership, ServiceIdentitySystemMeta,
+        Tenancy, TenantResourceGroupRoles, TenantRoleAction,
+    };
+    use crate::zms::{DomainListOptions, SignedDomainsOptions};
+    use serde_json::json;
     use std::collections::HashMap;
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
@@ -508,10 +516,1499 @@ mod tests {
         handle.join().expect("server");
     }
 
+    #[tokio::test]
+    async fn put_service_identity_system_meta_calls_expected_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let meta = ServiceIdentitySystemMeta {
+            provider_endpoint: Some("https://provider.example/callback".to_string()),
+            ..Default::default()
+        };
+
+        client
+            .put_service_identity_system_meta(
+                "sports",
+                "api",
+                "provider-endpoint",
+                &meta,
+                Some("set service provider endpoint"),
+            )
+            .await
+            .expect("put service identity system meta");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports/service/api/meta/system/provider-endpoint"
+        );
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("set service provider endpoint")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_service_identity_ownership_calls_expected_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let ownership = ResourceServiceIdentityOwnership {
+            public_keys_owner: Some("sports.pubkeys_owner".to_string()),
+            hosts_owner: Some("sports.hosts_owner".to_string()),
+            object_owner: Some("sports.object_owner".to_string()),
+        };
+
+        client
+            .put_service_identity_ownership(
+                "sports",
+                "api",
+                &ownership,
+                Some("set service ownership"),
+            )
+            .await
+            .expect("put service identity ownership");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/service/api/ownership");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("set service ownership")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_domain_system_meta_calls_domain_meta_system_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let meta = DomainMeta {
+            product_id: Some("prod-1".to_string()),
+            ..Default::default()
+        };
+
+        client
+            .put_domain_system_meta("sports", "product-id", &meta, Some("set product id"))
+            .await
+            .expect("put domain system meta");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/meta/system/product-id");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("set product id")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("json body for put_domain_system_meta");
+        assert_eq!(body_json, json!({ "productId": "prod-1" }));
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_domain_ownership_calls_domain_ownership_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let ownership = ResourceDomainOwnership {
+            meta_owner: Some("sports.meta_owner".to_string()),
+            object_owner: Some("sports.object_owner".to_string()),
+        };
+
+        client
+            .put_domain_ownership("sports", &ownership, Some("set domain ownership"))
+            .await
+            .expect("put domain ownership");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/ownership");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("set domain ownership")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+        assert_eq!(
+            body_json,
+            json!({
+                "metaOwner": "sports.meta_owner",
+                "objectOwner": "sports.object_owner",
+            })
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_quota_calls_domain_quota_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let quota = Quota {
+            name: "sports".to_string(),
+            subdomain: 1,
+            role: 2,
+            role_member: 3,
+            policy: 4,
+            assertion: 5,
+            entity: 6,
+            service: 7,
+            service_host: 8,
+            public_key: 9,
+            group: 10,
+            group_member: 11,
+            modified: None,
+        };
+
+        client
+            .put_quota("sports", &quota, Some("update domain quota"))
+            .await
+            .expect("put quota");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/quota");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("update domain quota")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn delete_quota_calls_domain_quota_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .delete_quota("sports", Some("delete domain quota"))
+            .await
+            .expect("delete quota");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "DELETE");
+        assert_eq!(req.path, "/zms/v1/domain/sports/quota");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("delete domain quota")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_entity_calls_domain_entity_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let entity = Entity {
+            name: "sports.entity.config".to_string(),
+            value: json!({
+                "enabled": true,
+                "limit": 100
+            }),
+        };
+
+        client
+            .put_entity(
+                "sports",
+                "entity.config",
+                &entity,
+                Some("upsert domain entity"),
+                Some("sports-admin"),
+            )
+            .await
+            .expect("put entity");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/entity/entity.config");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("upsert domain entity")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports-admin")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+        assert_eq!(
+            body_json,
+            json!({
+                "name": "sports.entity.config",
+                "value": {
+                    "enabled": true,
+                    "limit": 100
+                }
+            })
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn delete_entity_calls_domain_entity_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .delete_entity(
+                "sports",
+                "entity.config",
+                Some("delete domain entity"),
+                Some("sports-admin"),
+            )
+            .await
+            .expect("delete entity");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "DELETE");
+        assert_eq!(req.path, "/zms/v1/domain/sports/entity/entity.config");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("delete domain entity")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports-admin")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_domain_dependency_calls_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let detail = DependentService {
+            service: "sports.storage".to_string(),
+        };
+
+        client
+            .put_domain_dependency(
+                "sports",
+                &detail,
+                Some("register dependency"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("put domain dependency");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/dependency/domain/sports");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("register dependency")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+        let body: serde_json::Value = serde_json::from_slice(&req.body).expect("json body");
+        assert_eq!(body["service"], "sports.storage");
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn delete_domain_dependency_calls_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .delete_domain_dependency(
+                "sports",
+                "sports.storage",
+                Some("delete dependency"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("delete domain dependency");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "DELETE");
+        assert_eq!(
+            req.path,
+            "/zms/v1/dependency/domain/sports/service/sports.storage"
+        );
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("delete dependency")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_group_system_meta_calls_group_meta_system_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let meta = GroupMeta {
+            self_serve: Some(true),
+            ..Default::default()
+        };
+
+        client
+            .put_group_system_meta(
+                "sports",
+                "devs",
+                "self-serve",
+                &meta,
+                Some("set group self-serve"),
+            )
+            .await
+            .expect("put group system meta");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports/group/devs/meta/system/self-serve"
+        );
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("set group self-serve")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+        assert_eq!(body_json, json!({ "selfServe": true }));
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_group_meta_calls_group_meta_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let meta = GroupMeta {
+            self_serve: Some(true),
+            review_enabled: Some(true),
+            ..Default::default()
+        };
+
+        client
+            .put_group_meta("sports", "devs", &meta, Some("update group meta"))
+            .await
+            .expect("put group meta");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/group/devs/meta");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("update group meta")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+        assert_eq!(
+            body_json,
+            json!({ "selfServe": true, "reviewEnabled": true })
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_group_review_calls_group_review_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .put_group_review("sports", "devs", Some("mark group reviewed"))
+            .await
+            .expect("put group review");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/group/devs/review");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("mark group reviewed")
+        );
+        assert!(req.body.is_empty());
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_group_ownership_calls_group_ownership_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let ownership = ResourceGroupOwnership {
+            meta_owner: Some("sports.meta_owner".to_string()),
+            members_owner: Some("sports.members_owner".to_string()),
+            object_owner: Some("sports.object_owner".to_string()),
+        };
+
+        client
+            .put_group_ownership("sports", "devs", &ownership, Some("set group ownership"))
+            .await
+            .expect("put group ownership");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/group/devs/ownership");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("set group ownership")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+        assert_eq!(
+            body_json,
+            json!({
+                "metaOwner": "sports.meta_owner",
+                "membersOwner": "sports.members_owner",
+                "objectOwner": "sports.object_owner",
+            })
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_policy_ownership_calls_expected_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let ownership = ResourcePolicyOwnership {
+            assertions_owner: Some("sports.assertions_owner".to_string()),
+            object_owner: Some("sports.object_owner".to_string()),
+        };
+
+        client
+            .put_policy_ownership(
+                "sports",
+                "readers",
+                &ownership,
+                Some("set policy ownership"),
+            )
+            .await
+            .expect("put policy ownership");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/policy/readers/ownership");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("set policy ownership")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+        assert_eq!(
+            body_json,
+            json!({
+                "assertionsOwner": "sports.assertions_owner",
+                "objectOwner": "sports.object_owner",
+            })
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_principal_state_calls_principal_state_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let principal_state = PrincipalState { suspended: true };
+
+        client
+            .put_principal_state(
+                "sports.api",
+                &principal_state,
+                Some("disable compromised principal"),
+            )
+            .await
+            .expect("put principal state");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/principal/sports.api/state");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("disable compromised principal")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+        assert_eq!(body_json, json!({ "suspended": true }));
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn delete_user_calls_endpoint_with_audit_headers() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .delete_user("jane", Some("cleanup user"), Some("sports.owner"))
+            .await
+            .expect("delete user");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "DELETE");
+        assert_eq!(req.path, "/zms/v1/user/jane");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("cleanup user")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn delete_domain_member_calls_endpoint_with_audit_headers() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .delete_domain_member(
+                "sports",
+                "user.jane",
+                Some("remove user memberships"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("delete domain member");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "DELETE");
+        assert_eq!(req.path, "/zms/v1/domain/sports/member/user.jane");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("remove user memberships")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_tenancy_calls_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let detail = Tenancy {
+            domain: "sports".to_string(),
+            service: "storage".to_string(),
+            resource_groups: Some(vec!["core".to_string()]),
+            create_admin_role: Some(true),
+        };
+
+        client
+            .put_tenancy(
+                "sports",
+                "storage",
+                &detail,
+                Some("register tenant service"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("put tenancy");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/tenancy/storage");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("register tenant service")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn delete_tenancy_calls_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .delete_tenancy(
+                "sports",
+                "storage",
+                Some("delete tenant service"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("delete tenancy");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "DELETE");
+        assert_eq!(req.path, "/zms/v1/domain/sports/tenancy/storage");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("delete tenant service")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_tenant_calls_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let detail = Tenancy {
+            domain: "sports.tenant".to_string(),
+            service: "storage".to_string(),
+            resource_groups: Some(vec!["core".to_string()]),
+            create_admin_role: Some(true),
+        };
+
+        client
+            .put_tenant(
+                "sports",
+                "storage",
+                "sports.tenant",
+                &detail,
+                Some("register tenant domain"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("put tenant");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports/service/storage/tenant/sports.tenant"
+        );
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("register tenant domain")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn delete_tenant_calls_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .delete_tenant(
+                "sports",
+                "storage",
+                "sports.tenant",
+                Some("delete tenant domain"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("delete tenant");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "DELETE");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports/service/storage/tenant/sports.tenant"
+        );
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("delete tenant domain")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_tenant_resource_group_roles_calls_endpoint() {
+        let body = r#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let detail = TenantResourceGroupRoles {
+            domain: "sports".to_string(),
+            service: "storage".to_string(),
+            tenant: "sports.tenant".to_string(),
+            roles: vec![TenantRoleAction {
+                role: "reader".to_string(),
+                action: "read".to_string(),
+            }],
+            resource_group: "core".to_string(),
+        };
+
+        let result = client
+            .put_tenant_resource_group_roles(
+                "sports",
+                "storage",
+                "sports.tenant",
+                "core",
+                &detail,
+                Some("upsert tenant roles"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("put tenant resource group roles");
+        assert_eq!(result.domain, "sports");
+        assert_eq!(result.service, "storage");
+        assert_eq!(result.tenant, "sports.tenant");
+        assert_eq!(result.roles.len(), 1);
+        assert_eq!(result.roles[0].role, "reader");
+        assert_eq!(result.roles[0].action, "read");
+        assert_eq!(result.resource_group, "core");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports/service/storage/tenant/sports.tenant/resourceGroup/core"
+        );
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("upsert tenant roles")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn delete_tenant_resource_group_roles_calls_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .delete_tenant_resource_group_roles(
+                "sports",
+                "storage",
+                "sports.tenant",
+                "core",
+                Some("delete tenant roles"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("delete tenant resource group roles");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "DELETE");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports/service/storage/tenant/sports.tenant/resourceGroup/core"
+        );
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("delete tenant roles")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_provider_resource_group_roles_calls_endpoint() {
+        let body = r#"{"domain":"sports","service":"storage","tenant":"sports.tenant","roles":[{"role":"reader","action":"read"}],"resourceGroup":"core","createAdminRole":true,"skipPrincipalMember":false}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let detail = ProviderResourceGroupRoles {
+            domain: "sports".to_string(),
+            service: "storage".to_string(),
+            tenant: "sports.tenant".to_string(),
+            roles: vec![TenantRoleAction {
+                role: "reader".to_string(),
+                action: "read".to_string(),
+            }],
+            resource_group: "core".to_string(),
+            create_admin_role: Some(true),
+            skip_principal_member: Some(false),
+        };
+
+        let result = client
+            .put_provider_resource_group_roles(
+                "sports.tenant",
+                "sports",
+                "storage",
+                "core",
+                &detail,
+                Some("upsert provider roles"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("put provider resource group roles");
+        assert_eq!(result.domain, "sports");
+        assert_eq!(result.service, "storage");
+        assert_eq!(result.tenant, "sports.tenant");
+        assert_eq!(result.roles.len(), 1);
+        assert_eq!(result.roles[0].role, "reader");
+        assert_eq!(result.roles[0].action, "read");
+        assert_eq!(result.resource_group, "core");
+        assert_eq!(result.create_admin_role, Some(true));
+        assert_eq!(result.skip_principal_member, Some(false));
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports.tenant/provDomain/sports/provService/storage/resourceGroup/core"
+        );
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("upsert provider roles")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn delete_provider_resource_group_roles_calls_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .delete_provider_resource_group_roles(
+                "sports.tenant",
+                "sports",
+                "storage",
+                "core",
+                Some("delete provider roles"),
+                Some("sports.owner"),
+            )
+            .await
+            .expect("delete provider resource group roles");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "DELETE");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports.tenant/provDomain/sports/provService/storage/resourceGroup/core"
+        );
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("delete provider roles")
+        );
+        assert_eq!(
+            req.headers.get("athenz-resource-owner").map(String::as_str),
+            Some("sports.owner")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn options_user_token_calls_user_token_options_endpoint() {
+        let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .options_user_token("jane", Some("sports.api"))
+            .await
+            .expect("options user token");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "OPTIONS");
+        assert_eq!(req.path, "/zms/v1/user/jane/token");
+        assert_eq!(
+            req.query.get("services").map(String::as_str),
+            Some("sports.api")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn options_user_token_accepts_no_content_response() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .options_user_token("jane", Some("sports.api"))
+            .await
+            .expect("options user token");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "OPTIONS");
+        assert_eq!(req.path, "/zms/v1/user/jane/token");
+        assert_eq!(
+            req.query.get("services").map(String::as_str),
+            Some("sports.api")
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn options_user_token_applies_auth_header() {
+        let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .follow_redirects(false)
+            .ntoken_auth("Athenz-Principal-Auth", "token")
+            .expect("ntoken auth")
+            .build()
+            .expect("build");
+
+        client
+            .options_user_token("jane", Some("sports.api"))
+            .await
+            .expect("options user token");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "OPTIONS");
+        assert_eq!(req.path, "/zms/v1/user/jane/token");
+        assert_eq!(
+            req.query.get("services").map(String::as_str),
+            Some("sports.api")
+        );
+        assert_eq!(
+            req.headers.get("athenz-principal-auth").map(String::as_str),
+            Some("token")
+        );
+
+        handle.join().expect("server");
+    }
+
+    async fn assert_error_request<F, Fut>(
+        expected_method: &str,
+        expected_path: &str,
+        expected_query: &[(&str, &str)],
+        call: F,
+    ) where
+        F: FnOnce(ZmsAsyncClient) -> Fut,
+        Fut: std::future::Future<Output = Result<(), Error>>,
+    {
+        let response =
+            "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        let result = call(client).await;
+        assert!(result.is_err(), "request should fail with 500 response");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, expected_method);
+        assert_eq!(req.path, expected_path);
+        for (key, value) in expected_query {
+            assert_eq!(req.query.get(*key).map(String::as_str), Some(*value));
+        }
+        if expected_query.is_empty() {
+            assert!(
+                req.query.is_empty(),
+                "unexpected query params: {:?}",
+                req.query
+            );
+        }
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn get_endpoints_cover_async_client_surface() {
+        assert_error_request(
+            "GET",
+            "/zms/v1/access/read/sports.resource",
+            &[("domain", "sports"), ("principal", "user.jane")],
+            |client| async move {
+                client
+                    .get_access("read", "sports.resource", Some("sports"), Some("user.jane"))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+
+        assert_error_request(
+            "GET",
+            "/zms/v1/access/read",
+            &[
+                ("resource", "sports.resource"),
+                ("domain", "sports"),
+                ("principal", "user.jane"),
+            ],
+            |client| async move {
+                client
+                    .get_access_ext("read", "sports.resource", Some("sports"), Some("user.jane"))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+
+        assert_error_request(
+            "GET",
+            "/zms/v1/dependency/service/sports.storage",
+            &[],
+            |client| async move {
+                client
+                    .get_dependent_domain_list("sports.storage")
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/dependency/domain/sports",
+            &[],
+            |client| async move {
+                client
+                    .get_dependent_service_list("sports")
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/dependency/domain/sports/resourceGroup",
+            &[],
+            |client| async move {
+                client
+                    .get_dependent_service_resource_group_list("sports")
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/check",
+            &[],
+            |client| async move { client.get_domain_data_check("sports").await.map(|_| ()) },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/group/member",
+            &[],
+            |client| async move { client.get_domain_group_members("sports").await.map(|_| ()) },
+        )
+        .await;
+        assert_error_request("GET", "/zms/v1/domain", &[], |client| async move {
+            client
+                .get_domain_list(&DomainListOptions::default())
+                .await
+                .map(|_| ())
+        })
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/metastore",
+            &[("attribute", "product-id"), ("user", "user.jane")],
+            |client| async move {
+                client
+                    .get_domain_meta_store("product-id", Some("user.jane"))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/member",
+            &[],
+            |client| async move { client.get_domain_role_members("sports").await.map(|_| ()) },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/stats",
+            &[],
+            |client| async move { client.get_domain_stats("sports").await.map(|_| ()) },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/templatedetails",
+            &[],
+            |client| async move {
+                client
+                    .get_domain_template_details("sports")
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/entity/entity.config",
+            &[],
+            |client| async move {
+                client
+                    .get_entity("sports", "entity.config")
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/entity",
+            &[],
+            |client| async move { client.get_entity_list("sports").await.map(|_| ()) },
+        )
+        .await;
+
+        assert_error_request(
+            "GET",
+            "/zms/v1/review/group",
+            &[("principal", "user.jane")],
+            |client| async move {
+                client
+                    .get_groups_for_review(Some("user.jane"))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request("GET", "/zms/v1/sys/info", &[], |client| async move {
+            client.get_info().await.map(|_| ())
+        })
+        .await;
+
+        assert_error_request(
+            "GET",
+            "/zms/v1/sys/modified_domains",
+            &[],
+            |client| async move {
+                client
+                    .get_modified_domains(&SignedDomainsOptions::default(), None)
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/overdue",
+            &[],
+            |client| async move {
+                client
+                    .get_overdue_domain_role_members("sports")
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/pending_group_members",
+            &[("principal", "user.jane"), ("domain", "sports")],
+            |client| async move {
+                client
+                    .get_pending_group_members(Some("user.jane"), Some("sports"))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/pending_members",
+            &[("principal", "user.jane"), ("domain", "sports")],
+            |client| async move {
+                client
+                    .get_pending_members(Some("user.jane"), Some("sports"))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/group",
+            &[("principal", "user.jane"), ("domain", "sports")],
+            |client| async move {
+                client
+                    .get_principal_groups(Some("user.jane"), Some("sports"))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports.tenant/provDomain/sports/provService/storage/resourceGroup/core",
+            &[],
+            |client| async move {
+                client
+                    .get_provider_resource_group_roles("sports.tenant", "sports", "storage", "core")
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/quota",
+            &[],
+            |client| async move { client.get_quota("sports").await.map(|_| ()) },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/resource",
+            &[
+                ("principal", "user.jane"),
+                ("action", "read"),
+                ("filter", "sports."),
+            ],
+            |client| async move {
+                client
+                    .get_resource_access_list("user.jane", Some("read"), Some("sports."))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/review/role",
+            &[("principal", "user.jane")],
+            |client| async move {
+                client
+                    .get_roles_for_review(Some("user.jane"))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request("GET", "/zms/v1/schema", &[], |client| async move {
+            client.get_schema().await.map(|_| ())
+        })
+        .await;
+        assert_error_request("GET", "/zms/v1/templatedetails", &[], |client| async move {
+            client.get_server_template_details_list().await.map(|_| ())
+        })
+        .await;
+        assert_error_request("GET", "/zms/v1/template", &[], |client| async move {
+            client.get_server_template_list().await.map(|_| ())
+        })
+        .await;
+        assert_error_request("GET", "/zms/v1/principal", &[], |client| async move {
+            client.get_service_principal().await.map(|_| ())
+        })
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/signed",
+            &[("signaturep1363format", "true")],
+            |client| async move {
+                client
+                    .get_signed_domain("sports", Some(true), Some("etag-2"))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request("GET", "/zms/v1/sys/stats", &[], |client| async move {
+            client.get_system_stats().await.map(|_| ())
+        })
+        .await;
+        assert_error_request("GET", "/zms/v1/template/base", &[], |client| async move {
+            client.get_template("base").await.map(|_| ())
+        })
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/domain/sports/service/storage/tenant/sports.tenant/resourceGroup/core",
+            &[],
+            |client| async move {
+                client
+                    .get_tenant_resource_group_roles("sports", "storage", "sports.tenant", "core")
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/authority/user/attribute",
+            &[],
+            |client| async move { client.get_user_authority_attributes().await.map(|_| ()) },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/user",
+            &[("domain", "user")],
+            |client| async move { client.get_user_list(Some("user")).await.map(|_| ()) },
+        )
+        .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/user/jane/token",
+            &[("services", "sports.api,media.api"), ("header", "true")],
+            |client| async move {
+                client
+                    .get_user_token("jane", Some("sports.api,media.api"), Some(true))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
+    }
+
     struct CapturedRequest {
         method: String,
         path: String,
         headers: HashMap<String, String>,
+        query: HashMap<String, String>,
+        body: Vec<u8>,
     }
 
     fn serve_once(
@@ -558,7 +2055,14 @@ mod tests {
         let request_line = lines.next().unwrap_or("");
         let mut parts = request_line.split_whitespace();
         let method = parts.next().unwrap_or("").to_string();
-        let path = parts.next().unwrap_or("").to_string();
+        let full_path = parts.next().unwrap_or("");
+        let mut path_parts = full_path.splitn(2, '?');
+        let path = path_parts.next().unwrap_or("").to_string();
+        let query_str = path_parts.next().unwrap_or("");
+        let mut query = HashMap::new();
+        for (k, v) in url::form_urlencoded::parse(query_str.as_bytes()) {
+            query.insert(k.to_string(), v.to_string());
+        }
         let mut headers = HashMap::new();
         for line in lines {
             if let Some((key, value)) = line.split_once(':') {
@@ -566,10 +2070,28 @@ mod tests {
             }
         }
 
+        let content_length = headers
+            .get("content-length")
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(0);
+        let mut body = buf[header_end..].to_vec();
+        while body.len() < content_length {
+            let read = stream.read(&mut chunk).unwrap_or(0);
+            if read == 0 {
+                break;
+            }
+            body.extend_from_slice(&chunk[..read]);
+        }
+        if body.len() > content_length {
+            body.truncate(content_length);
+        }
+
         CapturedRequest {
             method,
             path,
             headers,
+            query,
+            body,
         }
     }
 }

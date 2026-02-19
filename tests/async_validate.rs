@@ -489,6 +489,52 @@ async fn policy_client_async_validates_jws_policy_data() {
 }
 
 #[tokio::test]
+async fn policy_client_async_uses_public_key_cache() {
+    let now = OffsetDateTime::now_utc();
+    let expires = (now + time::Duration::seconds(300))
+        .format(&Rfc3339)
+        .expect("expires");
+    let modified = now.format(&Rfc3339).expect("modified");
+    let signed_policy = SignedPolicyData {
+        policy_data: PolicyData {
+            domain: "sports".to_string(),
+            policies: Vec::new(),
+        },
+        zms_signature: None,
+        zms_key_id: None,
+        modified,
+        expires,
+    };
+    let jws = build_jws_policy_data(&signed_policy);
+
+    let response = zts_public_key_response();
+    let (base_url, request_count, handle) =
+        spawn_zts_key_server(response, 1, Duration::from_secs(2)).await;
+
+    let zts = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+    let client = PolicyClientAsync::new(zts);
+
+    let first = client
+        .validate_jws_policy_data(&jws)
+        .await
+        .expect("first validate");
+    assert_eq!(first.domain, "sports");
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
+
+    let second = client
+        .validate_jws_policy_data(&jws)
+        .await
+        .expect("second validate");
+    assert_eq!(second.domain, "sports");
+    assert_eq!(request_count.load(Ordering::SeqCst), 1);
+
+    handle.await.expect("mock zts key server task should exit");
+}
+
+#[tokio::test]
 async fn policy_client_async_rejects_expired_jws_policy_data() {
     let now = OffsetDateTime::now_utc();
     let expires = (now - time::Duration::seconds(5))

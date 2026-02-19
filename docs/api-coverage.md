@@ -43,6 +43,7 @@ If you add new endpoints, update this list.
   - List roles / role list, get role
   - List role members by domain (`/domain/{name}/member`) and overdue members (`/domain/{name}/overdue`)
   - List pending role memberships (`/pending_members?principal=&domain=`)
+  - Update role meta/system meta, review state, and ownership
   - Create/update role, delete role
   - Role membership get/put/delete
 - Policies:

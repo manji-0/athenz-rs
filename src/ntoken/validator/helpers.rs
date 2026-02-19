@@ -20,6 +20,10 @@ use super::super::token::{
 };
 use super::{CachedKey, KeySource, NTokenValidatorConfig, NTokenVerifier};
 
+fn lock_poison_error(lock: &str) -> Error {
+    Error::Crypto(format!("{lock} lock poisoned"))
+}
+
 pub(super) fn build_zts_public_key_url(
     config: &NTokenValidatorConfig,
     src: &KeySource,
@@ -50,26 +54,40 @@ pub(super) fn get_cached_verifier(
     src: &KeySource,
 ) -> Result<NTokenVerifier, Error> {
     let now = Instant::now();
-    if let Some(entry) = cache.read().unwrap().get(src) {
-        if entry.expires_at > now {
-            return Ok(entry.verifier.clone());
+    {
+        let cache_guard = cache
+            .read()
+            .map_err(|_| lock_poison_error("ntoken verifier cache"))?;
+        if let Some(entry) = cache_guard.get(src) {
+            if entry.expires_at > now {
+                return Ok(entry.verifier.clone());
+            }
         }
     }
 
     let fetch_lock = {
-        let mut locks = fetch_locks.lock().expect("ntoken fetch lock map poisoned");
+        let mut locks = fetch_locks
+            .lock()
+            .map_err(|_| lock_poison_error("ntoken fetch lock map"))?;
         locks
             .entry(src.clone())
             .or_insert_with(|| Arc::new(Mutex::new(())))
             .clone()
     };
     let result = {
-        let _guard = fetch_lock.lock().expect("ntoken fetch lock poisoned");
+        let _guard = fetch_lock
+            .lock()
+            .map_err(|_| lock_poison_error("ntoken fetch lock"))?;
         (|| -> Result<NTokenVerifier, Error> {
             let now = Instant::now();
-            if let Some(entry) = cache.read().unwrap().get(src) {
-                if entry.expires_at > now {
-                    return Ok(entry.verifier.clone());
+            {
+                let cache_guard = cache
+                    .read()
+                    .map_err(|_| lock_poison_error("ntoken verifier cache"))?;
+                if let Some(entry) = cache_guard.get(src) {
+                    if entry.expires_at > now {
+                        return Ok(entry.verifier.clone());
+                    }
                 }
             }
 
@@ -95,14 +113,18 @@ pub(super) fn get_cached_verifier(
                 expires_at: now + config.cache_ttl,
                 created_at: now,
             };
-            let mut cache = cache.write().unwrap();
-            cache.insert(src.clone(), cached);
-            enforce_cache_limit(&mut cache, config.max_cache_entries);
+            let mut cache_guard = cache
+                .write()
+                .map_err(|_| lock_poison_error("ntoken verifier cache"))?;
+            cache_guard.insert(src.clone(), cached);
+            enforce_cache_limit(&mut cache_guard, config.max_cache_entries);
             Ok(verifier)
         })()
     };
 
-    let mut locks = fetch_locks.lock().expect("ntoken fetch lock map poisoned");
+    let mut locks = fetch_locks
+        .lock()
+        .map_err(|_| lock_poison_error("ntoken fetch lock map"))?;
     if let Some(existing) = locks.get(src) {
         if Arc::ptr_eq(existing, &fetch_lock) && Arc::strong_count(existing) == 2 {
             locks.remove(src);

@@ -9,10 +9,13 @@ Include the version path:
 
 ## Does this crate support async clients?
 
-Yes, for ZMS with the `async-client` feature.
-Enable the feature to use `ZmsAsyncClient` and `ZmsAsyncClientBuilder`.
-The async client uses a non-blocking HTTP client and must be run inside an async runtime (for example, a Tokio-based executor or another compatible async runtime).
-ZTS remains sync-only for now and continues to use the blocking client APIs.
+Yes. With the `async-client` feature, both ZTS and ZMS clients have async variants:
+
+- `ZtsAsyncClient` / `ZtsAsyncClientBuilder`
+- `ZmsAsyncClient` / `ZmsAsyncClientBuilder`
+
+The async clients use non-blocking HTTP and must run inside an async runtime
+(for example, Tokio or another compatible runtime).
 
 ## Which JWT algorithms are allowed?
 
@@ -37,5 +40,8 @@ Use `add_ca_cert_pem` on the client builder and pass a CA certificate PEM.
 
 ## How does `PolicyStore` handle `case_sensitive` and `conditions`?
 
-It honors `case_sensitive` (assertion overrides policy; default is false) and
-enforces supported assertion conditions.
+`PolicyStore` follows ZPE-style matching for local evaluation:
+
+- action/resource are normalized to lowercase
+- `case_sensitive` is not applied during matching
+- assertion `conditions` are not evaluated during matching

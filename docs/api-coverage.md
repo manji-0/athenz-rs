@@ -1,7 +1,7 @@
 # API Coverage
 
 This document summarizes the currently implemented ZTS and ZMS APIs.
-It is based on the public client methods in `src/zts.rs` and `src/zms.rs`.
+It is based on the public client methods in `src/zts/client/` and `src/zms/client/`.
 
 If you add new endpoints, update this list.
 

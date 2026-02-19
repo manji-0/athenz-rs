@@ -1,14 +1,9 @@
-use crate::models::{Assertion, AssertionConditions, AssertionEffect, PolicyData};
-use std::borrow::Cow;
+use crate::models::{Assertion, AssertionEffect, PolicyData};
 use std::collections::HashMap;
 
-use super::conditions::{assertion_conditions_match, validate_assertion_conditions};
 use super::decision::{PolicyDecision, PolicyMatch};
 use super::matchers::{contains_match_char, Match, MatchInput};
-use super::normalize::{
-    normalize_role, strip_domain_prefix, strip_domain_prefix_if_matches,
-    strip_domain_prefix_if_matches_ascii_case_insensitive,
-};
+use super::normalize::{normalize_role, strip_domain_prefix, strip_domain_prefix_if_matches};
 
 #[derive(Default)]
 pub struct PolicyStore {
@@ -65,14 +60,8 @@ impl PolicyStore {
                 None => return PolicyMatch::new(PolicyDecision::DenyDomainMismatch),
             }
         };
-        let resource_original_case = if domain_policy.has_case_sensitive {
-            strip_domain_prefix_if_matches_ascii_case_insensitive(resource, token_domain)
-        } else {
-            Cow::Borrowed(resource_stripped_lower.as_str())
-        };
-        let action_match = MatchInput::new(action, &action_lower);
-        let resource_match =
-            MatchInput::new(resource_original_case.as_ref(), &resource_stripped_lower);
+        let action_match = MatchInput::new(&action_lower, &action_lower);
+        let resource_match = MatchInput::new(&resource_stripped_lower, &resource_stripped_lower);
 
         if domain_policy.is_empty() {
             return PolicyMatch::new(PolicyDecision::DenyDomainEmpty);
@@ -117,14 +106,12 @@ impl PolicyStore {
 pub struct DomainPolicy {
     allow: RoleAssertions,
     deny: RoleAssertions,
-    has_case_sensitive: bool,
 }
 
 impl DomainPolicy {
     fn from_policy_data(policy_data: PolicyData) -> Self {
         let mut allow = RoleAssertions::default();
         let mut deny = RoleAssertions::default();
-        let mut has_case_sensitive = false;
 
         let domain = policy_data.domain.clone();
         for policy in policy_data.policies {
@@ -134,20 +121,9 @@ impl DomainPolicy {
                 continue;
             }
             let policy_name = policy.name.clone();
-            let policy_case_sensitive = policy.case_sensitive.unwrap_or(false);
             for assertion in policy.assertions {
                 let effect = assertion.effect.clone().unwrap_or(AssertionEffect::Allow);
-                let assertion_case_sensitive =
-                    assertion.case_sensitive.unwrap_or(policy_case_sensitive);
-                if assertion_case_sensitive {
-                    has_case_sensitive = true;
-                }
-                let entry = AssertionEntry::from_assertion(
-                    assertion,
-                    &policy_name,
-                    &domain,
-                    assertion_case_sensitive,
-                );
+                let entry = AssertionEntry::from_assertion(assertion, &policy_name, &domain);
                 match effect {
                     AssertionEffect::Allow => allow.insert(entry),
                     AssertionEffect::Deny => deny.insert(entry),
@@ -155,11 +131,7 @@ impl DomainPolicy {
             }
         }
 
-        Self {
-            allow,
-            deny,
-            has_case_sensitive,
-        }
+        Self { allow, deny }
     }
 
     fn is_empty(&self) -> bool {
@@ -246,45 +218,26 @@ struct AssertionEntry {
     role_has_wildcard: bool,
     action: Match,
     resource: Match,
-    case_sensitive: bool,
     _policy_name: String,
-    conditions: Option<AssertionConditions>,
 }
 
 impl AssertionEntry {
-    fn from_assertion(
-        assertion: Assertion,
-        policy_name: &str,
-        domain: &str,
-        case_sensitive: bool,
-    ) -> Self {
+    fn from_assertion(assertion: Assertion, policy_name: &str, domain: &str) -> Self {
         let Assertion {
             role,
             resource,
             action,
-            id,
-            conditions,
             ..
         } = assertion;
-        if let Some(ref conditions) = conditions {
-            validate_assertion_conditions(conditions, policy_name, id, &role, &action, &resource);
-        }
         let mut role = strip_domain_prefix_if_matches(&role, domain).into_owned();
         if let Some(stripped) = role.strip_prefix("role.") {
             role = stripped.to_string();
         }
         let role_has_wildcard = contains_match_char(&role);
-        let action_value = if case_sensitive {
-            action
-        } else {
-            action.to_lowercase()
-        };
-        let resource_value = if case_sensitive {
-            strip_domain_prefix_if_matches_ascii_case_insensitive(&resource, domain).into_owned()
-        } else {
-            let resource_lowercased = resource.to_lowercase();
-            strip_domain_prefix_if_matches(&resource_lowercased, domain).into_owned()
-        };
+        let action_value = action.to_lowercase();
+        let resource_lowercased = resource.to_lowercase();
+        let resource_value =
+            strip_domain_prefix_if_matches(&resource_lowercased, domain).into_owned();
         let action = Match::from_pattern(&action_value, "action", policy_name);
         let resource = Match::from_pattern(&resource_value, "resource", policy_name);
         Self {
@@ -292,17 +245,8 @@ impl AssertionEntry {
             role_has_wildcard,
             action,
             resource,
-            case_sensitive,
             _policy_name: policy_name.to_string(),
-            conditions,
         }
-    }
-
-    fn conditions_match(&self) -> bool {
-        let Some(conditions) = &self.conditions else {
-            return true;
-        };
-        assertion_conditions_match(conditions)
     }
 }
 
@@ -312,19 +256,10 @@ fn match_assertions(
     resource: &MatchInput<'_>,
 ) -> bool {
     for assertion in asserts {
-        if !assertion.conditions_match() {
+        if !assertion.action.matches(action.value(false)) {
             continue;
         }
-        if !assertion
-            .action
-            .matches(action.value(assertion.case_sensitive))
-        {
-            continue;
-        }
-        if !assertion
-            .resource
-            .matches(resource.value(assertion.case_sensitive))
-        {
+        if !assertion.resource.matches(resource.value(false)) {
             continue;
         }
         return true;

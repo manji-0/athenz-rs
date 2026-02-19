@@ -19,6 +19,10 @@ use super::types::{JwksSanitizeReport, RemovedAlg, RemovedAlgReason};
 const DEFAULT_JWKS_TIMEOUT: Duration = Duration::from_secs(10);
 const MIN_REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
+fn lock_poison_error(lock: &str) -> Error {
+    Error::Crypto(format!("{lock} lock poisoned"))
+}
+
 #[derive(Debug)]
 pub struct JwksProvider {
     jwks_uri: Url,
@@ -236,10 +240,16 @@ impl JwksProvider {
     /// Sets the cache time-to-live and updates any cached entry.
     pub fn with_cache_ttl(mut self, ttl: Duration) -> Self {
         self.cache_ttl = ttl;
-        if let Some(cached) = self.cache.write().unwrap().as_mut() {
-            let now = Instant::now();
-            cached.expires_at = now + self.cache_ttl;
-            cached.fetched_at = now;
+        {
+            let mut cache = match self.cache.write() {
+                Ok(cache) => cache,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            if let Some(cached) = cache.as_mut() {
+                let now = Instant::now();
+                cached.expires_at = now + self.cache_ttl;
+                cached.fetched_at = now;
+            }
         }
         self
     }
@@ -252,7 +262,14 @@ impl JwksProvider {
             expires_at: now + self.cache_ttl,
             fetched_at: now,
         };
-        *self.cache.write().unwrap() = Some(cached);
+        match self.cache.write() {
+            Ok(mut cache) => {
+                *cache = Some(cached);
+            }
+            Err(poisoned) => {
+                *poisoned.into_inner() = Some(cached);
+            }
+        }
         self
     }
 
@@ -263,16 +280,31 @@ impl JwksProvider {
     }
 
     pub(crate) fn fetch_with_source(&self) -> Result<(JwkSet, FetchSource), Error> {
-        if let Some(cached) = self.cache.read().unwrap().as_ref() {
-            if cached.expires_at > Instant::now() {
-                return Ok((cached.jwks.clone(), FetchSource::Cache));
+        {
+            let cache = self
+                .cache
+                .read()
+                .map_err(|_| lock_poison_error("jwks cache"))?;
+            if let Some(cached) = cache.as_ref() {
+                if cached.expires_at > Instant::now() {
+                    return Ok((cached.jwks.clone(), FetchSource::Cache));
+                }
             }
         }
 
-        let _guard = self.fetch_lock.lock().unwrap();
-        if let Some(cached) = self.cache.read().unwrap().as_ref() {
-            if cached.expires_at > Instant::now() {
-                return Ok((cached.jwks.clone(), FetchSource::Cache));
+        let _guard = self
+            .fetch_lock
+            .lock()
+            .map_err(|_| lock_poison_error("jwks fetch"))?;
+        {
+            let cache = self
+                .cache
+                .read()
+                .map_err(|_| lock_poison_error("jwks cache"))?;
+            if let Some(cached) = cache.as_ref() {
+                if cached.expires_at > Instant::now() {
+                    return Ok((cached.jwks.clone(), FetchSource::Cache));
+                }
             }
         }
 
@@ -283,15 +315,30 @@ impl JwksProvider {
     /// Fetches JWKS from remote unless it was refreshed very recently.
     pub fn fetch_fresh(&self) -> Result<JwkSet, Error> {
         let now = Instant::now();
-        if let Some(cached) = self.cache.read().unwrap().as_ref() {
-            if cached.fetched_at + MIN_REFRESH_INTERVAL > now {
-                return Ok(cached.jwks.clone());
+        {
+            let cache = self
+                .cache
+                .read()
+                .map_err(|_| lock_poison_error("jwks cache"))?;
+            if let Some(cached) = cache.as_ref() {
+                if cached.fetched_at + MIN_REFRESH_INTERVAL > now {
+                    return Ok(cached.jwks.clone());
+                }
             }
         }
-        let _guard = self.fetch_lock.lock().unwrap();
-        if let Some(cached) = self.cache.read().unwrap().as_ref() {
-            if cached.fetched_at + MIN_REFRESH_INTERVAL > now {
-                return Ok(cached.jwks.clone());
+        let _guard = self
+            .fetch_lock
+            .lock()
+            .map_err(|_| lock_poison_error("jwks fetch"))?;
+        {
+            let cache = self
+                .cache
+                .read()
+                .map_err(|_| lock_poison_error("jwks cache"))?;
+            if let Some(cached) = cache.as_ref() {
+                if cached.fetched_at + MIN_REFRESH_INTERVAL > now {
+                    return Ok(cached.jwks.clone());
+                }
             }
         }
         self.fetch_remote()
@@ -333,7 +380,11 @@ impl JwksProvider {
             expires_at: now + self.cache_ttl,
             fetched_at: now,
         };
-        *self.cache.write().unwrap() = Some(cached);
+        let mut cache = self
+            .cache
+            .write()
+            .map_err(|_| lock_poison_error("jwks cache"))?;
+        *cache = Some(cached);
         Ok(jwks)
     }
 }

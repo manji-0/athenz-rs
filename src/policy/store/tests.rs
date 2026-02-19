@@ -1,10 +1,12 @@
-use super::conditions::{ENFORCEMENT_STATE_ENFORCE, ENFORCEMENT_STATE_KEY};
 use super::*;
 use crate::models::{Assertion, AssertionEffect, Policy, PolicyData};
 use crate::models::{
     AssertionCondition, AssertionConditionData, AssertionConditionOperator, AssertionConditions,
 };
 use std::collections::HashMap;
+
+const ENFORCEMENT_STATE_KEY: &str = "enforcementState";
+const ENFORCEMENT_STATE_ENFORCE: &str = "ENFORCE";
 
 #[test]
 fn policy_store_allows_and_denies() {
@@ -189,7 +191,7 @@ fn policy_store_skips_inactive_policies() {
 }
 
 #[test]
-fn policy_store_enforces_conditions() {
+fn policy_store_ignores_conditions_and_case_sensitive_fields() {
     let mut conditions = HashMap::new();
     conditions.insert(
         ENFORCEMENT_STATE_KEY.to_string(),
@@ -235,7 +237,7 @@ fn policy_store_enforces_conditions() {
 
     let roles = vec!["reader".to_string()];
     let decision = store.allow_action("sports", &roles, "READ", "sports:resource.read");
-    assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+    assert_eq!(decision.decision, PolicyDecision::Allow);
 
     let decision = store.allow_action("sports", &roles, "Read", "Sports:Resource.Read");
     assert_eq!(decision.decision, PolicyDecision::Allow);
@@ -362,7 +364,7 @@ fn policy_store_matches_case_insensitive_condition_key() {
 }
 
 #[test]
-fn policy_store_skips_non_enforced_conditions() {
+fn policy_store_ignores_non_enforced_conditions() {
     let mut conditions = HashMap::new();
     conditions.insert(
         ENFORCEMENT_STATE_KEY.to_string(),
@@ -408,11 +410,11 @@ fn policy_store_skips_non_enforced_conditions() {
 
     let roles = vec!["reader".to_string()];
     let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
-    assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+    assert_eq!(decision.decision, PolicyDecision::Allow);
 }
 
 #[test]
-fn policy_store_skips_empty_conditions_list() {
+fn policy_store_ignores_empty_conditions_list() {
     let assertion_conditions = AssertionConditions {
         conditions_list: Vec::new(),
     };
@@ -447,11 +449,11 @@ fn policy_store_skips_empty_conditions_list() {
 
     let roles = vec!["reader".to_string()];
     let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
-    assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+    assert_eq!(decision.decision, PolicyDecision::Allow);
 }
 
 #[test]
-fn policy_store_skips_unsupported_condition_key() {
+fn policy_store_ignores_unsupported_condition_key() {
     let mut conditions = HashMap::new();
     conditions.insert(
         "unsupportedKey".to_string(),
@@ -497,11 +499,11 @@ fn policy_store_skips_unsupported_condition_key() {
 
     let roles = vec!["reader".to_string()];
     let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
-    assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+    assert_eq!(decision.decision, PolicyDecision::Allow);
 }
 
 #[test]
-fn policy_store_skips_mixed_supported_and_unsupported_conditions() {
+fn policy_store_ignores_mixed_supported_and_unsupported_conditions() {
     let mut conditions = HashMap::new();
     conditions.insert(
         ENFORCEMENT_STATE_KEY.to_string(),
@@ -554,7 +556,7 @@ fn policy_store_skips_mixed_supported_and_unsupported_conditions() {
 
     let roles = vec!["reader".to_string()];
     let decision = store.allow_action("sports", &roles, "read", "sports:resource.read");
-    assert_eq!(decision.decision, PolicyDecision::DenyNoMatch);
+    assert_eq!(decision.decision, PolicyDecision::Allow);
 }
 
 #[test]

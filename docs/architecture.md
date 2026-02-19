@@ -4,7 +4,8 @@ This document provides a high-level overview of the crate's structure and data f
 
 ## Module map
 
-- `zts` / `zms`: HTTP clients for ZTS/ZMS APIs (blocking `reqwest`)
+- `zts` / `zms`: blocking HTTP clients for ZTS/ZMS APIs
+- `zts_async` / `zms_async`: async HTTP clients for ZTS/ZMS APIs
 - `jwt`: JWKS parsing and JWT validation
 - `ntoken`: NToken signing and validation (RSA/ECDSA)
 - `policy`: Signed policy validation and local policy evaluation
@@ -19,8 +20,8 @@ This document provides a high-level overview of the crate's structure and data f
 client -> build request -> HTTP -> JSON -> model structs
 ```
 
-Clients are synchronous and use `reqwest::blocking` with optional mTLS or
-NToken auth headers.
+Blocking clients use `reqwest::blocking`; async clients use non-blocking
+`reqwest`. Both support optional mTLS and NToken auth headers.
 
 ### JWT validation
 
@@ -52,5 +53,5 @@ before allow rules, matching ZPE behavior.
 ## Design choices
 
 - **No OpenSSL dependency**: uses `rustls` and pure Rust crypto crates.
-- **Blocking clients**: simple, deterministic behavior for server-side usage.
+- **Dual client modes**: both blocking and async clients are provided.
 - **Explicit allowlist**: JWT algorithms are validated against a fixed allowlist.

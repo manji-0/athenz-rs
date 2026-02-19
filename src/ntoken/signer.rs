@@ -5,6 +5,10 @@ use super::keys::load_private_key;
 use super::keys::PrivateKey;
 use super::token::{sign_with_key, unix_time_now, NTokenBuilder, EXPIRATION_DRIFT};
 
+fn lock_poison_error() -> Error {
+    Error::Crypto("ntoken signer cache lock poisoned".to_string())
+}
+
 pub struct NTokenSigner {
     builder: NTokenBuilder,
     key: PrivateKey,
@@ -39,16 +43,25 @@ impl NTokenSigner {
     /// internal cache, even if the returned builder is not subsequently mutated.
     /// Any later call to [`Self::token`] will recompute and recache a new token.
     pub fn builder_mut(&mut self) -> &mut NTokenBuilder {
-        *self
-            .cached
-            .write()
-            .expect("ntoken signer cache lock poisoned") = None;
+        match self.cached.write() {
+            Ok(mut cache) => {
+                *cache = None;
+            }
+            Err(poisoned) => {
+                *poisoned.into_inner() = None;
+            }
+        }
         &mut self.builder
     }
 
     /// Returns a cached token when valid, otherwise signs a new token.
     pub fn token(&self) -> Result<String, Error> {
-        if let Some(cached) = self.cached.read().unwrap().as_ref() {
+        if let Some(cached) = self
+            .cached
+            .read()
+            .map_err(|_| lock_poison_error())?
+            .as_ref()
+        {
             let now = unix_time_now();
             if now + EXPIRATION_DRIFT.as_secs() as i64 <= cached.expiry_time {
                 return Ok(cached.token.clone());
@@ -66,7 +79,8 @@ impl NTokenSigner {
             token: token.clone(),
             expiry_time: expiry,
         };
-        *self.cached.write().unwrap() = Some(cached);
+        let mut guard = self.cached.write().map_err(|_| lock_poison_error())?;
+        *guard = Some(cached);
         Ok(token)
     }
 }

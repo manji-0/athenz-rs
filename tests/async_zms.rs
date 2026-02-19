@@ -896,6 +896,118 @@ async fn dependency_get_dependent_domain_list_calls_endpoint() {
 }
 
 #[tokio::test]
+async fn access_get_access_calls_endpoint_with_query() {
+    let body = r#"{"granted":true}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access("read", "sports.resource", Some("sports"), Some("user.jane"))
+        .await
+        .expect("access");
+    assert!(access.granted);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read/sports.resource");
+    assert_eq!(req.query_value("domain"), Some("sports"));
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+}
+
+#[tokio::test]
+async fn access_get_access_ext_calls_endpoint_with_query() {
+    let body = r#"{"granted":false}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access_ext("read", "sports.resource", Some("sports"), Some("user.jane"))
+        .await
+        .expect("access");
+    assert!(!access.granted);
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read");
+    assert_eq!(req.query_value("resource"), Some("sports.resource"));
+    assert_eq!(req.query_value("domain"), Some("sports"));
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+}
+
+#[tokio::test]
+async fn access_get_resource_access_list_calls_endpoint_with_query() {
+    let body = r#"{"resources":[{"principal":"user.jane","assertions":[{"role":"sports:role.reader","resource":"sports.resource","action":"read"}]}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_resource_access_list("user.jane", Some("read"), Some("sports."))
+        .await
+        .expect("resource access list");
+    assert_eq!(list.resources.len(), 1);
+    assert_eq!(list.resources[0].principal, "user.jane");
+    assert_eq!(list.resources[0].assertions.len(), 1);
+    assert_eq!(list.resources[0].assertions[0].action, "read");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/resource");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("action"), Some("read"));
+    assert_eq!(req.query_value("filter"), Some("sports."));
+}
+
+#[tokio::test]
+async fn access_get_access_applies_auth_header() {
+    let body = r#"{"granted":true}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .follow_redirects(false)
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    client
+        .get_access("read", "sports.resource", None, None)
+        .await
+        .expect("access");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.header_value("Athenz-Principal-Auth"), Some("token"));
+}
+
+#[tokio::test]
 async fn user_get_user_list_calls_endpoint_with_domain_query() {
     let body = r#"{"names":["jane","alex"]}"#;
     let response = json_response("200 OK", body);

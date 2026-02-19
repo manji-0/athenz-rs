@@ -69,6 +69,9 @@ If you add new endpoints, update this list.
 - Dependency:
   - Register/unregister dependency (`/dependency/domain/{domainName}`)
   - List dependent services, service resource groups, and domains
+- Access:
+  - Check access (`/access/{action}/{resource}` and `/access/{action}?resource=`)
+  - List principal resource access (`/resource?principal=&action=&filter=`)
 - User:
   - List users (`/user?domain=`)
   - Delete user and delete domain member (`/user/{name}`, `/domain/{domainName}/member/{memberName}`)

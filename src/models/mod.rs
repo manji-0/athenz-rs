@@ -25,7 +25,7 @@ pub use zms::{
     ServiceIdentityList, ServicePrincipal, SignedDomain, SignedDomains, SignedPolicies, Stats,
     SubDomain, Template, TemplateMeta, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
     TopLevelDomain, User, UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain, UserList,
-    UserToken,
+    UserToken, ZmsAccess, ZmsResourceAccess, ZmsResourceAccessList,
 };
 pub use zts::{
     AWSTemporaryCredentials, Access, AccessTokenResponse, AthenzJwkConfig,

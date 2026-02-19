@@ -911,6 +911,136 @@ fn dependency_get_dependent_domain_list_calls_endpoint() {
 }
 
 #[test]
+fn access_get_access_calls_endpoint_with_query() {
+    let body = r#"{"granted":true}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access("read", "sports.resource", Some("sports"), Some("user.jane"))
+        .expect("access");
+    assert!(access.granted);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read/sports.resource");
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn access_get_access_ext_calls_endpoint_with_query() {
+    let body = r#"{"granted":false}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let access = client
+        .get_access_ext("read", "sports.resource", Some("sports"), Some("user.jane"))
+        .expect("access");
+    assert!(!access.granted);
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/access/read");
+    assert_eq!(
+        req.query.get("resource").map(String::as_str),
+        Some("sports.resource")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn access_get_resource_access_list_calls_endpoint_with_query() {
+    let body = r#"{"resources":[{"principal":"user.jane","assertions":[{"role":"sports:role.reader","resource":"sports.resource","action":"read"}]}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let list = client
+        .get_resource_access_list("user.jane", Some("read"), Some("sports."))
+        .expect("resource access list");
+    assert_eq!(list.resources.len(), 1);
+    assert_eq!(list.resources[0].principal, "user.jane");
+    assert_eq!(list.resources[0].assertions.len(), 1);
+    assert_eq!(list.resources[0].assertions[0].action, "read");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/resource");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("action").map(String::as_str), Some("read"));
+    assert_eq!(req.query.get("filter").map(String::as_str), Some("sports."));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn access_get_access_applies_auth_header() {
+    let body = r#"{"granted":true}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .disable_redirect(true)
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .build()
+        .expect("build");
+
+    client
+        .get_access("read", "sports.resource", None, None)
+        .expect("access");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(
+        req.headers.get("athenz-principal-auth").map(String::as_str),
+        Some("token")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn user_get_user_list_calls_endpoint_with_domain_query() {
     let body = r#"{"names":["jane","alex"]}"#;
     let response = format!(

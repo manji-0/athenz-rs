@@ -2057,6 +2057,38 @@ async fn get_principal_groups_with_domain_only_sets_domain_query_param() {
 }
 
 #[tokio::test]
+async fn get_principal_roles_calls_role_endpoint() {
+    let body = r#"{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader","domainName":"sports","memberName":"user.jane","active":true}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let roles = client
+        .get_principal_roles(Some("user.jane"), Some("sports"), Some(true))
+        .await
+        .expect("principal roles");
+    assert_eq!(roles.member_name, "user.jane");
+    assert_eq!(roles.member_roles.len(), 1);
+    assert_eq!(roles.member_roles[0].role_name, "sports:role.reader");
+    assert_eq!(roles.member_roles[0].domain_name.as_deref(), Some("sports"));
+    assert_eq!(roles.member_roles[0].active, Some(true));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/role");
+    assert_eq!(req.query_value("principal"), Some("user.jane"));
+    assert_eq!(req.query_value("domain"), Some("sports"));
+    assert_eq!(req.query_value("expand"), Some("true"));
+}
+
+#[tokio::test]
 async fn get_roles_for_review_calls_review_role_endpoint() {
     let body = r#"{"list":[{"domainName":"sports","name":"sports:role.reader","memberExpiryDays":30,"memberReviewDays":90,"serviceExpiryDays":0,"serviceReviewDays":0,"groupExpiryDays":0,"groupReviewDays":0,"lastReviewedDate":"2024-01-01T00:00:00Z","created":"2020-01-01T00:00:00Z"}]}"#;
     let response = json_response("200 OK", body);

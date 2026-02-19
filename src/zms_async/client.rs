@@ -2093,6 +2093,22 @@ mod tests {
             },
         )
         .await;
+        assert_error_request(
+            "GET",
+            "/zms/v1/role",
+            &[
+                ("principal", "user.jane"),
+                ("domain", "sports"),
+                ("expand", "true"),
+            ],
+            |client| async move {
+                client
+                    .get_principal_roles(Some("user.jane"), Some("sports"), Some(true))
+                    .await
+                    .map(|_| ())
+            },
+        )
+        .await;
 
         assert_error_request(
             "GET",

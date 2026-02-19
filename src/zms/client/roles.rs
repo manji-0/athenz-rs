@@ -1,7 +1,8 @@
 use super::ZmsClient;
 use crate::error::Error;
 use crate::models::{
-    DomainRoleMembers, Membership, ResourceRoleOwnership, Role, RoleList, RoleMeta, Roles,
+    DomainRoleMember, DomainRoleMembers, Membership, ResourceRoleOwnership, Role, RoleList,
+    RoleMeta, Roles,
 };
 use crate::zms::common;
 use crate::zms::{RoleGetOptions, RoleListOptions, RolesQueryOptions};
@@ -160,6 +161,31 @@ impl ZmsClient {
         if let Some(expiration) = expiration {
             req = req.query(&[("expiration", expiration)]);
         }
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Lists roles for a principal across domains, optionally scoped to one domain.
+    pub fn get_principal_roles(
+        &self,
+        principal: Option<&str>,
+        domain: Option<&str>,
+        expand: Option<bool>,
+    ) -> Result<DomainRoleMember, Error> {
+        let url = self.build_url(&["role"])?;
+        let mut req = self.http.get(url);
+        let mut query = Vec::new();
+        if let Some(principal) = principal {
+            query.push(("principal", principal.to_string()));
+        }
+        if let Some(domain) = domain {
+            query.push(("domain", domain.to_string()));
+        }
+        if let Some(expand) = expand {
+            query.push(("expand", expand.to_string()));
+        }
+        req = common::apply_query_params(req, query);
         req = self.apply_auth(req)?;
         let resp = req.send()?;
         self.expect_ok_json(resp)

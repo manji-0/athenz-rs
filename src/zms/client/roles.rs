@@ -1,6 +1,8 @@
 use super::ZmsClient;
 use crate::error::Error;
-use crate::models::{DomainRoleMembers, Membership, Role, RoleList, Roles};
+use crate::models::{
+    DomainRoleMembers, Membership, ResourceRoleOwnership, Role, RoleList, RoleMeta, Roles,
+};
 use crate::zms::common;
 use crate::zms::{RoleGetOptions, RoleListOptions, RolesQueryOptions};
 
@@ -63,6 +65,70 @@ impl ZmsClient {
         }
         let resp = req.send()?;
         self.expect_no_content_or_json(resp)
+    }
+
+    /// Updates role system metadata for a specific attribute.
+    pub fn put_role_system_meta(
+        &self,
+        domain: &str,
+        role: &str,
+        attribute: &str,
+        meta: &RoleMeta,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "meta", "system", attribute])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    /// Updates role metadata.
+    pub fn put_role_meta(
+        &self,
+        domain: &str,
+        role: &str,
+        meta: &RoleMeta,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "meta"])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    /// Marks a role as reviewed.
+    pub fn put_role_review(
+        &self,
+        domain: &str,
+        role: &str,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "review"])?;
+        let mut req = self.http.put(url);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    /// Sets resource ownership for a role.
+    pub fn put_role_ownership(
+        &self,
+        domain: &str,
+        role: &str,
+        ownership: &ResourceRoleOwnership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "role", role, "ownership"])?;
+        let mut req = self.http.put(url).json(ownership);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
     }
 
     /// Deletes a role.

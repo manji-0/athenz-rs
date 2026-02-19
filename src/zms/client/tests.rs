@@ -2,8 +2,8 @@ use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
     DependentService, DomainMeta, Entity, GroupMeta, PolicyOptions, PrincipalState,
     ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourceGroupOwnership,
-    ResourcePolicyOwnership, ResourceServiceIdentityOwnership, ServiceIdentitySystemMeta, Tenancy,
-    TenantResourceGroupRoles, TenantRoleAction,
+    ResourcePolicyOwnership, ResourceRoleOwnership, ResourceServiceIdentityOwnership, RoleMeta,
+    ServiceIdentitySystemMeta, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
@@ -2464,6 +2464,220 @@ fn put_group_ownership_calls_group_ownership_endpoint() {
             "membersOwner": "sports.members_owner",
             "objectOwner": "sports.object_owner",
         })
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_role_system_meta_calls_role_meta_system_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let meta = RoleMeta {
+        self_serve: Some(true),
+        ..Default::default()
+    };
+    client
+        .put_role_system_meta(
+            "sports",
+            "readers",
+            "self-serve",
+            &meta,
+            Some("set role self-serve"),
+        )
+        .expect("put role system meta");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/role/readers/meta/system/self-serve"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set role self-serve")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(body_json, json!({ "selfServe": true }));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_role_meta_calls_role_meta_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let meta = RoleMeta {
+        self_serve: Some(true),
+        review_enabled: Some(true),
+        ..Default::default()
+    };
+    client
+        .put_role_meta("sports", "readers", &meta, Some("update role meta"))
+        .expect("put role meta");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/role/readers/meta");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("update role meta")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({ "selfServe": true, "reviewEnabled": true })
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_role_review_calls_role_review_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .put_role_review("sports", "readers", Some("mark role reviewed"))
+        .expect("put role review");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/role/readers/review");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("mark role reviewed")
+    );
+    assert!(req.body.is_empty());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_role_ownership_calls_role_ownership_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let ownership = ResourceRoleOwnership {
+        meta_owner: Some("sports.meta_owner".to_string()),
+        members_owner: Some("sports.members_owner".to_string()),
+        object_owner: Some("sports.object_owner".to_string()),
+    };
+    client
+        .put_role_ownership("sports", "readers", &ownership, Some("set role ownership"))
+        .expect("put role ownership");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/role/readers/ownership");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set role ownership")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({
+            "metaOwner": "sports.meta_owner",
+            "membersOwner": "sports.members_owner",
+            "objectOwner": "sports.object_owner",
+        })
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_role_governance_endpoints_propagate_server_errors() {
+    assert_sync_error_request(
+        "PUT",
+        "/zms/v1/domain/sports/role/readers/meta/system/self-serve",
+        |client| {
+            let meta = RoleMeta {
+                self_serve: Some(true),
+                ..Default::default()
+            };
+            client.put_role_system_meta(
+                "sports",
+                "readers",
+                "self-serve",
+                &meta,
+                Some("set role self-serve"),
+            )
+        },
+    );
+
+    assert_sync_error_request("PUT", "/zms/v1/domain/sports/role/readers/meta", |client| {
+        let meta = RoleMeta {
+            self_serve: Some(true),
+            review_enabled: Some(true),
+            ..Default::default()
+        };
+        client.put_role_meta("sports", "readers", &meta, Some("update role meta"))
+    });
+
+    assert_sync_error_request(
+        "PUT",
+        "/zms/v1/domain/sports/role/readers/review",
+        |client| client.put_role_review("sports", "readers", Some("mark role reviewed")),
+    );
+
+    assert_sync_error_request(
+        "PUT",
+        "/zms/v1/domain/sports/role/readers/ownership",
+        |client| {
+            let ownership = ResourceRoleOwnership {
+                meta_owner: Some("sports.meta_owner".to_string()),
+                members_owner: Some("sports.members_owner".to_string()),
+                object_owner: Some("sports.object_owner".to_string()),
+            };
+            client.put_role_ownership("sports", "readers", &ownership, Some("set role ownership"))
+        },
+    );
+}
+
+fn assert_sync_error_request<F>(expected_method: &str, expected_path: &str, call: F)
+where
+    F: FnOnce(&ZmsClient) -> Result<(), Error>,
+{
+    let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let result = call(&client);
+    assert!(result.is_err(), "request should fail with 500 response");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, expected_method);
+    assert_eq!(req.path, expected_path);
+    assert!(
+        req.query.is_empty(),
+        "unexpected query params: {:?}",
+        req.query
     );
 
     handle.join().expect("server");

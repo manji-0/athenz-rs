@@ -278,8 +278,8 @@ mod tests {
     use crate::models::{
         DependentService, DomainMeta, Entity, GroupMeta, PolicyOptions, PrincipalState,
         ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourceGroupOwnership,
-        ResourcePolicyOwnership, ResourceServiceIdentityOwnership, ServiceIdentitySystemMeta,
-        Tenancy, TenantResourceGroupRoles, TenantRoleAction,
+        ResourcePolicyOwnership, ResourceRoleOwnership, ResourceServiceIdentityOwnership, RoleMeta,
+        ServiceIdentitySystemMeta, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
     };
     use crate::zms::{DomainListOptions, SignedDomainsOptions};
     use serde_json::json;
@@ -1029,6 +1029,220 @@ mod tests {
         );
 
         handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_role_system_meta_calls_role_meta_system_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let meta = RoleMeta {
+            self_serve: Some(true),
+            ..Default::default()
+        };
+
+        client
+            .put_role_system_meta(
+                "sports",
+                "readers",
+                "self-serve",
+                &meta,
+                Some("set role self-serve"),
+            )
+            .await
+            .expect("put role system meta");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(
+            req.path,
+            "/zms/v1/domain/sports/role/readers/meta/system/self-serve"
+        );
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("set role self-serve")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+        assert_eq!(body_json, json!({ "selfServe": true }));
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_role_meta_calls_role_meta_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let meta = RoleMeta {
+            self_serve: Some(true),
+            review_enabled: Some(true),
+            ..Default::default()
+        };
+
+        client
+            .put_role_meta("sports", "readers", &meta, Some("update role meta"))
+            .await
+            .expect("put role meta");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/role/readers/meta");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("update role meta")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+        assert_eq!(
+            body_json,
+            json!({ "selfServe": true, "reviewEnabled": true })
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_role_review_calls_role_review_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+
+        client
+            .put_role_review("sports", "readers", Some("mark role reviewed"))
+            .await
+            .expect("put role review");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/role/readers/review");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("mark role reviewed")
+        );
+        assert!(req.body.is_empty());
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_role_ownership_calls_role_ownership_endpoint() {
+        let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+        let (base_url, rx, handle) = serve_once(response);
+        let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+            .expect("builder")
+            .build()
+            .expect("build");
+        let ownership = ResourceRoleOwnership {
+            meta_owner: Some("sports.meta_owner".to_string()),
+            members_owner: Some("sports.members_owner".to_string()),
+            object_owner: Some("sports.object_owner".to_string()),
+        };
+
+        client
+            .put_role_ownership("sports", "readers", &ownership, Some("set role ownership"))
+            .await
+            .expect("put role ownership");
+
+        let req = rx.recv().expect("request");
+        assert_eq!(req.method, "PUT");
+        assert_eq!(req.path, "/zms/v1/domain/sports/role/readers/ownership");
+        assert_eq!(
+            req.headers.get("y-audit-ref").map(String::as_str),
+            Some("set role ownership")
+        );
+        let body_json: serde_json::Value =
+            serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+        assert_eq!(
+            body_json,
+            json!({
+                "metaOwner": "sports.meta_owner",
+                "membersOwner": "sports.members_owner",
+                "objectOwner": "sports.object_owner",
+            })
+        );
+
+        handle.join().expect("server");
+    }
+
+    #[tokio::test]
+    async fn put_role_governance_endpoints_propagate_server_errors() {
+        assert_error_request(
+            "PUT",
+            "/zms/v1/domain/sports/role/readers/meta/system/self-serve",
+            &[],
+            |client| async move {
+                let meta = RoleMeta {
+                    self_serve: Some(true),
+                    ..Default::default()
+                };
+                client
+                    .put_role_system_meta(
+                        "sports",
+                        "readers",
+                        "self-serve",
+                        &meta,
+                        Some("set role self-serve"),
+                    )
+                    .await
+            },
+        )
+        .await;
+
+        assert_error_request(
+            "PUT",
+            "/zms/v1/domain/sports/role/readers/meta",
+            &[],
+            |client| async move {
+                let meta = RoleMeta {
+                    self_serve: Some(true),
+                    review_enabled: Some(true),
+                    ..Default::default()
+                };
+                client
+                    .put_role_meta("sports", "readers", &meta, Some("update role meta"))
+                    .await
+            },
+        )
+        .await;
+
+        assert_error_request(
+            "PUT",
+            "/zms/v1/domain/sports/role/readers/review",
+            &[],
+            |client| async move {
+                client
+                    .put_role_review("sports", "readers", Some("mark role reviewed"))
+                    .await
+            },
+        )
+        .await;
+
+        assert_error_request(
+            "PUT",
+            "/zms/v1/domain/sports/role/readers/ownership",
+            &[],
+            |client| async move {
+                let ownership = ResourceRoleOwnership {
+                    meta_owner: Some("sports.meta_owner".to_string()),
+                    members_owner: Some("sports.members_owner".to_string()),
+                    object_owner: Some("sports.object_owner".to_string()),
+                };
+                client
+                    .put_role_ownership("sports", "readers", &ownership, Some("set role ownership"))
+                    .await
+            },
+        )
+        .await;
     }
 
     #[tokio::test]

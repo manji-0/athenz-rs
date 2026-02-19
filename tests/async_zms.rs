@@ -1,9 +1,10 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{
-    DependentService, DomainListOptions, DomainMeta, Entity, NTokenSigner, PrincipalState,
-    ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourcePolicyOwnership,
-    SignedDomainsOptions, Tenancy, TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
+    DependentService, DomainListOptions, DomainMeta, Entity, GroupMeta, NTokenSigner,
+    PrincipalState, ProviderResourceGroupRoles, Quota, ResourceDomainOwnership,
+    ResourceGroupOwnership, ResourcePolicyOwnership, SignedDomainsOptions, Tenancy,
+    TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
 };
 use rand::thread_rng;
 use rsa::pkcs1::EncodeRsaPrivateKey;
@@ -2010,6 +2011,148 @@ async fn get_domain_group_members_calls_group_member_endpoint() {
         .expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/group/member");
+}
+
+#[tokio::test]
+async fn put_group_system_meta_calls_group_meta_system_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let meta = GroupMeta {
+        self_serve: Some(true),
+        ..Default::default()
+    };
+    client
+        .put_group_system_meta(
+            "sports",
+            "devs",
+            "self-serve",
+            &meta,
+            Some("set group self-serve"),
+        )
+        .await
+        .expect("put group system meta");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/group/devs/meta/system/self-serve"
+    );
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("set group self-serve")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(body_json, json!({ "selfServe": true }));
+}
+
+#[tokio::test]
+async fn put_group_meta_calls_group_meta_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let meta = GroupMeta {
+        self_serve: Some(true),
+        review_enabled: Some(true),
+        ..Default::default()
+    };
+    client
+        .put_group_meta("sports", "devs", &meta, Some("update group meta"))
+        .await
+        .expect("put group meta");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/group/devs/meta");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("update group meta"));
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({ "selfServe": true, "reviewEnabled": true })
+    );
+}
+
+#[tokio::test]
+async fn put_group_review_calls_group_review_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .put_group_review("sports", "devs", Some("mark group reviewed"))
+        .await
+        .expect("put group review");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/group/devs/review");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("mark group reviewed"));
+    assert!(req.body.is_empty());
+}
+
+#[tokio::test]
+async fn put_group_ownership_calls_group_ownership_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let ownership = ResourceGroupOwnership {
+        meta_owner: Some("sports.meta_owner".to_string()),
+        members_owner: Some("sports.members_owner".to_string()),
+        object_owner: Some("sports.object_owner".to_string()),
+    };
+    client
+        .put_group_ownership("sports", "devs", &ownership, Some("set group ownership"))
+        .await
+        .expect("put group ownership");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/group/devs/ownership");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("set group ownership"));
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({
+            "metaOwner": "sports.meta_owner",
+            "membersOwner": "sports.members_owner",
+            "objectOwner": "sports.object_owner",
+        })
+    );
 }
 
 #[tokio::test]

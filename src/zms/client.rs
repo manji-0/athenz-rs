@@ -27,6 +27,7 @@ mod stats;
 mod templates;
 mod tenancy;
 mod token;
+mod user;
 
 pub struct ZmsClientBuilder {
     base_url: Url,

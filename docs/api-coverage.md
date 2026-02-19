@@ -69,6 +69,9 @@ If you add new endpoints, update this list.
 - Dependency:
   - Register/unregister dependency (`/dependency/domain/{domainName}`)
   - List dependent services, service resource groups, and domains
+- User:
+  - List users (`/user?domain=`)
+  - Delete user and delete domain member (`/user/{name}`, `/domain/{domainName}/member/{memberName}`)
 
 ## Gaps / to be tracked
 

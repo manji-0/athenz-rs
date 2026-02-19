@@ -2,7 +2,8 @@ use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
     DependentService, DomainMeta, Entity, GroupMeta, PolicyOptions, PrincipalState,
     ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourceGroupOwnership,
-    ResourcePolicyOwnership, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
+    ResourcePolicyOwnership, ResourceServiceIdentityOwnership, ServiceIdentitySystemMeta, Tenancy,
+    TenantResourceGroupRoles, TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
@@ -2461,6 +2462,88 @@ fn put_group_ownership_calls_group_ownership_endpoint() {
         json!({
             "metaOwner": "sports.meta_owner",
             "membersOwner": "sports.members_owner",
+            "objectOwner": "sports.object_owner",
+        })
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_service_identity_system_meta_calls_service_meta_system_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let meta = ServiceIdentitySystemMeta {
+        provider_endpoint: Some("https://provider.example/callback".to_string()),
+        ..Default::default()
+    };
+    client
+        .put_service_identity_system_meta(
+            "sports",
+            "api",
+            "provider-endpoint",
+            &meta,
+            Some("set service provider endpoint"),
+        )
+        .expect("put service identity system meta");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/service/api/meta/system/provider-endpoint"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set service provider endpoint")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({ "providerEndpoint": "https://provider.example/callback" })
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_service_identity_ownership_calls_service_ownership_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let ownership = ResourceServiceIdentityOwnership {
+        public_keys_owner: Some("sports.pubkeys_owner".to_string()),
+        hosts_owner: Some("sports.hosts_owner".to_string()),
+        object_owner: Some("sports.object_owner".to_string()),
+    };
+    client
+        .put_service_identity_ownership("sports", "api", &ownership, Some("set service ownership"))
+        .expect("put service identity ownership");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/service/api/ownership");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set service ownership")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({
+            "publicKeysOwner": "sports.pubkeys_owner",
+            "hostsOwner": "sports.hosts_owner",
             "objectOwner": "sports.object_owner",
         })
     );

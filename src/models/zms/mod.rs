@@ -51,6 +51,7 @@ pub use role::{
 };
 pub use service::{
     ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity, ServiceIdentityList,
+    ServiceIdentitySystemMeta,
 };
 pub use signed_domain::{
     DomainData, DomainPolicies, JWSDomain, SignedDomain, SignedDomains, SignedPolicies,

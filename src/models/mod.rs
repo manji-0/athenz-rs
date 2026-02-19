@@ -22,10 +22,11 @@ pub use zms::{
     ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership,
     ResourceRoleOwnership, ResourceServiceIdentityOwnership, ReviewObject, ReviewObjects, Role,
     RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles, ServerTemplateList, ServiceIdentities,
-    ServiceIdentity, ServiceIdentityList, ServicePrincipal, SignedDomain, SignedDomains,
-    SignedPolicies, Stats, SubDomain, Template, TemplateMeta, Tenancy, TenantResourceGroupRoles,
-    TenantRoleAction, TopLevelDomain, User, UserAuthorityAttributeMap, UserAuthorityAttributes,
-    UserDomain, UserList, UserToken, ZmsAccess, ZmsResourceAccess, ZmsResourceAccessList,
+    ServiceIdentity, ServiceIdentityList, ServiceIdentitySystemMeta, ServicePrincipal,
+    SignedDomain, SignedDomains, SignedPolicies, Stats, SubDomain, Template, TemplateMeta, Tenancy,
+    TenantResourceGroupRoles, TenantRoleAction, TopLevelDomain, User, UserAuthorityAttributeMap,
+    UserAuthorityAttributes, UserDomain, UserList, UserToken, ZmsAccess, ZmsResourceAccess,
+    ZmsResourceAccessList,
 };
 pub use zts::{
     AWSTemporaryCredentials, Access, AccessTokenResponse, AthenzJwkConfig,

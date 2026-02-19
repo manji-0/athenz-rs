@@ -62,6 +62,7 @@ If you add new endpoints, update this list.
   - Get principal groups (`/group?principal=&domain=`)
   - Get groups for review (`/review/group?principal=`)
   - List group members by domain (`/domain/{name}/group/member`)
+  - Update group meta/system meta, review state, and ownership
   - Create/update group, delete group
   - Group membership get/put/delete
 - Review:

@@ -1,8 +1,8 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
-    DependentService, DomainMeta, Entity, PolicyOptions, PrincipalState,
-    ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourcePolicyOwnership, Tenancy,
-    TenantResourceGroupRoles, TenantRoleAction,
+    DependentService, DomainMeta, Entity, GroupMeta, PolicyOptions, PrincipalState,
+    ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourceGroupOwnership,
+    ResourcePolicyOwnership, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
@@ -2043,6 +2043,145 @@ fn get_domain_group_members_calls_group_member_endpoint() {
     let req = rx.recv().expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/domain/sports/group/member");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_group_system_meta_calls_group_meta_system_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let meta = GroupMeta {
+        self_serve: Some(true),
+        ..Default::default()
+    };
+    client
+        .put_group_system_meta(
+            "sports",
+            "devs",
+            "self-serve",
+            &meta,
+            Some("set group self-serve"),
+        )
+        .expect("put group system meta");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/group/devs/meta/system/self-serve"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set group self-serve")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(body_json, json!({ "selfServe": true }));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_group_meta_calls_group_meta_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let meta = GroupMeta {
+        self_serve: Some(true),
+        review_enabled: Some(true),
+        ..Default::default()
+    };
+    client
+        .put_group_meta("sports", "devs", &meta, Some("update group meta"))
+        .expect("put group meta");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/group/devs/meta");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("update group meta")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({ "selfServe": true, "reviewEnabled": true })
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_group_review_calls_group_review_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .put_group_review("sports", "devs", Some("mark group reviewed"))
+        .expect("put group review");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/group/devs/review");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("mark group reviewed")
+    );
+    assert!(req.body.is_empty());
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_group_ownership_calls_group_ownership_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let ownership = ResourceGroupOwnership {
+        meta_owner: Some("sports.meta_owner".to_string()),
+        members_owner: Some("sports.members_owner".to_string()),
+        object_owner: Some("sports.object_owner".to_string()),
+    };
+    client
+        .put_group_ownership("sports", "devs", &ownership, Some("set group ownership"))
+        .expect("put group ownership");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/group/devs/ownership");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set group ownership")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({
+            "metaOwner": "sports.meta_owner",
+            "membersOwner": "sports.members_owner",
+            "objectOwner": "sports.object_owner",
+        })
+    );
 
     handle.join().expect("server");
 }

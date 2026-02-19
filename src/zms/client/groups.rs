@@ -1,6 +1,9 @@
 use super::ZmsClient;
 use crate::error::Error;
-use crate::models::{DomainGroupMember, DomainGroupMembers, Group, GroupMembership, Groups};
+use crate::models::{
+    DomainGroupMember, DomainGroupMembers, Group, GroupMembership, GroupMeta, Groups,
+    ResourceGroupOwnership,
+};
 use crate::zms::common;
 use crate::zms::{GroupGetOptions, GroupsQueryOptions};
 
@@ -49,6 +52,72 @@ impl ZmsClient {
         }
         let resp = req.send()?;
         self.expect_no_content_or_json(resp)
+    }
+
+    /// Updates group system metadata for a specific attribute.
+    pub fn put_group_system_meta(
+        &self,
+        domain: &str,
+        group: &str,
+        attribute: &str,
+        meta: &GroupMeta,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&[
+            "domain", domain, "group", group, "meta", "system", attribute,
+        ])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    /// Updates group metadata.
+    pub fn put_group_meta(
+        &self,
+        domain: &str,
+        group: &str,
+        meta: &GroupMeta,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "group", group, "meta"])?;
+        let mut req = self.http.put(url).json(meta);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    /// Marks a group as reviewed.
+    pub fn put_group_review(
+        &self,
+        domain: &str,
+        group: &str,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "group", group, "review"])?;
+        let mut req = self.http.put(url);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    /// Sets resource ownership for a group.
+    pub fn put_group_ownership(
+        &self,
+        domain: &str,
+        group: &str,
+        ownership: &ResourceGroupOwnership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "group", group, "ownership"])?;
+        let mut req = self.http.put(url).json(ownership);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
     }
 
     /// Deletes a group.

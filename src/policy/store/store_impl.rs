@@ -41,7 +41,11 @@ impl PolicyStore {
         action: &str,
         resource: &str,
     ) -> PolicyMatch {
-        if token_domain.is_empty() || roles.is_empty() || action.is_empty() || resource.is_empty() {
+        if token_domain.is_empty() || roles.is_empty() {
+            return PolicyMatch::new(PolicyDecision::DenyRoleTokenInvalid);
+        }
+
+        if action.is_empty() || resource.is_empty() {
             return PolicyMatch::new(PolicyDecision::DenyInvalidParameters);
         }
 

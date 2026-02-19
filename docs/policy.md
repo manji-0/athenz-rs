@@ -55,6 +55,8 @@ if let Some(signed) = response.data {
 
 - `PolicyClient`/`PolicyClientAsync` caches fetched ZTS/ZMS public keys for policy validation.
 - `allow_action` lowercases `action` and `resource` before matching.
+- Empty `token_domain` or empty `roles` returns `PolicyDecision::DenyRoleTokenInvalid`.
+- Empty `action` or empty `resource` returns `PolicyDecision::DenyInvalidParameters`.
 - `PolicyStore` does not apply `case_sensitive` flags during matching.
 - `PolicyStore` does not evaluate assertion `conditions` during matching.
 - Deny assertions are evaluated before allow assertions.

@@ -57,6 +57,42 @@ fn policy_store_allows_and_denies() {
     assert_eq!(decision.decision, PolicyDecision::Deny);
 }
 
+#[test]
+fn policy_store_distinguishes_invalid_role_token_from_invalid_parameters() {
+    let policy = mk_policy(
+        "sports:policy.test",
+        None,
+        vec![mk_assertion(
+            "sports:role.reader",
+            "sports:resource.read",
+            "read",
+            AssertionEffect::Allow,
+        )],
+    );
+    let policy_data = PolicyData {
+        domain: "sports".to_string(),
+        policies: vec![policy],
+    };
+
+    let mut store = PolicyStore::new();
+    store.insert(policy_data);
+
+    let valid_roles = vec!["reader".to_string()];
+    let no_roles: Vec<String> = vec![];
+
+    let decision = store.allow_action("", &valid_roles, "read", "sports:resource.read");
+    assert_eq!(decision.decision, PolicyDecision::DenyRoleTokenInvalid);
+
+    let decision = store.allow_action("sports", &no_roles, "read", "sports:resource.read");
+    assert_eq!(decision.decision, PolicyDecision::DenyRoleTokenInvalid);
+
+    let decision = store.allow_action("sports", &valid_roles, "", "sports:resource.read");
+    assert_eq!(decision.decision, PolicyDecision::DenyInvalidParameters);
+
+    let decision = store.allow_action("sports", &valid_roles, "read", "");
+    assert_eq!(decision.decision, PolicyDecision::DenyInvalidParameters);
+}
+
 fn mk_assertion(role: &str, resource: &str, action: &str, effect: AssertionEffect) -> Assertion {
     Assertion {
         role: role.to_string(),

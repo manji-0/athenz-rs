@@ -50,8 +50,8 @@ pub use role::{
     ResourceRoleOwnership, Role, RoleAuditLog, RoleList, RoleMember, RoleMeta, Roles,
 };
 pub use service::{
-    ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity, ServiceIdentityList,
-    ServiceIdentitySystemMeta,
+    CredsEntry, ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity,
+    ServiceIdentityList, ServiceIdentitySystemMeta,
 };
 pub use signed_domain::{
     DomainData, DomainPolicies, JWSDomain, SignedDomain, SignedDomains, SignedPolicies,

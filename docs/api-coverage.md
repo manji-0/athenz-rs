@@ -55,8 +55,10 @@ If you add new endpoints, update this list.
   - Assertion get/put/delete
 - Service identities:
   - Get service identity, list service identities
+  - Search service identities by name (`/service/{serviceName}?substringMatch=&domainFilter=`)
   - Create/update service identity, delete service identity
   - Update service system meta and ownership
+  - Update service credentials (`/domain/{domain}/service/{service}/creds`)
   - Public key entry get/put/delete
 - Entities:
   - Get entity, list entities

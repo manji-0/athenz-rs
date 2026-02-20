@@ -1,10 +1,10 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{
-    DependentService, DomainListOptions, DomainMeta, Entity, GroupMembership, GroupMeta,
-    NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota, ResourceDomainOwnership,
-    ResourceGroupOwnership, ResourcePolicyOwnership, SignedDomainsOptions, Tenancy,
-    TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
+    CredsEntry, DependentService, DomainListOptions, DomainMeta, Entity, GroupMembership,
+    GroupMeta, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota,
+    ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership, ServiceSearchOptions,
+    SignedDomainsOptions, Tenancy, TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
 };
 use rand::thread_rng;
 use rsa::pkcs1::EncodeRsaPrivateKey;
@@ -1367,6 +1367,151 @@ async fn user_delete_domain_member_calls_endpoint_with_audit_headers() {
     assert_eq!(
         req.header_value("Athenz-Resource-Owner"),
         Some("sports.owner")
+    );
+}
+
+#[tokio::test]
+async fn search_service_identities_calls_search_endpoint() {
+    let body =
+        r#"{"list":[{"name":"sports.api","description":"api service"}],"serviceMatchCount":1}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = ServiceSearchOptions {
+        substring_match: Some(true),
+        domain_filter: Some("sports".to_string()),
+    };
+    let result = client
+        .search_service_identities("api", &options)
+        .await
+        .expect("service search");
+    assert_eq!(result.list.len(), 1);
+    assert_eq!(result.list[0].name, "sports.api");
+    assert_eq!(result.service_match_count, Some(1));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/service/api");
+    assert_eq!(req.query_value("substringMatch"), Some("true"));
+    assert_eq!(req.query_value("domainFilter"), Some("sports"));
+}
+
+#[tokio::test]
+async fn search_service_identities_reports_server_error() {
+    let response = empty_response("500 Internal Server Error");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = ServiceSearchOptions {
+        substring_match: Some(true),
+        domain_filter: Some("sports".to_string()),
+    };
+    let err = client
+        .search_service_identities("api", &options)
+        .await
+        .expect_err("request should fail");
+    assert!(format!("{err}").contains("500"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/service/api");
+    assert_eq!(req.query_value("substringMatch"), Some("true"));
+    assert_eq!(req.query_value("domainFilter"), Some("sports"));
+}
+
+#[tokio::test]
+async fn put_service_creds_entry_calls_service_creds_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let creds = CredsEntry {
+        value: Some("super-secret".to_string()),
+    };
+    client
+        .put_service_creds_entry(
+            "sports",
+            "api",
+            &creds,
+            Some("update service creds"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("put service creds entry");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/service/api/creds");
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("update service creds")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(body_json, json!({ "value": "super-secret" }));
+}
+
+#[tokio::test]
+async fn put_service_creds_entry_reports_server_error() {
+    let response = empty_response("500 Internal Server Error");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let creds = CredsEntry {
+        value: Some("super-secret".to_string()),
+    };
+    let err = client
+        .put_service_creds_entry(
+            "sports",
+            "api",
+            &creds,
+            Some("update service creds"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect_err("request should fail");
+    assert!(format!("{err}").contains("500"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/service/api/creds");
+    assert!(
+        req.query.is_empty(),
+        "unexpected query params: {:?}",
+        req.query
     );
 }
 

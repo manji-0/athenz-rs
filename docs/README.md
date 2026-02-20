@@ -26,6 +26,8 @@ let client = ZtsClient::builder("https://zts.example.com/zts/v1")?
 - `architecture.md` - module overview and data flow
 - `faq.md` - frequently asked questions
 - `clients.md` - ZTS/ZMS client configuration
+- `onboarding.md` - onboarding steps for new maintainers
+- `operations-handover.md` - operational handover checklist and template
 - `api-coverage.md` - implemented ZTS/ZMS endpoints
 - `design-doc-athenz-rust-client-scope-policy.md` - scope/policy design doc
 

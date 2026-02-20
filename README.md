@@ -135,6 +135,8 @@ println!("service={}.{}", claims.domain, claims.name);
 - `docs/architecture.md` (module overview and data flow)
 - `docs/faq.md` (frequently asked questions)
 - `docs/clients.md` (client configuration)
+- `docs/onboarding.md` (onboarding guide for new maintainers)
+- `docs/operations-handover.md` (operations handover checklist/template)
 - `docs/api-coverage.md` (implemented ZTS/ZMS endpoints)
 - `docs/design-doc-athenz-rust-client-scope-policy.md` (scope/policy design)
 - `CODE_OF_CONDUCT.md` (community guidelines)

@@ -54,7 +54,8 @@ If you add new endpoints, update this list.
   - Set policy ownership (`/domain/{name}/policy/{policy}/ownership`)
   - Create/update policy, delete policy
   - Policy version management: list/get/create/activate/delete version
-  - Assertion get/put/delete
+  - Assertion get/put/delete, plus versioned assertion put/delete
+  - Assertion conditions put/delete (`.../assertion/{id}/conditions`, `.../assertion/{id}/condition`, `.../assertion/{id}/condition/{conditionId}`)
 - Service identities:
   - Get service identity, list service identities
   - Search service identities by name (`/service/{serviceName}?substringMatch=&domainFilter=`)

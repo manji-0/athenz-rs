@@ -3,11 +3,21 @@ use crate::models::{DomainSignedPolicyData, JWSPolicyData, PolicyData, SignedPol
 use crate::zts::ZtsClient;
 #[cfg(feature = "async-validate")]
 use crate::zts_async::ZtsAsyncClient;
+use std::collections::HashMap;
+use std::sync::{Mutex, RwLock};
 use std::time::Duration;
-
-use super::validator::{validate_jws_policy_data, validate_signed_policy_data};
 #[cfg(feature = "async-validate")]
-use super::validator::{validate_jws_policy_data_async, validate_signed_policy_data_async};
+use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
+
+use super::validator::{
+    validate_jws_policy_data, validate_signed_policy_data, PolicyPublicKeyCache,
+    PolicyPublicKeyFetchLocks,
+};
+#[cfg(feature = "async-validate")]
+use super::validator::{
+    validate_jws_policy_data_async, validate_signed_policy_data_async, PolicyPublicKeyCacheAsync,
+    PolicyPublicKeyFetchLocksAsync,
+};
 
 #[derive(Debug, Clone)]
 pub struct PolicyFetchResponse<T> {
@@ -39,6 +49,8 @@ impl Default for PolicyValidatorConfig {
 pub struct PolicyClient {
     zts: ZtsClient,
     config: PolicyValidatorConfig,
+    key_cache: PolicyPublicKeyCache,
+    fetch_locks: PolicyPublicKeyFetchLocks,
 }
 
 impl PolicyClient {
@@ -47,6 +59,8 @@ impl PolicyClient {
         Self {
             zts,
             config: PolicyValidatorConfig::default(),
+            key_cache: RwLock::new(HashMap::new()),
+            fetch_locks: Mutex::new(HashMap::new()),
         }
     }
 
@@ -89,12 +103,24 @@ impl PolicyClient {
         &self,
         data: &DomainSignedPolicyData,
     ) -> Result<PolicyData, Error> {
-        validate_signed_policy_data(data, &self.zts, &self.config)
+        validate_signed_policy_data(
+            data,
+            &self.zts,
+            &self.config,
+            &self.key_cache,
+            &self.fetch_locks,
+        )
     }
 
     /// Validates JWS policy data using the configured ZTS client.
     pub fn validate_jws_policy_data(&self, data: &JWSPolicyData) -> Result<PolicyData, Error> {
-        validate_jws_policy_data(data, &self.zts, &self.config)
+        validate_jws_policy_data(
+            data,
+            &self.zts,
+            &self.config,
+            &self.key_cache,
+            &self.fetch_locks,
+        )
     }
 }
 
@@ -102,6 +128,8 @@ impl PolicyClient {
 pub struct PolicyClientAsync {
     zts: ZtsAsyncClient,
     config: PolicyValidatorConfig,
+    key_cache: PolicyPublicKeyCacheAsync,
+    fetch_locks: PolicyPublicKeyFetchLocksAsync,
 }
 
 #[cfg(feature = "async-validate")]
@@ -111,6 +139,8 @@ impl PolicyClientAsync {
         Self {
             zts,
             config: PolicyValidatorConfig::default(),
+            key_cache: AsyncRwLock::new(HashMap::new()),
+            fetch_locks: AsyncMutex::new(HashMap::new()),
         }
     }
 
@@ -154,7 +184,14 @@ impl PolicyClientAsync {
         &self,
         data: &DomainSignedPolicyData,
     ) -> Result<PolicyData, Error> {
-        validate_signed_policy_data_async(data, &self.zts, &self.config).await
+        validate_signed_policy_data_async(
+            data,
+            &self.zts,
+            &self.config,
+            &self.key_cache,
+            &self.fetch_locks,
+        )
+        .await
     }
 
     /// Validates JWS policy data using the configured ZTS client.
@@ -162,6 +199,13 @@ impl PolicyClientAsync {
         &self,
         data: &JWSPolicyData,
     ) -> Result<PolicyData, Error> {
-        validate_jws_policy_data_async(data, &self.zts, &self.config).await
+        validate_jws_policy_data_async(
+            data,
+            &self.zts,
+            &self.config,
+            &self.key_cache,
+            &self.fetch_locks,
+        )
+        .await
     }
 }

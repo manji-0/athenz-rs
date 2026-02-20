@@ -1,9 +1,10 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
-    DependentService, DomainMeta, Entity, GroupMeta, PolicyOptions, PrincipalState,
-    ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourceGroupOwnership,
-    ResourcePolicyOwnership, ResourceRoleOwnership, ResourceServiceIdentityOwnership, RoleMeta,
-    ServiceIdentitySystemMeta, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
+    DependentService, DomainMeta, Entity, GroupMembership, GroupMeta, PolicyOptions,
+    PrincipalState, ProviderResourceGroupRoles, Quota, ResourceDomainOwnership,
+    ResourceGroupOwnership, ResourcePolicyOwnership, ResourceRoleOwnership,
+    ResourceServiceIdentityOwnership, RoleMeta, ServiceIdentitySystemMeta, Tenancy,
+    TenantResourceGroupRoles, TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
@@ -2590,6 +2591,95 @@ fn put_group_review_calls_group_review_endpoint() {
 }
 
 #[test]
+fn put_group_membership_decision_calls_group_membership_decision_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let membership = GroupMembership {
+        member_name: "user.jane".to_string(),
+        is_member: None,
+        group_name: Some("devs".to_string()),
+        expiration: None,
+        active: None,
+        approved: Some(true),
+        audit_ref: None,
+        request_principal: None,
+        system_disabled: None,
+        pending_state: Some("add".to_string()),
+    };
+    client
+        .put_group_membership_decision(
+            "sports",
+            "devs",
+            "user.jane",
+            &membership,
+            Some("approve membership request"),
+        )
+        .expect("put group membership decision");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/group/devs/member/user.jane/decision"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("approve membership request")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({
+            "memberName": "user.jane",
+            "groupName": "devs",
+            "approved": true,
+            "pendingState": "add"
+        })
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn delete_pending_group_membership_calls_pending_group_membership_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_pending_group_membership(
+            "sports",
+            "devs",
+            "user.jane",
+            Some("remove pending request"),
+        )
+        .expect("delete pending group membership");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/group/devs/pendingmember/user.jane"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("remove pending request")
+    );
+    assert!(req.body.is_empty());
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn put_group_ownership_calls_group_ownership_endpoint() {
     let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
     let (base_url, rx, handle) = serve_once(response);
@@ -2812,6 +2902,48 @@ fn put_role_governance_endpoints_propagate_server_errors() {
                 object_owner: Some("sports.object_owner".to_string()),
             };
             client.put_role_ownership("sports", "readers", &ownership, Some("set role ownership"))
+        },
+    );
+}
+
+#[test]
+fn put_group_governance_endpoints_propagate_server_errors() {
+    assert_sync_error_request(
+        "PUT",
+        "/zms/v1/domain/sports/group/devs/member/user.jane/decision",
+        |client| {
+            let membership = GroupMembership {
+                member_name: "user.jane".to_string(),
+                is_member: None,
+                group_name: Some("devs".to_string()),
+                expiration: None,
+                active: None,
+                approved: Some(true),
+                audit_ref: None,
+                request_principal: None,
+                system_disabled: None,
+                pending_state: Some("add".to_string()),
+            };
+            client.put_group_membership_decision(
+                "sports",
+                "devs",
+                "user.jane",
+                &membership,
+                Some("approve membership request"),
+            )
+        },
+    );
+
+    assert_sync_error_request(
+        "DELETE",
+        "/zms/v1/domain/sports/group/devs/pendingmember/user.jane",
+        |client| {
+            client.delete_pending_group_membership(
+                "sports",
+                "devs",
+                "user.jane",
+                Some("remove pending request"),
+            )
         },
     );
 }

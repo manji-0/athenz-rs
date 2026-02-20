@@ -214,6 +214,25 @@ impl ZmsAsyncClient {
         self.expect_no_content_or_json(resp).await
     }
 
+    /// Approves or rejects a pending group membership request.
+    pub async fn put_group_membership_decision(
+        &self,
+        domain: &str,
+        group: &str,
+        member: &str,
+        membership: &GroupMembership,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&[
+            "domain", domain, "group", group, "member", member, "decision",
+        ])?;
+        let mut req = self.http.put(url).json(membership);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        let resp = req.send().await?;
+        self.expect_no_content(resp).await
+    }
+
     /// Deletes a group membership.
     pub async fn delete_group_membership(
         &self,
@@ -227,6 +246,22 @@ impl ZmsAsyncClient {
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
         req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        let resp = req.send().await?;
+        self.expect_no_content(resp).await
+    }
+
+    /// Deletes a pending group membership request.
+    pub async fn delete_pending_group_membership(
+        &self,
+        domain: &str,
+        group: &str,
+        member: &str,
+        audit_ref: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "group", group, "pendingmember", member])?;
+        let mut req = self.http.delete(url);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
         let resp = req.send().await?;
         self.expect_no_content(resp).await
     }

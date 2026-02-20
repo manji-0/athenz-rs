@@ -65,6 +65,7 @@ If you add new endpoints, update this list.
   - Get groups, list groups
   - Get principal groups (`/group?principal=&domain=`)
   - List pending group memberships (`/pending_group_members?principal=&domain=`)
+  - Approve membership requests and delete pending requests (`/domain/{name}/group/{group}/member/{member}/decision`, `/domain/{name}/group/{group}/pendingmember/{member}`)
   - Get groups for review (`/review/group?principal=`)
   - List group members by domain (`/domain/{name}/group/member`)
   - Update group meta/system meta, review state, and ownership

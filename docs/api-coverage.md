@@ -38,6 +38,7 @@ If you add new endpoints, update this list.
   - Get domain auth/token history dependencies (`/domain/{name}/history/auth`)
   - Delete expired role/group members (`/expired-members?purgeResources=`)
   - Set domain ownership (`/domain/{name}/ownership`)
+  - Apply/list/remove domain templates (`/domain/{name}/template`, `/domain/{name}/template/{template}`)
   - Create top-level, sub-, and user domains
   - Delete top-level, sub-, and user domains
   - Update domain metadata

@@ -58,7 +58,10 @@ pub use signed_domain::{
     DomainData, DomainPolicies, JWSDomain, SignedDomain, SignedDomains, SignedPolicies,
 };
 pub use stats::Stats;
-pub use template::{DomainTemplateDetailsList, ServerTemplateList, Template, TemplateMeta};
+pub use template::{
+    DomainTemplate, DomainTemplateDetailsList, DomainTemplateList, ServerTemplateList, Template,
+    TemplateMeta, TemplateParam,
+};
 pub use tenancy::{
     ProviderResourceGroupRoles, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
 };

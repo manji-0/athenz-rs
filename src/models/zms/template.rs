@@ -47,6 +47,27 @@ pub struct ServerTemplateList {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TemplateParam {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainTemplate {
+    pub template_names: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<Vec<TemplateParam>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DomainTemplateList {
+    pub template_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DomainTemplateDetailsList {
     pub meta_data: Vec<TemplateMeta>,
 }

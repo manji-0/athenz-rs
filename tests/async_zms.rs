@@ -1,8 +1,9 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{
-    CredsEntry, DependentService, DomainListOptions, DomainMeta, Entity, GroupMembership,
-    GroupMeta, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota,
+    Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
+    AssertionConditions, CredsEntry, DependentService, DomainListOptions, DomainMeta, Entity,
+    GroupMembership, GroupMeta, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota,
     ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership, ServiceSearchOptions,
     SignedDomainsOptions, Tenancy, TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
 };
@@ -10,6 +11,7 @@ use rand::thread_rng;
 use rsa::pkcs1::EncodeRsaPrivateKey;
 use rsa::RsaPrivateKey;
 use serde_json::json;
+use std::collections::HashMap;
 use std::sync::OnceLock;
 use tokio::time::{timeout, Duration};
 
@@ -3386,6 +3388,293 @@ async fn get_system_stats_calls_system_stats_endpoint() {
         .expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/sys/stats");
+}
+
+#[tokio::test]
+async fn put_assertion_policy_version_calls_expected_endpoint() {
+    let body = r#"{"role":"sports:role.readers","resource":"sports:*","action":"read","id":42}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let assertion = Assertion {
+        role: "sports:role.readers".to_string(),
+        resource: "sports:*".to_string(),
+        action: "read".to_string(),
+        effect: None,
+        id: None,
+        case_sensitive: None,
+        conditions: None,
+    };
+    let created = client
+        .put_assertion_policy_version(
+            "sports",
+            "readers",
+            "v2",
+            &assertion,
+            Some("add version assertion"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("put assertion policy version");
+    assert_eq!(created.id, Some(42));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/version/v2/assertion"
+    );
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("add version assertion")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"role":"sports:role.readers","resource":"sports:*","action":"read"}"#
+    );
+}
+
+#[tokio::test]
+async fn delete_assertion_policy_version_calls_expected_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_assertion_policy_version(
+            "sports",
+            "readers",
+            "v2",
+            42,
+            Some("delete version assertion"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("delete assertion policy version");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/version/v2/assertion/42"
+    );
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("delete version assertion")
+    );
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+}
+
+#[tokio::test]
+async fn put_assertion_conditions_calls_expected_endpoint() {
+    let body = r#"{"conditionsList":[{"id":7,"conditionsMap":{"date":{"operator":"EQUALS","value":"2026-02-21"}}}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let mut conditions_map = HashMap::new();
+    conditions_map.insert(
+        "date".to_string(),
+        AssertionConditionData {
+            operator: AssertionConditionOperator::Equals,
+            value: "2026-02-21".to_string(),
+        },
+    );
+    let conditions = AssertionConditions {
+        conditions_list: vec![AssertionCondition {
+            id: None,
+            conditions_map,
+        }],
+    };
+    let updated = client
+        .put_assertion_conditions(
+            "sports",
+            "readers",
+            42,
+            &conditions,
+            Some("set conditions"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("put assertion conditions");
+    assert_eq!(updated.conditions_list.len(), 1);
+    assert_eq!(updated.conditions_list[0].id, Some(7));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/assertion/42/conditions"
+    );
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("set conditions"));
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"conditionsList":[{"conditionsMap":{"date":{"operator":"EQUALS","value":"2026-02-21"}}}]}"#
+    );
+}
+
+#[tokio::test]
+async fn put_assertion_condition_calls_expected_endpoint() {
+    let body = r#"{"id":8,"conditionsMap":{"ip":{"operator":"EQUALS","value":"127.0.0.1"}}}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let mut conditions_map = HashMap::new();
+    conditions_map.insert(
+        "ip".to_string(),
+        AssertionConditionData {
+            operator: AssertionConditionOperator::Equals,
+            value: "127.0.0.1".to_string(),
+        },
+    );
+    let condition = AssertionCondition {
+        id: None,
+        conditions_map,
+    };
+    let updated = client
+        .put_assertion_condition(
+            "sports",
+            "readers",
+            42,
+            &condition,
+            Some("set condition"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("put assertion condition");
+    assert_eq!(updated.id, Some(8));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/assertion/42/condition"
+    );
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("set condition"));
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"conditionsMap":{"ip":{"operator":"EQUALS","value":"127.0.0.1"}}}"#
+    );
+}
+
+#[tokio::test]
+async fn delete_assertion_conditions_calls_expected_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_assertion_conditions(
+            "sports",
+            "readers",
+            42,
+            Some("delete conditions"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("delete assertion conditions");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/assertion/42/conditions"
+    );
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("delete conditions"));
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
+}
+
+#[tokio::test]
+async fn delete_assertion_condition_calls_expected_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_assertion_condition(
+            "sports",
+            "readers",
+            42,
+            8,
+            Some("delete condition"),
+            Some("sports.owner"),
+        )
+        .await
+        .expect("delete assertion condition");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/assertion/42/condition/8"
+    );
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("delete condition"));
+    assert_eq!(
+        req.header_value("Athenz-Resource-Owner"),
+        Some("sports.owner")
+    );
 }
 
 #[tokio::test]

@@ -1,7 +1,8 @@
 use super::ZmsClient;
 use crate::error::Error;
 use crate::models::{
-    Assertion, Policies, Policy, PolicyList, PolicyOptions, ResourcePolicyOwnership,
+    Assertion, AssertionCondition, AssertionConditions, Policies, Policy, PolicyList,
+    PolicyOptions, ResourcePolicyOwnership,
 };
 use crate::zms::common;
 use crate::zms::{PoliciesQueryOptions, PolicyListOptions};
@@ -211,6 +212,86 @@ impl ZmsClient {
         self.expect_ok_json(resp)
     }
 
+    /// Creates a new assertion in a specific policy version.
+    pub fn put_assertion_policy_version(
+        &self,
+        domain: &str,
+        policy: &str,
+        version: &str,
+        assertion: &Assertion,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> Result<Assertion, Error> {
+        let url = self.build_url(&[
+            "domain",
+            domain,
+            "policy",
+            policy,
+            "version",
+            version,
+            "assertion",
+        ])?;
+        let mut req = self.http.put(url).json(assertion);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Adds conditions to an existing policy assertion.
+    pub fn put_assertion_conditions(
+        &self,
+        domain: &str,
+        policy: &str,
+        assertion_id: i64,
+        assertion_conditions: &AssertionConditions,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> Result<AssertionConditions, Error> {
+        let id = assertion_id.to_string();
+        let url = self.build_url(&[
+            "domain",
+            domain,
+            "policy",
+            policy,
+            "assertion",
+            &id,
+            "conditions",
+        ])?;
+        let mut req = self.http.put(url).json(assertion_conditions);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Adds a single condition to an existing policy assertion.
+    pub fn put_assertion_condition(
+        &self,
+        domain: &str,
+        policy: &str,
+        assertion_id: i64,
+        assertion_condition: &AssertionCondition,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> Result<AssertionCondition, Error> {
+        let id = assertion_id.to_string();
+        let url = self.build_url(&[
+            "domain",
+            domain,
+            "policy",
+            policy,
+            "assertion",
+            &id,
+            "condition",
+        ])?;
+        let mut req = self.http.put(url).json(assertion_condition);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
     /// Deletes a policy assertion.
     pub fn delete_assertion(
         &self,
@@ -222,6 +303,89 @@ impl ZmsClient {
     ) -> Result<(), Error> {
         let id = assertion_id.to_string();
         let url = self.build_url(&["domain", domain, "policy", policy, "assertion", &id])?;
+        let mut req = self.http.delete(url);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    /// Deletes a specific assertion from a policy version.
+    pub fn delete_assertion_policy_version(
+        &self,
+        domain: &str,
+        policy: &str,
+        version: &str,
+        assertion_id: i64,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> Result<(), Error> {
+        let id = assertion_id.to_string();
+        let url = self.build_url(&[
+            "domain",
+            domain,
+            "policy",
+            policy,
+            "version",
+            version,
+            "assertion",
+            &id,
+        ])?;
+        let mut req = self.http.delete(url);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    /// Deletes all conditions from a policy assertion.
+    pub fn delete_assertion_conditions(
+        &self,
+        domain: &str,
+        policy: &str,
+        assertion_id: i64,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> Result<(), Error> {
+        let id = assertion_id.to_string();
+        let url = self.build_url(&[
+            "domain",
+            domain,
+            "policy",
+            policy,
+            "assertion",
+            &id,
+            "conditions",
+        ])?;
+        let mut req = self.http.delete(url);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        let resp = req.send()?;
+        self.expect_no_content(resp)
+    }
+
+    /// Deletes a specific condition from a policy assertion.
+    pub fn delete_assertion_condition(
+        &self,
+        domain: &str,
+        policy: &str,
+        assertion_id: i64,
+        condition_id: i32,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> Result<(), Error> {
+        let assertion = assertion_id.to_string();
+        let condition = condition_id.to_string();
+        let url = self.build_url(&[
+            "domain",
+            domain,
+            "policy",
+            policy,
+            "assertion",
+            &assertion,
+            "condition",
+            &condition,
+        ])?;
         let mut req = self.http.delete(url);
         req = self.apply_auth(req)?;
         req = common::apply_audit_headers(req, audit_ref, resource_owner);

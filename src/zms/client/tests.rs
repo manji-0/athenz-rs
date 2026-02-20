@@ -1,10 +1,11 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
-    CredsEntry, DependentService, DomainMeta, Entity, GroupMembership, GroupMeta, PolicyOptions,
-    PrincipalState, ProviderResourceGroupRoles, Quota, ResourceDomainOwnership,
-    ResourceGroupOwnership, ResourcePolicyOwnership, ResourceRoleOwnership,
-    ResourceServiceIdentityOwnership, RoleMeta, ServiceIdentitySystemMeta, Tenancy,
-    TenantResourceGroupRoles, TenantRoleAction,
+    Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
+    AssertionConditions, CredsEntry, DependentService, DomainMeta, Entity, GroupMembership,
+    GroupMeta, PolicyOptions, PrincipalState, ProviderResourceGroupRoles, Quota,
+    ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership,
+    ResourceRoleOwnership, ResourceServiceIdentityOwnership, RoleMeta, ServiceIdentitySystemMeta,
+    Tenancy, TenantResourceGroupRoles, TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, ServiceSearchOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
@@ -4029,6 +4030,299 @@ fn delete_policy_version_calls_expected_endpoint() {
     assert_eq!(
         req.headers.get("y-audit-ref").map(String::as_str),
         Some("delete version")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_assertion_policy_version_calls_expected_endpoint() {
+    let body = r#"{"role":"sports:role.readers","resource":"sports:*","action":"read","id":42}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let assertion = Assertion {
+        role: "sports:role.readers".to_string(),
+        resource: "sports:*".to_string(),
+        action: "read".to_string(),
+        effect: None,
+        id: None,
+        case_sensitive: None,
+        conditions: None,
+    };
+    let created = client
+        .put_assertion_policy_version(
+            "sports",
+            "readers",
+            "v2",
+            &assertion,
+            Some("add version assertion"),
+            Some("sports.owner"),
+        )
+        .expect("put assertion policy version");
+    assert_eq!(created.id, Some(42));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/version/v2/assertion"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("add version assertion")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"role":"sports:role.readers","resource":"sports:*","action":"read"}"#
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn delete_assertion_policy_version_calls_expected_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_assertion_policy_version(
+            "sports",
+            "readers",
+            "v2",
+            42,
+            Some("delete version assertion"),
+            Some("sports.owner"),
+        )
+        .expect("delete assertion policy version");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/version/v2/assertion/42"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete version assertion")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_assertion_conditions_calls_expected_endpoint() {
+    let body = r#"{"conditionsList":[{"id":7,"conditionsMap":{"date":{"operator":"EQUALS","value":"2026-02-21"}}}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let mut conditions_map = HashMap::new();
+    conditions_map.insert(
+        "date".to_string(),
+        AssertionConditionData {
+            operator: AssertionConditionOperator::Equals,
+            value: "2026-02-21".to_string(),
+        },
+    );
+    let conditions = AssertionConditions {
+        conditions_list: vec![AssertionCondition {
+            id: None,
+            conditions_map,
+        }],
+    };
+    let updated = client
+        .put_assertion_conditions(
+            "sports",
+            "readers",
+            42,
+            &conditions,
+            Some("set conditions"),
+            Some("sports.owner"),
+        )
+        .expect("put assertion conditions");
+    assert_eq!(updated.conditions_list.len(), 1);
+    assert_eq!(updated.conditions_list[0].id, Some(7));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/assertion/42/conditions"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set conditions")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"conditionsList":[{"conditionsMap":{"date":{"operator":"EQUALS","value":"2026-02-21"}}}]}"#
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_assertion_condition_calls_expected_endpoint() {
+    let body = r#"{"id":8,"conditionsMap":{"ip":{"operator":"EQUALS","value":"127.0.0.1"}}}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let mut conditions_map = HashMap::new();
+    conditions_map.insert(
+        "ip".to_string(),
+        AssertionConditionData {
+            operator: AssertionConditionOperator::Equals,
+            value: "127.0.0.1".to_string(),
+        },
+    );
+    let condition = AssertionCondition {
+        id: None,
+        conditions_map,
+    };
+    let updated = client
+        .put_assertion_condition(
+            "sports",
+            "readers",
+            42,
+            &condition,
+            Some("set condition"),
+            Some("sports.owner"),
+        )
+        .expect("put assertion condition");
+    assert_eq!(updated.id, Some(8));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/assertion/42/condition"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("set condition")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"conditionsMap":{"ip":{"operator":"EQUALS","value":"127.0.0.1"}}}"#
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn delete_assertion_conditions_calls_expected_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_assertion_conditions(
+            "sports",
+            "readers",
+            42,
+            Some("delete conditions"),
+            Some("sports.owner"),
+        )
+        .expect("delete assertion conditions");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/assertion/42/conditions"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete conditions")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn delete_assertion_condition_calls_expected_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_assertion_condition(
+            "sports",
+            "readers",
+            42,
+            8,
+            Some("delete condition"),
+            Some("sports.owner"),
+        )
+        .expect("delete assertion condition");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/policy/readers/assertion/42/condition/8"
+    );
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("delete condition")
     );
     assert_eq!(
         req.headers.get("athenz-resource-owner").map(String::as_str),

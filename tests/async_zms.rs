@@ -1,8 +1,8 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{
-    DependentService, DomainListOptions, DomainMeta, Entity, GroupMeta, NTokenSigner,
-    PrincipalState, ProviderResourceGroupRoles, Quota, ResourceDomainOwnership,
+    DependentService, DomainListOptions, DomainMeta, Entity, GroupMembership, GroupMeta,
+    NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota, ResourceDomainOwnership,
     ResourceGroupOwnership, ResourcePolicyOwnership, SignedDomainsOptions, Tenancy,
     TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
 };
@@ -2395,6 +2395,187 @@ async fn put_group_review_calls_group_review_endpoint() {
     assert_eq!(req.path, "/zms/v1/domain/sports/group/devs/review");
     assert_eq!(req.header_value("Y-Audit-Ref"), Some("mark group reviewed"));
     assert!(req.body.is_empty());
+}
+
+#[tokio::test]
+async fn put_group_membership_decision_calls_group_membership_decision_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let membership = GroupMembership {
+        member_name: "user.jane".to_string(),
+        is_member: None,
+        group_name: Some("devs".to_string()),
+        expiration: None,
+        active: None,
+        approved: Some(true),
+        audit_ref: None,
+        request_principal: None,
+        system_disabled: None,
+        pending_state: Some("add".to_string()),
+    };
+    client
+        .put_group_membership_decision(
+            "sports",
+            "devs",
+            "user.jane",
+            &membership,
+            Some("approve membership request"),
+        )
+        .await
+        .expect("put group membership decision");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/group/devs/member/user.jane/decision"
+    );
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("approve membership request")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(
+        body_json,
+        json!({
+            "memberName": "user.jane",
+            "groupName": "devs",
+            "approved": true,
+            "pendingState": "add"
+        })
+    );
+}
+
+#[tokio::test]
+async fn delete_pending_group_membership_calls_pending_group_membership_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_pending_group_membership(
+            "sports",
+            "devs",
+            "user.jane",
+            Some("remove pending request"),
+        )
+        .await
+        .expect("delete pending group membership");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/group/devs/pendingmember/user.jane"
+    );
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("remove pending request")
+    );
+    assert!(req.body.is_empty());
+}
+
+#[tokio::test]
+async fn put_group_governance_endpoints_report_server_errors() {
+    let response = empty_response("500 Internal Server Error");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let membership = GroupMembership {
+        member_name: "user.jane".to_string(),
+        is_member: None,
+        group_name: Some("devs".to_string()),
+        expiration: None,
+        active: None,
+        approved: Some(true),
+        audit_ref: None,
+        request_principal: None,
+        system_disabled: None,
+        pending_state: Some("add".to_string()),
+    };
+    let err = client
+        .put_group_membership_decision(
+            "sports",
+            "devs",
+            "user.jane",
+            &membership,
+            Some("approve membership request"),
+        )
+        .await
+        .expect_err("request should fail");
+    let message = format!("{err}");
+    assert!(message.contains("500"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/group/devs/member/user.jane/decision"
+    );
+    assert!(
+        req.query.is_empty(),
+        "unexpected query params: {:?}",
+        req.query
+    );
+
+    let response = empty_response("500 Internal Server Error");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let err = client
+        .delete_pending_group_membership(
+            "sports",
+            "devs",
+            "user.jane",
+            Some("remove pending request"),
+        )
+        .await
+        .expect_err("request should fail");
+    let message = format!("{err}");
+    assert!(message.contains("500"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(
+        req.path,
+        "/zms/v1/domain/sports/group/devs/pendingmember/user.jane"
+    );
+    assert!(
+        req.query.is_empty(),
+        "unexpected query params: {:?}",
+        req.query
+    );
 }
 
 #[tokio::test]

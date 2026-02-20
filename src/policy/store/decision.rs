@@ -6,6 +6,7 @@ pub enum PolicyDecision {
     DenyDomainMismatch,
     DenyDomainNotFound,
     DenyDomainEmpty,
+    DenyRoleTokenInvalid,
     DenyInvalidParameters,
 }
 

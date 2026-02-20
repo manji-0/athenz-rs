@@ -454,6 +454,158 @@ async fn put_domain_ownership_calls_domain_ownership_endpoint() {
 }
 
 #[tokio::test]
+async fn get_domain_auth_history_calls_auth_history_endpoint() {
+    let body = r#"{"incomingDependencies":[{"uriDomain":"sports","principalDomain":"user","principalName":"jane","timestamp":"2026-02-21T00:00:00Z","endpoint":"/zms/v1/access","ttl":123}],"outgoingDependencies":[]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let history = client
+        .get_domain_auth_history("sports")
+        .await
+        .expect("domain auth history");
+    assert_eq!(history.incoming_dependencies.len(), 1);
+    assert_eq!(
+        history.incoming_dependencies[0].principal_name.as_deref(),
+        Some("jane")
+    );
+    assert_eq!(history.incoming_dependencies[0].ttl, 123);
+    assert!(history.outgoing_dependencies.is_empty());
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/history/auth");
+}
+
+#[tokio::test]
+async fn get_domain_auth_history_reports_server_error() {
+    let response = empty_response("500 Internal Server Error");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let err = client
+        .get_domain_auth_history("sports")
+        .await
+        .expect_err("request should fail");
+    assert!(format!("{err}").contains("500"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/history/auth");
+    assert!(
+        req.query.is_empty(),
+        "unexpected query params: {:?}",
+        req.query
+    );
+}
+
+#[tokio::test]
+async fn delete_expired_members_calls_endpoint_and_returns_entries() {
+    let body = r#"{"expiredRoleMembers":[{"domainName":"sports","collectionName":"sports:role.reader","principalName":"user.jane","expiration":"2026-02-01T00:00:00Z"}],"expiredGroupMembers":[{"domainName":"sports","collectionName":"sports:group.devs","principalName":"user.john","expiration":"2026-02-02T00:00:00Z"}]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let result = client
+        .delete_expired_members(Some(3), Some("purge expired members"), Some(true))
+        .await
+        .expect("delete expired members");
+    let result = result.expect("expired members response");
+    assert_eq!(result.expired_role_members.len(), 1);
+    assert_eq!(result.expired_group_members.len(), 1);
+    assert_eq!(result.expired_role_members[0].principal_name, "user.jane");
+    assert_eq!(result.expired_group_members[0].principal_name, "user.john");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/expired-members");
+    assert_eq!(req.query_value("purgeResources"), Some("3"));
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("purge expired members")
+    );
+    assert_eq!(req.header_value("Athenz-Return-Object"), Some("true"));
+}
+
+#[tokio::test]
+async fn delete_expired_members_reports_server_error() {
+    let response = empty_response("500 Internal Server Error");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let err = client
+        .delete_expired_members(Some(3), Some("purge expired members"), Some(true))
+        .await
+        .expect_err("request should fail");
+    assert!(format!("{err}").contains("500"));
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/expired-members");
+    assert_eq!(req.query_value("purgeResources"), Some("3"));
+    assert_eq!(
+        req.header_value("Y-Audit-Ref"),
+        Some("purge expired members")
+    );
+    assert_eq!(req.header_value("Athenz-Return-Object"), Some("true"));
+}
+
+#[tokio::test]
+async fn delete_expired_members_accepts_no_content_response() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let result = client
+        .delete_expired_members(None, None, None)
+        .await
+        .expect("delete expired members");
+    assert!(result.is_none());
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/expired-members");
+    assert_eq!(req.query_value("purgeResources"), None);
+    assert_eq!(req.header_value("Y-Audit-Ref"), None);
+    assert_eq!(req.header_value("Athenz-Return-Object"), None);
+}
+
+#[tokio::test]
 async fn get_quota_calls_domain_quota_endpoint() {
     let body = r#"{"name":"sports","subdomain":1,"role":2,"roleMember":3,"policy":4,"assertion":5,"entity":6,"service":7,"serviceHost":8,"publicKey":9,"group":10,"groupMember":11,"modified":"2026-02-10T00:00:00Z"}"#;
     let response = json_response("200 OK", body);

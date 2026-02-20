@@ -32,8 +32,9 @@ pub use dependency::{
     DependentService, DependentServiceResourceGroup, DependentServiceResourceGroupList,
 };
 pub use domain::{
-    Domain, DomainList, DomainMeta, DomainMetaStoreValidValuesList, DomainMetric, DomainMetricType,
-    DomainMetrics, ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,
+    AuthHistory, AuthHistoryDependencies, Domain, DomainList, DomainMeta,
+    DomainMetaStoreValidValuesList, DomainMetric, DomainMetricType, DomainMetrics, ExpiredMembers,
+    ExpiryMember, ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,
 };
 pub use domain_data_check::{DanglingPolicy, DomainDataCheck};
 pub use entity::{Entity, EntityList};

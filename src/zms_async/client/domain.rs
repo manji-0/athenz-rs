@@ -1,8 +1,9 @@
 use super::ZmsAsyncClient;
 use crate::error::Error;
 use crate::models::{
-    Domain, DomainDataCheck, DomainList, DomainMeta, DomainMetaStoreValidValuesList,
-    ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,
+    AuthHistoryDependencies, Domain, DomainDataCheck, DomainList, DomainMeta,
+    DomainMetaStoreValidValuesList, ExpiredMembers, ResourceDomainOwnership, SubDomain,
+    TopLevelDomain, UserDomain,
 };
 use crate::zms::common;
 use crate::zms::DomainListOptions;
@@ -188,6 +189,41 @@ impl ZmsAsyncClient {
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
+    }
+
+    /// Retrieves authorization/token dependency history for a domain.
+    pub async fn get_domain_auth_history(
+        &self,
+        domain_name: &str,
+    ) -> Result<AuthHistoryDependencies, Error> {
+        let url = self.build_url(&["domain", domain_name, "history", "auth"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send().await?;
+        self.expect_ok_json(resp).await
+    }
+
+    /// Deletes expired members and optionally returns deleted entries.
+    pub async fn delete_expired_members(
+        &self,
+        purge_resources: Option<i32>,
+        audit_ref: Option<&str>,
+        return_obj: Option<bool>,
+    ) -> Result<Option<ExpiredMembers>, Error> {
+        let url = self.build_url(&["expired-members"])?;
+        let mut req = self.http.delete(url);
+        let mut query = Vec::new();
+        if let Some(purge_resources) = purge_resources {
+            query.push(("purgeResources", purge_resources.to_string()));
+        }
+        req = common::apply_query_params(req, query);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        if let Some(return_obj) = return_obj {
+            req = req.header("Athenz-Return-Object", return_obj.to_string());
+        }
+        let resp = req.send().await?;
+        self.expect_no_content_or_json(resp).await
     }
 
     /// Sets resource ownership for a domain.

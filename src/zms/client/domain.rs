@@ -1,8 +1,9 @@
 use super::ZmsClient;
 use crate::error::Error;
 use crate::models::{
-    Domain, DomainDataCheck, DomainList, DomainMeta, DomainMetaStoreValidValuesList,
-    ResourceDomainOwnership, SubDomain, TopLevelDomain, UserDomain,
+    AuthHistoryDependencies, Domain, DomainDataCheck, DomainList, DomainMeta,
+    DomainMetaStoreValidValuesList, ExpiredMembers, ResourceDomainOwnership, SubDomain,
+    TopLevelDomain, UserDomain,
 };
 use crate::zms::common;
 use crate::zms::DomainListOptions;
@@ -188,6 +189,41 @@ impl ZmsClient {
         req = self.apply_auth(req)?;
         let resp = req.send()?;
         self.expect_ok_json(resp)
+    }
+
+    /// Retrieves authorization/token dependency history for a domain.
+    pub fn get_domain_auth_history(
+        &self,
+        domain_name: &str,
+    ) -> Result<AuthHistoryDependencies, Error> {
+        let url = self.build_url(&["domain", domain_name, "history", "auth"])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Deletes expired members and optionally returns deleted entries.
+    pub fn delete_expired_members(
+        &self,
+        purge_resources: Option<i32>,
+        audit_ref: Option<&str>,
+        return_obj: Option<bool>,
+    ) -> Result<Option<ExpiredMembers>, Error> {
+        let url = self.build_url(&["expired-members"])?;
+        let mut req = self.http.delete(url);
+        let mut query = Vec::new();
+        if let Some(purge_resources) = purge_resources {
+            query.push(("purgeResources", purge_resources.to_string()));
+        }
+        req = common::apply_query_params(req, query);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, None);
+        if let Some(return_obj) = return_obj {
+            req = req.header("Athenz-Return-Object", return_obj.to_string());
+        }
+        let resp = req.send()?;
+        self.expect_no_content_or_json(resp)
     }
 
     /// Sets resource ownership for a domain.

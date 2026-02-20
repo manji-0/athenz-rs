@@ -151,6 +151,45 @@ pub struct DomainMetaStoreValidValuesList {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AuthHistory {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uri_domain: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal_domain: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub principal_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+    pub ttl: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthHistoryDependencies {
+    pub incoming_dependencies: Vec<AuthHistory>,
+    pub outgoing_dependencies: Vec<AuthHistory>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExpiryMember {
+    pub domain_name: String,
+    pub collection_name: String,
+    pub principal_name: String,
+    pub expiration: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExpiredMembers {
+    pub expired_role_members: Vec<ExpiryMember>,
+    pub expired_group_members: Vec<ExpiryMember>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TopLevelDomain {
     pub name: String,
     pub admin_users: Vec<String>,

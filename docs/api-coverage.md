@@ -35,6 +35,8 @@ If you add new endpoints, update this list.
   - Get/update/delete domain quota (`/domain/{name}/quota`)
   - Update domain system meta (`/domain/{name}/meta/system/{attribute}`)
   - Get domain metastore valid values (`/domain/metastore?attribute=&user=`)
+  - Get domain auth/token history dependencies (`/domain/{name}/history/auth`)
+  - Delete expired role/group members (`/expired-members?purgeResources=`)
   - Set domain ownership (`/domain/{name}/ownership`)
   - Create top-level, sub-, and user domains
   - Delete top-level, sub-, and user domains

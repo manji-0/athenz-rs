@@ -1,11 +1,11 @@
 use super::ZmsAsyncClient;
 use crate::error::Error;
 use crate::models::{
-    PublicKeyEntry, ResourceServiceIdentityOwnership, ServiceIdentities, ServiceIdentity,
-    ServiceIdentityList, ServiceIdentitySystemMeta,
+    CredsEntry, PublicKeyEntry, ResourceServiceIdentityOwnership, ServiceIdentities,
+    ServiceIdentity, ServiceIdentityList, ServiceIdentitySystemMeta,
 };
 use crate::zms::common;
-use crate::zms::{ServiceIdentitiesQueryOptions, ServiceListOptions};
+use crate::zms::{ServiceIdentitiesQueryOptions, ServiceListOptions, ServiceSearchOptions};
 
 impl ZmsAsyncClient {
     /// Retrieves a service identity.
@@ -121,6 +121,20 @@ impl ZmsAsyncClient {
         self.expect_ok_json(resp).await
     }
 
+    /// Searches services across domains by service name.
+    pub async fn search_service_identities(
+        &self,
+        service_name: &str,
+        options: &ServiceSearchOptions,
+    ) -> Result<ServiceIdentities, Error> {
+        let url = self.build_url(&["service", service_name])?;
+        let mut req = self.http.get(url);
+        req = common::apply_query_params(req, options.to_query_pairs());
+        req = self.apply_auth(req)?;
+        let resp = req.send().await?;
+        self.expect_ok_json(resp).await
+    }
+
     /// Retrieves a public key entry for a service.
     pub async fn get_public_key_entry(
         &self,
@@ -164,6 +178,23 @@ impl ZmsAsyncClient {
     ) -> Result<(), Error> {
         let url = self.build_url(&["domain", domain, "service", service, "publickey", key_id])?;
         let mut req = self.http.delete(url);
+        req = self.apply_auth(req)?;
+        req = common::apply_audit_headers(req, audit_ref, resource_owner);
+        let resp = req.send().await?;
+        self.expect_no_content(resp).await
+    }
+
+    /// Creates or updates credentials for a service.
+    pub async fn put_service_creds_entry(
+        &self,
+        domain: &str,
+        service: &str,
+        cred_entry: &CredsEntry,
+        audit_ref: Option<&str>,
+        resource_owner: Option<&str>,
+    ) -> Result<(), Error> {
+        let url = self.build_url(&["domain", domain, "service", service, "creds"])?;
+        let mut req = self.http.put(url).json(cred_entry);
         req = self.apply_auth(req)?;
         req = common::apply_audit_headers(req, audit_ref, resource_owner);
         let resp = req.send().await?;

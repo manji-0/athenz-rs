@@ -30,7 +30,7 @@ pub use jwt::{JwksProviderAsync, JwtValidatorAsync};
 pub use models::{
     AWSTemporaryCredentials, Access, AccessTokenResponse, Assertion, AssertionCondition,
     AssertionConditionData, AssertionConditionOperator, AssertionConditions, AssertionEffect,
-    AthenzJwkConfig, CertificateAuthorityBundle, DanglingPolicy, DependentService,
+    AthenzJwkConfig, CertificateAuthorityBundle, CredsEntry, DanglingPolicy, DependentService,
     DependentServiceResourceGroup, DependentServiceResourceGroupList, Domain, DomainData,
     DomainDataCheck, DomainGroupMember, DomainGroupMembers, DomainGroupMembership, DomainList,
     DomainMeta, DomainMetaStoreValidValuesList, DomainMetric, DomainMetricType, DomainMetrics,
@@ -80,8 +80,8 @@ pub use policy::{
 pub use zms::{
     DomainListOptions, GroupGetOptions, GroupsQueryOptions, PoliciesQueryOptions,
     PolicyListOptions, RoleGetOptions, RoleListOptions, RolesQueryOptions,
-    ServiceIdentitiesQueryOptions, ServiceListOptions, SignedDomainsOptions, ZmsClient,
-    ZmsClientBuilder,
+    ServiceIdentitiesQueryOptions, ServiceListOptions, ServiceSearchOptions, SignedDomainsOptions,
+    ZmsClient, ZmsClientBuilder,
 };
 #[cfg(feature = "async-client")]
 pub use zms_async::{ZmsAsyncClient, ZmsAsyncClientBuilder};

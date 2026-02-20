@@ -1,12 +1,12 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
-    DependentService, DomainMeta, Entity, GroupMembership, GroupMeta, PolicyOptions,
+    CredsEntry, DependentService, DomainMeta, Entity, GroupMembership, GroupMeta, PolicyOptions,
     PrincipalState, ProviderResourceGroupRoles, Quota, ResourceDomainOwnership,
     ResourceGroupOwnership, ResourcePolicyOwnership, ResourceRoleOwnership,
     ResourceServiceIdentityOwnership, RoleMeta, ServiceIdentitySystemMeta, Tenancy,
     TenantResourceGroupRoles, TenantRoleAction,
 };
-use crate::zms::{DomainListOptions, SignedDomainsOptions, ZmsClient};
+use crate::zms::{DomainListOptions, ServiceSearchOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -2972,6 +2972,136 @@ where
     );
 
     handle.join().expect("server");
+}
+
+#[test]
+fn search_service_identities_calls_search_endpoint() {
+    let body =
+        r#"{"list":[{"name":"sports.api","description":"api service"}],"serviceMatchCount":1}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = ServiceSearchOptions {
+        substring_match: Some(true),
+        domain_filter: Some("sports".to_string()),
+    };
+    let result = client
+        .search_service_identities("api", &options)
+        .expect("service search");
+    assert_eq!(result.list.len(), 1);
+    assert_eq!(result.list[0].name, "sports.api");
+    assert_eq!(result.service_match_count, Some(1));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/service/api");
+    assert_eq!(
+        req.query.get("substringMatch").map(String::as_str),
+        Some("true")
+    );
+    assert_eq!(
+        req.query.get("domainFilter").map(String::as_str),
+        Some("sports")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn search_service_identities_propagates_server_errors() {
+    let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = ServiceSearchOptions {
+        substring_match: Some(true),
+        domain_filter: Some("sports".to_string()),
+    };
+    let err = client
+        .search_service_identities("api", &options)
+        .expect_err("request should fail");
+    assert!(format!("{err}").contains("500"));
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/service/api");
+    assert_eq!(
+        req.query.get("substringMatch").map(String::as_str),
+        Some("true")
+    );
+    assert_eq!(
+        req.query.get("domainFilter").map(String::as_str),
+        Some("sports")
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_service_creds_entry_calls_service_creds_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let creds = CredsEntry {
+        value: Some("super-secret".to_string()),
+    };
+    client
+        .put_service_creds_entry(
+            "sports",
+            "api",
+            &creds,
+            Some("update service creds"),
+            Some("sports.owner"),
+        )
+        .expect("put service creds entry");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/service/api/creds");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("update service creds")
+    );
+    assert_eq!(
+        req.headers.get("athenz-resource-owner").map(String::as_str),
+        Some("sports.owner")
+    );
+    let body_json: serde_json::Value =
+        serde_json::from_slice(&req.body).expect("request body should be valid JSON");
+    assert_eq!(body_json, json!({ "value": "super-secret" }));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn put_service_creds_entry_propagates_server_errors() {
+    assert_sync_error_request("PUT", "/zms/v1/domain/sports/service/api/creds", |client| {
+        let creds = CredsEntry {
+            value: Some("super-secret".to_string()),
+        };
+        client.put_service_creds_entry(
+            "sports",
+            "api",
+            &creds,
+            Some("update service creds"),
+            Some("sports.owner"),
+        )
+    });
 }
 
 #[test]

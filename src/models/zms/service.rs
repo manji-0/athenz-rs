@@ -16,6 +16,13 @@ pub struct ResourceServiceIdentityOwnership {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct CredsEntry {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct ServiceIdentitySystemMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub provider_endpoint: Option<String>,

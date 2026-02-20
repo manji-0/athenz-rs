@@ -6,5 +6,5 @@ pub use client::{ZmsClient, ZmsClientBuilder};
 pub use options::{
     DomainListOptions, GroupGetOptions, GroupsQueryOptions, PoliciesQueryOptions,
     PolicyListOptions, RoleGetOptions, RoleListOptions, RolesQueryOptions,
-    ServiceIdentitiesQueryOptions, ServiceListOptions, SignedDomainsOptions,
+    ServiceIdentitiesQueryOptions, ServiceListOptions, ServiceSearchOptions, SignedDomainsOptions,
 };

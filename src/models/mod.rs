@@ -11,7 +11,7 @@ pub use policy::{
 };
 pub use zms::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
-    AssertionConditions, AssertionEffect, DanglingPolicy, DependentService,
+    AssertionConditions, AssertionEffect, CredsEntry, DanglingPolicy, DependentService,
     DependentServiceResourceGroup, DependentServiceResourceGroupList, Domain, DomainData,
     DomainDataCheck, DomainGroupMember, DomainGroupMembers, DomainGroupMembership, DomainList,
     DomainMeta, DomainMetaStoreValidValuesList, DomainMetric, DomainMetricType, DomainMetrics,

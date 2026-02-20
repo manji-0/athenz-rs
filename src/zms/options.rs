@@ -224,6 +224,25 @@ impl ServiceIdentitiesQueryOptions {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct ServiceSearchOptions {
+    pub substring_match: Option<bool>,
+    pub domain_filter: Option<String>,
+}
+
+impl ServiceSearchOptions {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+        let mut pairs = Vec::new();
+        if let Some(substring_match) = self.substring_match {
+            pairs.push(("substringMatch", substring_match.to_string()));
+        }
+        if let Some(ref domain_filter) = self.domain_filter {
+            pairs.push(("domainFilter", domain_filter.clone()));
+        }
+        pairs
+    }
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct GroupsQueryOptions {
     pub members: Option<bool>,
     pub tag_key: Option<String>,

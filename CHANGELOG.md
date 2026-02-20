@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 - Docs: reorganized README and added core documentation guides
 - Docs: added async-client/async-validate README examples and feature notes
+- Docs: added onboarding and operations handover guides
 - Test: added tokio-based async HTTP path tests for async clients/validation
 - Feat: added ZMS tenancy endpoints and tenancy role models
 - Metadata: set MSRV to 1.88

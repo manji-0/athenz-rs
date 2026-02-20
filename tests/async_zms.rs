@@ -2,10 +2,11 @@
 
 use athenz_rs::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
-    AssertionConditions, CredsEntry, DependentService, DomainListOptions, DomainMeta, Entity,
-    GroupMembership, GroupMeta, NTokenSigner, PrincipalState, ProviderResourceGroupRoles, Quota,
-    ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership, ServiceSearchOptions,
-    SignedDomainsOptions, Tenancy, TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
+    AssertionConditions, CredsEntry, DependentService, DomainListOptions, DomainMeta,
+    DomainTemplate, Entity, GroupMembership, GroupMeta, NTokenSigner, PrincipalState,
+    ProviderResourceGroupRoles, Quota, ResourceDomainOwnership, ResourceGroupOwnership,
+    ResourcePolicyOwnership, ServiceSearchOptions, SignedDomainsOptions, TemplateParam, Tenancy,
+    TenantResourceGroupRoles, TenantRoleAction, ZmsAsyncClient,
 };
 use rand::thread_rng;
 use rsa::pkcs1::EncodeRsaPrivateKey;
@@ -1727,6 +1728,122 @@ async fn template_get_template_calls_endpoint() {
         .expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/template/base");
+}
+
+#[tokio::test]
+async fn template_put_domain_template_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let domain_template = DomainTemplate {
+        template_names: vec!["base".to_string(), "tenant".to_string()],
+        params: Some(vec![TemplateParam {
+            name: "service".to_string(),
+            value: "api".to_string(),
+        }]),
+    };
+    client
+        .put_domain_template("sports", &domain_template, Some("apply templates"))
+        .await
+        .expect("put domain template");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/template");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("apply templates"));
+    assert_eq!(
+        req.body,
+        br#"{"templateNames":["base","tenant"],"params":[{"name":"service","value":"api"}]}"#
+    );
+}
+
+#[tokio::test]
+async fn template_put_domain_template_ext_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let domain_template = DomainTemplate {
+        template_names: vec!["base".to_string()],
+        params: None,
+    };
+    client
+        .put_domain_template_ext("sports", "base", &domain_template, Some("apply template"))
+        .await
+        .expect("put domain template ext");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/template/base");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("apply template"));
+    assert_eq!(req.body, br#"{"templateNames":["base"]}"#);
+}
+
+#[tokio::test]
+async fn template_get_domain_template_list_calls_endpoint() {
+    let body = r#"{"templateNames":["base","tenant"]}"#;
+    let response = json_response("200 OK", body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let templates = client
+        .get_domain_template_list("sports")
+        .await
+        .expect("domain template list");
+    assert_eq!(
+        templates.template_names,
+        vec!["base".to_string(), "tenant".to_string()]
+    );
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/template");
+}
+
+#[tokio::test]
+async fn template_delete_domain_template_calls_endpoint() {
+    let response = empty_response("204 No Content");
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZmsAsyncClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_domain_template("sports", "base", Some("remove template"))
+        .await
+        .expect("delete domain template");
+
+    let req = timeout(Duration::from_secs(1), rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/domain/sports/template/base");
+    assert_eq!(req.header_value("Y-Audit-Ref"), Some("remove template"));
 }
 
 #[tokio::test]

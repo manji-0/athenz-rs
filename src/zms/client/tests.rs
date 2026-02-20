@@ -1,11 +1,11 @@
 use crate::error::{Error, CONFIG_ERROR_REDIRECT_WITH_AUTH};
 use crate::models::{
     Assertion, AssertionCondition, AssertionConditionData, AssertionConditionOperator,
-    AssertionConditions, CredsEntry, DependentService, DomainMeta, Entity, GroupMembership,
-    GroupMeta, PolicyOptions, PrincipalState, ProviderResourceGroupRoles, Quota,
+    AssertionConditions, CredsEntry, DependentService, DomainMeta, DomainTemplate, Entity,
+    GroupMembership, GroupMeta, PolicyOptions, PrincipalState, ProviderResourceGroupRoles, Quota,
     ResourceDomainOwnership, ResourceGroupOwnership, ResourcePolicyOwnership,
     ResourceRoleOwnership, ResourceServiceIdentityOwnership, RoleMeta, ServiceIdentitySystemMeta,
-    Tenancy, TenantResourceGroupRoles, TenantRoleAction,
+    TemplateParam, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
 };
 use crate::zms::{DomainListOptions, ServiceSearchOptions, SignedDomainsOptions, ZmsClient};
 use serde_json::json;
@@ -1650,6 +1650,123 @@ fn template_get_template_calls_endpoint() {
     let req = rx.recv().expect("request");
     assert_eq!(req.method, "GET");
     assert_eq!(req.path, "/zms/v1/template/base");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn template_put_domain_template_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let domain_template = DomainTemplate {
+        template_names: vec!["base".to_string(), "tenant".to_string()],
+        params: Some(vec![TemplateParam {
+            name: "service".to_string(),
+            value: "api".to_string(),
+        }]),
+    };
+    client
+        .put_domain_template("sports", &domain_template, Some("apply templates"))
+        .expect("put domain template");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/template");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("apply templates")
+    );
+    assert_eq!(
+        req.body,
+        br#"{"templateNames":["base","tenant"],"params":[{"name":"service","value":"api"}]}"#
+    );
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn template_put_domain_template_ext_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let domain_template = DomainTemplate {
+        template_names: vec!["base".to_string()],
+        params: None,
+    };
+    client
+        .put_domain_template_ext("sports", "base", &domain_template, Some("apply template"))
+        .expect("put domain template ext");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "PUT");
+    assert_eq!(req.path, "/zms/v1/domain/sports/template/base");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("apply template")
+    );
+    assert_eq!(req.body, br#"{"templateNames":["base"]}"#);
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn template_get_domain_template_list_calls_endpoint() {
+    let body = r#"{"templateNames":["base","tenant"]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let templates = client
+        .get_domain_template_list("sports")
+        .expect("domain template list");
+    assert_eq!(
+        templates.template_names,
+        vec!["base".to_string(), "tenant".to_string()]
+    );
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/domain/sports/template");
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn template_delete_domain_template_calls_endpoint() {
+    let response = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\n\r\n".to_string();
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    client
+        .delete_domain_template("sports", "base", Some("remove template"))
+        .expect("delete domain template");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "DELETE");
+    assert_eq!(req.path, "/zms/v1/domain/sports/template/base");
+    assert_eq!(
+        req.headers.get("y-audit-ref").map(String::as_str),
+        Some("remove template")
+    );
 
     handle.join().expect("server");
 }

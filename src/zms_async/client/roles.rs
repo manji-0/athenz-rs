@@ -5,7 +5,7 @@ use crate::models::{
     RoleMeta, Roles,
 };
 use crate::zms::common;
-use crate::zms::{RoleGetOptions, RoleListOptions, RolesQueryOptions};
+use crate::zms::{PrincipalRolesOptions, RoleGetOptions, RoleListOptions, RolesQueryOptions};
 
 impl ZmsAsyncClient {
     /// Lists role names within a domain.
@@ -177,19 +177,22 @@ impl ZmsAsyncClient {
         domain: Option<&str>,
         expand: Option<bool>,
     ) -> Result<DomainRoleMember, Error> {
+        let options = PrincipalRolesOptions {
+            principal: principal.map(str::to_owned),
+            domain: domain.map(str::to_owned),
+            expand,
+        };
+        self.get_principal_roles_with_options(&options).await
+    }
+
+    /// Lists roles for a principal across domains using query options.
+    pub async fn get_principal_roles_with_options(
+        &self,
+        options: &PrincipalRolesOptions,
+    ) -> Result<DomainRoleMember, Error> {
         let url = self.build_url(&["role"])?;
         let mut req = self.http.get(url);
-        let mut query = Vec::new();
-        if let Some(principal) = principal {
-            query.push(("principal", principal.to_string()));
-        }
-        if let Some(domain) = domain {
-            query.push(("domain", domain.to_string()));
-        }
-        if let Some(expand) = expand {
-            query.push(("expand", expand.to_string()));
-        }
-        req = common::apply_query_params(req, query);
+        req = common::apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await

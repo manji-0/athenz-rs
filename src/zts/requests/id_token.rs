@@ -38,6 +38,16 @@ impl IdTokenRequest {
         }
     }
 
+    /// Returns a builder for ID token requests.
+    pub fn builder(
+        client_id: impl Into<String>,
+        redirect_uri: impl Into<String>,
+        scope: impl Into<String>,
+        nonce: impl Into<String>,
+    ) -> IdTokenRequestBuilder {
+        IdTokenRequestBuilder::new(client_id, redirect_uri, scope, nonce)
+    }
+
     /// Serializes the request into a URL query string.
     pub fn to_query(&self) -> String {
         let mut params = url::form_urlencoded::Serializer::new(String::new());
@@ -68,6 +78,73 @@ impl IdTokenRequest {
             params.append_pair("allScopePresent", &all_scope.to_string());
         }
         params.finish()
+    }
+}
+
+#[derive(Debug, Clone)]
+/// Builder for constructing [`IdTokenRequest`] values.
+pub struct IdTokenRequestBuilder {
+    request: IdTokenRequest,
+}
+
+impl IdTokenRequestBuilder {
+    /// Creates a builder with required ID token request fields.
+    pub fn new(
+        client_id: impl Into<String>,
+        redirect_uri: impl Into<String>,
+        scope: impl Into<String>,
+        nonce: impl Into<String>,
+    ) -> Self {
+        Self {
+            request: IdTokenRequest::new(client_id, redirect_uri, scope, nonce),
+        }
+    }
+
+    /// Sets the optional OAuth state.
+    pub fn state(mut self, state: impl Into<String>) -> Self {
+        self.request.state = Some(state.into());
+        self
+    }
+
+    /// Sets the key type for token signing.
+    pub fn key_type(mut self, key_type: impl Into<String>) -> Self {
+        self.request.key_type = Some(key_type.into());
+        self
+    }
+
+    /// Sets whether full ARN should be included.
+    pub fn full_arn(mut self, full_arn: bool) -> Self {
+        self.request.full_arn = Some(full_arn);
+        self
+    }
+
+    /// Sets token expiry time in seconds.
+    pub fn expiry_time(mut self, expiry_time: i32) -> Self {
+        self.request.expiry_time = Some(expiry_time);
+        self
+    }
+
+    /// Sets output mode.
+    pub fn output(mut self, output: impl Into<String>) -> Self {
+        self.request.output = Some(output.into());
+        self
+    }
+
+    /// Sets whether role should be included in audience claim.
+    pub fn role_in_aud_claim(mut self, role_in_aud_claim: bool) -> Self {
+        self.request.role_in_aud_claim = Some(role_in_aud_claim);
+        self
+    }
+
+    /// Sets all-scope-present behavior.
+    pub fn all_scope_present(mut self, all_scope_present: bool) -> Self {
+        self.request.all_scope_present = Some(all_scope_present);
+        self
+    }
+
+    /// Finalizes and returns the ID token request.
+    pub fn build(self) -> IdTokenRequest {
+        self.request
     }
 }
 

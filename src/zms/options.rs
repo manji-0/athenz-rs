@@ -314,3 +314,64 @@ impl SignedDomainsOptions {
         pairs
     }
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct PrincipalGroupsOptions {
+    pub principal: Option<String>,
+    pub domain: Option<String>,
+}
+
+impl PrincipalGroupsOptions {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+        let mut pairs = Vec::new();
+        if let Some(ref principal) = self.principal {
+            pairs.push(("principal", principal.clone()));
+        }
+        if let Some(ref domain) = self.domain {
+            pairs.push(("domain", domain.clone()));
+        }
+        pairs
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PrincipalRolesOptions {
+    pub principal: Option<String>,
+    pub domain: Option<String>,
+    pub expand: Option<bool>,
+}
+
+impl PrincipalRolesOptions {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+        let mut pairs = Vec::new();
+        if let Some(ref principal) = self.principal {
+            pairs.push(("principal", principal.clone()));
+        }
+        if let Some(ref domain) = self.domain {
+            pairs.push(("domain", domain.clone()));
+        }
+        if let Some(expand) = self.expand {
+            pairs.push(("expand", expand.to_string()));
+        }
+        pairs
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PendingMembershipOptions {
+    pub principal: Option<String>,
+    pub domain: Option<String>,
+}
+
+impl PendingMembershipOptions {
+    pub(crate) fn to_query_pairs(&self) -> Vec<(&'static str, String)> {
+        let mut pairs = Vec::new();
+        if let Some(ref principal) = self.principal {
+            pairs.push(("principal", principal.clone()));
+        }
+        if let Some(ref domain) = self.domain {
+            pairs.push(("domain", domain.clone()));
+        }
+        pairs
+    }
+}

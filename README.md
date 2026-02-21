@@ -57,7 +57,7 @@ let req = AccessTokenRequest::builder("sports")
     .roles(["reader"])
     .build();
 let token = client.issue_access_token(&req)?;
-println!("{}", token.access_token);
+println!("{}", token.access_token.as_deref().unwrap_or("<missing>"));
 # Ok(())
 # }
 ```
@@ -89,7 +89,7 @@ let req = AccessTokenRequest::builder("sports")
     .roles(["reader"])
     .build();
 let token = client.issue_access_token(&req).await?;
-println!("{}", token.access_token);
+println!("{}", token.access_token.as_deref().unwrap_or("<missing>"));
 # Ok(())
 # }
 ```

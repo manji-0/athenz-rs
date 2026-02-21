@@ -15,6 +15,7 @@ If you add new endpoints, update this list.
 - Instance provider confirmation: post instance confirmation, post refresh confirmation
 - Certificate authority: fetch CA bundle
 - SSH certificates: post SSH certificate request
+- User certificates: post user certificate request
 - Workloads / host mapping: query by service or IP, enumerate host services
 - Tenancy lookup: list tenant domains for provider/user
 - Transport rules: fetch transport rules

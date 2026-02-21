@@ -53,8 +53,9 @@ pub use models::{
     SignedPolicies, SignedPolicyData, SignedPolicyRequest, Stats, Status, SubDomain, Template,
     TemplateMeta, TemplateParam, Tenancy, TenantDomains, TenantResourceGroupRoles,
     TenantRoleAction, TopLevelDomain, TransportDirection, TransportRule, TransportRules, User,
-    UserAuthorityAttributeMap, UserAuthorityAttributes, UserDomain, UserList, UserToken, Workload,
-    Workloads, ZmsAccess, ZmsResourceAccess, ZmsResourceAccessList,
+    UserAuthorityAttributeMap, UserAuthorityAttributes, UserCertificate, UserCertificateRequest,
+    UserDomain, UserList, UserToken, Workload, Workloads, ZmsAccess, ZmsResourceAccess,
+    ZmsResourceAccessList,
 };
 
 #[cfg(feature = "async-validate")]

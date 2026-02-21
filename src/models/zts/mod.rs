@@ -12,6 +12,7 @@ mod role_token;
 mod ssh;
 mod tenant_domains;
 mod transport;
+mod user_cert;
 mod workload;
 
 pub use access::{Access, ResourceAccess};
@@ -34,4 +35,5 @@ pub use ssh::{
 };
 pub use tenant_domains::TenantDomains;
 pub use transport::{TransportDirection, TransportRule, TransportRules};
+pub use user_cert::{UserCertificate, UserCertificateRequest};
 pub use workload::{Workload, Workloads};

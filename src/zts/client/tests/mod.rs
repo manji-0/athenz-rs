@@ -1,9 +1,11 @@
 mod access_token;
+mod certs;
 mod helpers;
 mod host_services;
 mod id_token;
 mod instance;
 mod instance_provider;
+mod oauth;
 mod resource_access;
 mod role_access;
 mod role_token;

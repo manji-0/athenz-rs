@@ -121,6 +121,8 @@ pub struct DomainMeta {
     pub on_call: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_delete_tenant_assume_role_assertions: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_member_validator: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -66,7 +66,7 @@ pub use ntoken::{
 
 pub use zts::{
     AccessTokenRequest, AccessTokenRequestBuilder, ConditionalResponse, IdTokenRequest,
-    IdTokenResponse, ZtsClient, ZtsClientBuilder,
+    IdTokenRequestBuilder, IdTokenResponse, ZtsClient, ZtsClientBuilder,
 };
 #[cfg(feature = "async-client")]
 pub use zts_async::{ZtsAsyncClient, ZtsAsyncClientBuilder};
@@ -79,10 +79,10 @@ pub use policy::{
 };
 
 pub use zms::{
-    DomainListOptions, GroupGetOptions, GroupsQueryOptions, PoliciesQueryOptions,
-    PolicyListOptions, RoleGetOptions, RoleListOptions, RolesQueryOptions,
-    ServiceIdentitiesQueryOptions, ServiceListOptions, ServiceSearchOptions, SignedDomainsOptions,
-    ZmsClient, ZmsClientBuilder,
+    DomainListOptions, GroupGetOptions, GroupsQueryOptions, PendingMembershipOptions,
+    PoliciesQueryOptions, PolicyListOptions, PrincipalGroupsOptions, PrincipalRolesOptions,
+    RoleGetOptions, RoleListOptions, RolesQueryOptions, ServiceIdentitiesQueryOptions,
+    ServiceListOptions, ServiceSearchOptions, SignedDomainsOptions, ZmsClient, ZmsClientBuilder,
 };
 #[cfg(feature = "async-client")]
 pub use zms_async::{ZmsAsyncClient, ZmsAsyncClientBuilder};

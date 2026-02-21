@@ -14,6 +14,18 @@ fn build_url_trims_trailing_slash() {
 }
 
 #[test]
+fn build_url_clears_query_and_fragment() {
+    let client = ZtsClient::builder("https://example.com/zts/v1?foo=bar#frag")
+        .expect("builder")
+        .build()
+        .expect("build");
+    let url = client.build_url(&["domain"]).expect("url");
+    assert_eq!(url.path(), "/zts/v1/domain");
+    assert_eq!(url.query(), None);
+    assert_eq!(url.fragment(), None);
+}
+
+#[test]
 fn id_token_query_defaults_output_to_json() {
     let req = IdTokenRequest::new(
         "sports.api",
@@ -47,6 +59,33 @@ fn id_token_query_includes_optional_fields() {
     assert!(query.contains("redirect_uri=https%3A%2F%2Fexample.com%2Fcallback"));
     assert!(query.contains("scope=openid"));
     assert!(query.contains("nonce=nonce-123"));
+    assert!(query.contains("state=state-1"));
+    assert!(query.contains("keyType=EC"));
+    assert!(query.contains("fullArn=true"));
+    assert!(query.contains("expiryTime=3600"));
+    assert!(query.contains("output=json"));
+    assert!(query.contains("roleInAudClaim=true"));
+    assert!(query.contains("allScopePresent=true"));
+}
+
+#[test]
+fn id_token_builder_includes_optional_fields() {
+    let query = IdTokenRequest::builder(
+        "sports.api",
+        "https://example.com/callback",
+        "openid",
+        "nonce-123",
+    )
+    .state("state-1")
+    .key_type("EC")
+    .full_arn(true)
+    .expiry_time(3600)
+    .output("json")
+    .role_in_aud_claim(true)
+    .all_scope_present(true)
+    .build()
+    .to_query();
+    assert!(query.contains("response_type=id_token"));
     assert!(query.contains("state=state-1"));
     assert!(query.contains("keyType=EC"));
     assert!(query.contains("fullArn=true"));
@@ -122,6 +161,54 @@ fn auth_allows_redirects_disabled() {
         .ntoken_auth("Athenz-Principal-Auth", "token")
         .build()
         .expect("build");
+}
+
+#[test]
+fn auth_allows_follow_redirects_false() {
+    ZtsClient::builder("https://example.com/zts/v1")
+        .expect("builder")
+        .follow_redirects(false)
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .build()
+        .expect("build");
+}
+
+#[test]
+fn ntoken_auth_rejects_invalid_header_name() {
+    let err = match ZtsClient::builder("https://example.com/zts/v1")
+        .expect("builder")
+        .disable_redirect(true)
+        .ntoken_auth("bad header", "token")
+        .build()
+    {
+        Ok(_) => panic!("expected invalid header error"),
+        Err(err) => err,
+    };
+    match err {
+        Error::Crypto(message) => {
+            assert!(message.contains("config error: invalid header name"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn ntoken_auth_rejects_invalid_header_value() {
+    let err = match ZtsClient::builder("https://example.com/zts/v1")
+        .expect("builder")
+        .disable_redirect(true)
+        .ntoken_auth("Athenz-Principal-Auth", "bad\nvalue")
+        .build()
+    {
+        Ok(_) => panic!("expected invalid header error"),
+        Err(err) => err,
+    };
+    match err {
+        Error::Crypto(message) => {
+            assert!(message.contains("config error: invalid header value"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[test]

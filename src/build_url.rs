@@ -13,10 +13,13 @@ pub(crate) struct BuildUrlOptions {
 }
 
 impl BuildUrlOptions {
-    /// Preset for sync clients that need to trim an empty trailing segment.
+    /// Preset for sync clients.
+    ///
+    /// Sync and async clients should construct request URLs identically from the
+    /// provided base URL: drop query/fragment and trim a trailing empty segment.
     pub const SYNC_CLIENT: Self = Self {
-        clear_query: false,
-        clear_fragment: false,
+        clear_query: true,
+        clear_fragment: true,
         pop_if_empty: true,
     };
 

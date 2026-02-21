@@ -5,7 +5,7 @@ use crate::models::{
     ResourceGroupOwnership,
 };
 use crate::zms::common;
-use crate::zms::{GroupGetOptions, GroupsQueryOptions};
+use crate::zms::{GroupGetOptions, GroupsQueryOptions, PrincipalGroupsOptions};
 
 impl ZmsAsyncClient {
     /// Lists groups within a domain.
@@ -164,16 +164,21 @@ impl ZmsAsyncClient {
         principal: Option<&str>,
         domain: Option<&str>,
     ) -> Result<DomainGroupMember, Error> {
+        let options = PrincipalGroupsOptions {
+            principal: principal.map(str::to_owned),
+            domain: domain.map(str::to_owned),
+        };
+        self.get_principal_groups_with_options(&options).await
+    }
+
+    /// Lists groups for a principal across domains using query options.
+    pub async fn get_principal_groups_with_options(
+        &self,
+        options: &PrincipalGroupsOptions,
+    ) -> Result<DomainGroupMember, Error> {
         let url = self.build_url(&["group"])?;
         let mut req = self.http.get(url);
-        let mut query = Vec::new();
-        if let Some(principal) = principal {
-            query.push(("principal", principal.to_string()));
-        }
-        if let Some(domain) = domain {
-            query.push(("domain", domain.to_string()));
-        }
-        req = common::apply_query_params(req, query);
+        req = common::apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await

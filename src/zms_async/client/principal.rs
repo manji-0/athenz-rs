@@ -2,6 +2,7 @@ use super::ZmsAsyncClient;
 use crate::error::Error;
 use crate::models::{DomainGroupMembership, DomainRoleMembership, PrincipalState};
 use crate::zms::common;
+use crate::zms::PendingMembershipOptions;
 
 impl ZmsAsyncClient {
     /// Updates a principal state entry.
@@ -25,16 +26,21 @@ impl ZmsAsyncClient {
         principal: Option<&str>,
         domain: Option<&str>,
     ) -> Result<DomainRoleMembership, Error> {
+        let options = PendingMembershipOptions {
+            principal: principal.map(str::to_owned),
+            domain: domain.map(str::to_owned),
+        };
+        self.get_pending_members_with_options(&options).await
+    }
+
+    /// Lists pending role memberships using query options.
+    pub async fn get_pending_members_with_options(
+        &self,
+        options: &PendingMembershipOptions,
+    ) -> Result<DomainRoleMembership, Error> {
         let url = self.build_url(&["pending_members"])?;
         let mut req = self.http.get(url);
-        let mut query = Vec::new();
-        if let Some(principal) = principal {
-            query.push(("principal", principal.to_string()));
-        }
-        if let Some(domain) = domain {
-            query.push(("domain", domain.to_string()));
-        }
-        req = common::apply_query_params(req, query);
+        req = common::apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
@@ -46,16 +52,21 @@ impl ZmsAsyncClient {
         principal: Option<&str>,
         domain: Option<&str>,
     ) -> Result<DomainGroupMembership, Error> {
+        let options = PendingMembershipOptions {
+            principal: principal.map(str::to_owned),
+            domain: domain.map(str::to_owned),
+        };
+        self.get_pending_group_members_with_options(&options).await
+    }
+
+    /// Lists pending group memberships using query options.
+    pub async fn get_pending_group_members_with_options(
+        &self,
+        options: &PendingMembershipOptions,
+    ) -> Result<DomainGroupMembership, Error> {
         let url = self.build_url(&["pending_group_members"])?;
         let mut req = self.http.get(url);
-        let mut query = Vec::new();
-        if let Some(principal) = principal {
-            query.push(("principal", principal.to_string()));
-        }
-        if let Some(domain) = domain {
-            query.push(("domain", domain.to_string()));
-        }
-        req = common::apply_query_params(req, query);
+        req = common::apply_query_params(req, options.to_query_pairs());
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await

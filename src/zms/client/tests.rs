@@ -7,7 +7,10 @@ use crate::models::{
     ResourceRoleOwnership, ResourceServiceIdentityOwnership, RoleMeta, ServiceIdentitySystemMeta,
     TemplateParam, Tenancy, TenantResourceGroupRoles, TenantRoleAction,
 };
-use crate::zms::{DomainListOptions, ServiceSearchOptions, SignedDomainsOptions, ZmsClient};
+use crate::zms::{
+    DomainListOptions, PendingMembershipOptions, PrincipalGroupsOptions, PrincipalRolesOptions,
+    ServiceSearchOptions, SignedDomainsOptions, ZmsClient,
+};
 use serde_json::json;
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -2388,6 +2391,41 @@ fn get_principal_groups_with_domain_only_sets_domain_query_param() {
 }
 
 #[test]
+fn get_principal_groups_with_options_calls_group_endpoint() {
+    let body = r#"{"memberName":"user.jane","memberGroups":[{"memberName":"user.jane","groupName":"devs","domainName":"sports","active":true}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = PrincipalGroupsOptions {
+        principal: Some("user.jane".to_string()),
+        domain: Some("sports".to_string()),
+    };
+    let groups = client
+        .get_principal_groups_with_options(&options)
+        .expect("principal groups");
+    assert_eq!(groups.member_name, "user.jane");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/group");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn get_principal_roles_calls_role_endpoint() {
     let body = r#"{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader","domainName":"sports","memberName":"user.jane","active":true}]}"#;
     let response = format!(
@@ -2542,6 +2580,43 @@ fn get_principal_roles_with_expand_only_sets_expand_query_param() {
     assert!(req.query.get("principal").is_none());
     assert!(req.query.get("domain").is_none());
     assert_eq!(req.query.get("expand").map(String::as_str), Some("false"));
+
+    handle.join().expect("server");
+}
+
+#[test]
+fn get_principal_roles_with_options_calls_role_endpoint() {
+    let body = r#"{"memberName":"user.jane","memberRoles":[{"roleName":"sports:role.reader"}]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = PrincipalRolesOptions {
+        principal: Some("user.jane".to_string()),
+        domain: Some("sports".to_string()),
+        expand: Some(true),
+    };
+    let roles = client
+        .get_principal_roles_with_options(&options)
+        .expect("principal roles");
+    assert_eq!(roles.member_name, "user.jane");
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/role");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+    assert_eq!(req.query.get("expand").map(String::as_str), Some("true"));
 
     handle.join().expect("server");
 }
@@ -3538,6 +3613,41 @@ fn get_pending_group_members_calls_endpoint_with_query() {
 }
 
 #[test]
+fn get_pending_members_with_options_calls_endpoint_with_query() {
+    let body = r#"{"domainRoleMembersList":[]}"#;
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let (base_url, rx, handle) = serve_once(response);
+    let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
+        .expect("builder")
+        .build()
+        .expect("build");
+
+    let options = PendingMembershipOptions {
+        principal: Some("user.jane".to_string()),
+        domain: Some("sports".to_string()),
+    };
+    let memberships = client
+        .get_pending_members_with_options(&options)
+        .expect("pending role memberships");
+    assert!(memberships.domain_role_members_list.is_empty());
+
+    let req = rx.recv().expect("request");
+    assert_eq!(req.method, "GET");
+    assert_eq!(req.path, "/zms/v1/pending_members");
+    assert_eq!(
+        req.query.get("principal").map(String::as_str),
+        Some("user.jane")
+    );
+    assert_eq!(req.query.get("domain").map(String::as_str), Some("sports"));
+
+    handle.join().expect("server");
+}
+
+#[test]
 fn get_pending_members_with_principal_only_sets_principal_query_param() {
     let body = r#"{"domainRoleMembersList":[]}"#;
     let response = format!(
@@ -4512,6 +4622,18 @@ fn build_url_trims_trailing_slash() {
 }
 
 #[test]
+fn build_url_clears_query_and_fragment() {
+    let client = ZmsClient::builder("https://example.com/zms/v1?foo=bar#frag")
+        .expect("builder")
+        .build()
+        .expect("build");
+    let url = client.build_url(&["domain"]).expect("url");
+    assert_eq!(url.path(), "/zms/v1/domain");
+    assert_eq!(url.query(), None);
+    assert_eq!(url.fragment(), None);
+}
+
+#[test]
 fn auth_allows_redirects_disabled() {
     ZmsClient::builder("https://example.com/zms/v1")
         .expect("builder")
@@ -4519,6 +4641,54 @@ fn auth_allows_redirects_disabled() {
         .ntoken_auth("Athenz-Principal-Auth", "token")
         .build()
         .expect("build");
+}
+
+#[test]
+fn auth_allows_follow_redirects_false() {
+    ZmsClient::builder("https://example.com/zms/v1")
+        .expect("builder")
+        .follow_redirects(false)
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .build()
+        .expect("build");
+}
+
+#[test]
+fn ntoken_auth_rejects_invalid_header_name() {
+    let err = match ZmsClient::builder("https://example.com/zms/v1")
+        .expect("builder")
+        .disable_redirect(true)
+        .ntoken_auth("bad header", "token")
+        .build()
+    {
+        Ok(_) => panic!("expected invalid header name error"),
+        Err(err) => err,
+    };
+    match err {
+        Error::Crypto(message) => {
+            assert!(message.contains("config error: invalid header name"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn ntoken_auth_rejects_invalid_header_value() {
+    let err = match ZmsClient::builder("https://example.com/zms/v1")
+        .expect("builder")
+        .disable_redirect(true)
+        .ntoken_auth("Athenz-Principal-Auth", "bad\nvalue")
+        .build()
+    {
+        Ok(_) => panic!("expected invalid header value error"),
+        Err(err) => err,
+    };
+    match err {
+        Error::Crypto(message) => {
+            assert!(message.contains("config error: invalid header value"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 struct CapturedRequest {

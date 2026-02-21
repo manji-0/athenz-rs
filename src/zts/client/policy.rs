@@ -1,7 +1,7 @@
 use super::{ConditionalResponse, ZtsClient};
 use crate::error::Error;
 use crate::models::{
-    Access, DomainSignedPolicyData, JWSPolicyData, ResourceAccess, SignedPolicyRequest,
+    Access, DomainSignedPolicyData, JWSPolicyData, ResourceAccess, RoleAccess, SignedPolicyRequest,
 };
 use crate::zts::common;
 
@@ -22,6 +22,19 @@ impl ZtsClient {
             "principal",
             principal,
         ])?;
+        let mut req = self.http.get(url);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Lists roles in the specified domain available to the principal.
+    pub fn get_domain_role_access(
+        &self,
+        domain: &str,
+        principal: &str,
+    ) -> Result<RoleAccess, Error> {
+        let url = self.build_url(&["access", "domain", domain, "principal", principal])?;
         let mut req = self.http.get(url);
         req = self.apply_auth(req)?;
         let resp = req.send()?;

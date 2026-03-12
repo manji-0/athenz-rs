@@ -3994,7 +3994,7 @@ fn options_user_token_applies_auth_header() {
     let (base_url, rx, handle) = serve_once(response);
     let client = ZmsClient::builder(format!("{}/zms/v1", base_url))
         .expect("builder")
-        .disable_redirect(true)
+        .follow_redirects(false)
         .ntoken_auth("Athenz-Principal-Auth", "token")
         .build()
         .expect("build");
@@ -4596,7 +4596,7 @@ fn put_policy_ownership_calls_expected_endpoint() {
 fn auth_requires_redirects_disabled() {
     let err = match ZmsClient::builder("https://example.com/zms/v1")
         .expect("builder")
-        .disable_redirect(false)
+        .follow_redirects(true)
         .ntoken_auth("Athenz-Principal-Auth", "token")
         .build()
     {
@@ -4637,7 +4637,7 @@ fn build_url_clears_query_and_fragment() {
 fn auth_allows_redirects_disabled() {
     ZmsClient::builder("https://example.com/zms/v1")
         .expect("builder")
-        .disable_redirect(true)
+        .follow_redirects(false)
         .ntoken_auth("Athenz-Principal-Auth", "token")
         .build()
         .expect("build");

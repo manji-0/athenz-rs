@@ -106,7 +106,7 @@ fn issue_id_token_accepts_redirects() {
     let (base_url, rx, handle) = serve_once(response);
     let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
         .expect("builder")
-        .disable_redirect(true)
+        .follow_redirects(false)
         .build()
         .expect("build");
     let req = IdTokenRequest::new(
@@ -138,7 +138,7 @@ fn issue_id_token_accepts_redirects() {
 fn auth_requires_redirects_disabled() {
     let err = match ZtsClient::builder("https://example.com/zts/v1")
         .expect("builder")
-        .disable_redirect(false)
+        .follow_redirects(true)
         .ntoken_auth("Athenz-Principal-Auth", "token")
         .build()
     {
@@ -157,7 +157,7 @@ fn auth_requires_redirects_disabled() {
 fn auth_allows_redirects_disabled() {
     ZtsClient::builder("https://example.com/zts/v1")
         .expect("builder")
-        .disable_redirect(true)
+        .follow_redirects(false)
         .ntoken_auth("Athenz-Principal-Auth", "token")
         .build()
         .expect("build");
@@ -224,7 +224,7 @@ fn issue_id_token_ok_includes_location_header() {
     let (base_url, _rx, handle) = serve_once(response);
     let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
         .expect("builder")
-        .disable_redirect(true)
+        .follow_redirects(false)
         .build()
         .expect("build");
     let req = IdTokenRequest::new(
@@ -250,7 +250,7 @@ fn issue_id_token_redirect_requires_location() {
     let (base_url, _rx, handle) = serve_once(response);
     let client = ZtsClient::builder(format!("{}/zts/v1", base_url))
         .expect("builder")
-        .disable_redirect(true)
+        .follow_redirects(false)
         .build()
         .expect("build");
     let req = IdTokenRequest::new(
@@ -276,7 +276,7 @@ fn issue_id_token_redirect_requires_location() {
 fn issue_id_token_rejects_when_redirects_enabled() {
     let client = ZtsClient::builder("https://example.com/zts/v1")
         .expect("builder")
-        .disable_redirect(false)
+        .follow_redirects(true)
         .build()
         .expect("build");
     let req = IdTokenRequest::new(
@@ -289,7 +289,7 @@ fn issue_id_token_rejects_when_redirects_enabled() {
     let err = client.issue_id_token(&req).expect_err("request");
     match err {
         Error::Crypto(message) => {
-            assert!(message.contains("issue_id_token requires disable_redirect(true)"));
+            assert!(message.contains("issue_id_token requires follow_redirects(false)"));
         }
         other => panic!("unexpected error: {other:?}"),
     }

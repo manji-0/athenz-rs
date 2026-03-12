@@ -65,7 +65,10 @@ impl ZtsClientBuilder {
         self
     }
 
-    /// Disables redirects for the underlying HTTP client.
+    /// Set to true to disable HTTP redirects.
+    ///
+    /// Deprecated: prefer `follow_redirects(false)` for clarity.
+    #[deprecated(note = "Use follow_redirects(false) instead")]
     pub fn disable_redirect(mut self, disable: bool) -> Self {
         self.disable_redirect = disable;
         self

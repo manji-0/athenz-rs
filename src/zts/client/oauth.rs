@@ -96,7 +96,7 @@ impl ZtsClient {
     pub fn issue_id_token(&self, request: &IdTokenRequest) -> Result<IdTokenResponse, Error> {
         if !self.disable_redirect {
             return Err(Error::Crypto(
-                "config error: issue_id_token requires disable_redirect(true) to observe Location header"
+                "config error: issue_id_token requires follow_redirects(false) to observe Location header"
                     .to_string(),
             ));
         }

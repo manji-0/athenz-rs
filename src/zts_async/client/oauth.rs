@@ -7,6 +7,23 @@ use crate::models::{
 use crate::zts::common;
 use crate::zts::{AccessTokenRequest, IdTokenRequest, IdTokenResponse};
 use reqwest::StatusCode;
+
+fn validate_access_token_response(
+    response: AccessTokenResponse,
+) -> Result<AccessTokenResponse, Error> {
+    if response.access_token.is_some() || response.id_token.is_some() {
+        Ok(response)
+    } else {
+        Err(Error::Api(ResourceError {
+            code: StatusCode::OK.as_u16() as i32,
+            message: "oauth token response did not include access_token or id_token".to_string(),
+            description: None,
+            error: None,
+            request_id: None,
+        }))
+    }
+}
+
 impl ZtsAsyncClient {
     /// Retrieves a role token for roles in the given domain.
     pub async fn get_role_token(
@@ -89,7 +106,7 @@ impl ZtsAsyncClient {
             .body(body);
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
-        self.expect_ok_json(resp).await
+        validate_access_token_response(self.expect_ok_json(resp).await?)
     }
 
     /// Issues an ID token via the OIDC authorization endpoint.
@@ -163,7 +180,6 @@ impl ZtsAsyncClient {
     /// Retrieves the OAuth server configuration.
     pub async fn get_oauth_config(&self) -> Result<OAuthConfig, Error> {
         let url = self.build_url(&[".well-known", "oauth-authorization-server"])?;
-        // Well-known discovery endpoints are typically public; omit auth to match sync client.
         let resp = self.http.get(url).send().await?;
         self.expect_ok_json(resp).await
     }
@@ -171,7 +187,6 @@ impl ZtsAsyncClient {
     /// Retrieves the OpenID Connect configuration.
     pub async fn get_openid_config(&self) -> Result<OpenIdConfig, Error> {
         let url = self.build_url(&[".well-known", "openid-configuration"])?;
-        // Well-known discovery endpoints are typically public; omit auth to match sync client.
         let resp = self.http.get(url).send().await?;
         self.expect_ok_json(resp).await
     }
@@ -206,7 +221,6 @@ impl ZtsAsyncClient {
             params.push(("service", service.to_string()));
         }
         req = common::apply_query_params(req, params);
-        req = self.apply_auth(req)?;
         let resp = req.send().await?;
         self.expect_ok_json(resp).await
     }

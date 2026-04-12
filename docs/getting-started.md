@@ -32,7 +32,7 @@ let request = AccessTokenRequest::builder("sports")
     .build();
 
 let token = client.issue_access_token(&request)?;
-println!("{}", token.access_token);
+println!("{}", token.access_token.as_deref().unwrap_or("<missing>"));
 # Ok(())
 # }
 ```

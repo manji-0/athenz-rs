@@ -2,7 +2,7 @@ use super::ZtsClient;
 use crate::error::Error;
 use crate::models::{
     CertificateAuthorityBundle, RoleAccess, RoleCertificate, RoleCertificateRequest,
-    SSHCertRequest, SSHCertificates,
+    SSHCertRequest, SSHCertificates, UserCertificate, UserCertificateRequest,
 };
 use crate::zts::common;
 use reqwest::StatusCode;
@@ -35,6 +35,18 @@ impl ZtsClient {
         request: &RoleCertificateRequest,
     ) -> Result<RoleCertificate, Error> {
         let url = self.build_url(&["rolecert"])?;
+        let mut req = self.http.post(url).json(request);
+        req = self.apply_auth(req)?;
+        let resp = req.send()?;
+        self.expect_ok_json(resp)
+    }
+
+    /// Requests a user certificate.
+    pub fn post_user_certificate(
+        &self,
+        request: &UserCertificateRequest,
+    ) -> Result<UserCertificate, Error> {
+        let url = self.build_url(&["usercert"])?;
         let mut req = self.http.post(url).json(request);
         req = self.apply_auth(req)?;
         let resp = req.send()?;

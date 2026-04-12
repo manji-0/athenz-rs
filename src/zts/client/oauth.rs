@@ -7,6 +7,23 @@ use crate::models::{
 use crate::zts::common;
 use crate::zts::{AccessTokenRequest, IdTokenRequest, IdTokenResponse};
 use reqwest::StatusCode;
+
+fn validate_access_token_response(
+    response: AccessTokenResponse,
+) -> Result<AccessTokenResponse, Error> {
+    if response.access_token.is_some() || response.id_token.is_some() {
+        Ok(response)
+    } else {
+        Err(Error::Api(ResourceError {
+            code: StatusCode::OK.as_u16() as i32,
+            message: "oauth token response did not include access_token or id_token".to_string(),
+            description: None,
+            error: None,
+            request_id: None,
+        }))
+    }
+}
+
 impl ZtsClient {
     /// Retrieves a role token for roles in the given domain.
     pub fn get_role_token(
@@ -89,7 +106,7 @@ impl ZtsClient {
             .body(body);
         req = self.apply_auth(req)?;
         let resp = req.send()?;
-        self.expect_ok_json(resp)
+        validate_access_token_response(self.expect_ok_json(resp)?)
     }
 
     /// Issues an ID token via the OIDC authorization endpoint.

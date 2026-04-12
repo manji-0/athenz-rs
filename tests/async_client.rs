@@ -1,7 +1,8 @@
 #![cfg(feature = "async-client")]
 
 use athenz_rs::{
-    AccessTokenRequest, Error, IdTokenRequest, InstanceRegisterInformation, ZtsAsyncClient,
+    AccessTokenRequest, Error, IdTokenRequest, InstanceRegisterInformation, UserCertificateRequest,
+    ZtsAsyncClient,
 };
 use tokio::time::{timeout, Duration};
 
@@ -275,7 +276,7 @@ async fn issue_access_token_sends_form_body() {
 
     let request = AccessTokenRequest::new("sports", vec!["reader".to_string()]);
     let response = client.issue_access_token(&request).await.expect("token");
-    assert_eq!(response.access_token, "token");
+    assert_eq!(response.access_token.as_deref(), Some("token"));
 
     let req = timeout(REQUEST_TIMEOUT, rx)
         .await
@@ -309,7 +310,7 @@ async fn issue_access_token_allows_custom_grant_type() {
         .grant_type("token-exchange")
         .build();
     let response = client.issue_access_token(&request).await.expect("token");
-    assert_eq!(response.access_token, "token");
+    assert_eq!(response.access_token.as_deref(), Some("token"));
 
     let req = timeout(REQUEST_TIMEOUT, rx)
         .await
@@ -338,7 +339,7 @@ async fn issue_access_token_infers_token_exchange_grant_type() {
         .subject_token_type("urn:ietf:params:oauth:token-type:access_token")
         .build();
     let response = client.issue_access_token(&request).await.expect("token");
-    assert_eq!(response.access_token, "token");
+    assert_eq!(response.access_token.as_deref(), Some("token"));
 
     let req = timeout(REQUEST_TIMEOUT, rx)
         .await
@@ -368,7 +369,7 @@ async fn issue_access_token_infers_jwt_bearer_grant_type() {
         .assertion("jwt-assertion")
         .build();
     let response = client.issue_access_token(&request).await.expect("token");
-    assert_eq!(response.access_token, "token");
+    assert_eq!(response.access_token.as_deref(), Some("token"));
 
     let req = timeout(REQUEST_TIMEOUT, rx)
         .await
@@ -376,6 +377,67 @@ async fn issue_access_token_infers_jwt_bearer_grant_type() {
         .expect("request");
     let body_str = String::from_utf8_lossy(&req.body);
     assert!(body_str.contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer"));
+}
+
+#[tokio::test]
+async fn issue_access_token_allows_id_token_only_response() {
+    let body = r#"{"token_type":"Bearer","id_token":"id-token","issued_token_type":"urn:ietf:params:oauth:token-type:id_token"}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    let request = AccessTokenRequest::builder("sports")
+        .roles(["reader"])
+        .subject_token("subject-token")
+        .subject_token_type("urn:ietf:params:oauth:token-type:access_token")
+        .requested_token_type("urn:ietf:params:oauth:token-type:id_token")
+        .build();
+    let response = client.issue_access_token(&request).await.expect("token");
+    assert_eq!(response.access_token, None);
+    assert_eq!(response.id_token.as_deref(), Some("id-token"));
+
+    let req = timeout(REQUEST_TIMEOUT, rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.path, "/zts/v1/oauth2/token");
+}
+
+#[tokio::test]
+async fn issue_access_token_rejects_response_without_any_token() {
+    let body = r#"{"token_type":"Bearer"}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, _rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    let request = AccessTokenRequest::builder("sports")
+        .roles(["reader"])
+        .build();
+    let err = client
+        .issue_access_token(&request)
+        .await
+        .expect_err("empty token response should fail");
+    match err {
+        Error::Api(err) => {
+            assert_eq!(err.code, 200);
+            assert!(err
+                .message
+                .contains("did not include access_token or id_token"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -465,6 +527,41 @@ async fn get_roles_require_role_cert_sends_principal() {
         .expect("request");
     assert_eq!(req.path, "/zts/v1/role/cert");
     assert_eq!(req.query_value("principal"), Some("user.sports"));
+    assert_eq!(req.header_value("Athenz-Principal-Auth"), Some("token"));
+}
+
+#[tokio::test]
+async fn post_user_certificate_uses_expected_path() {
+    let body = r#"{"x509Certificate":"cert"}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    let request = UserCertificateRequest {
+        name: "user.jane".to_string(),
+        csr: "csr".to_string(),
+        attestation_data: "attestation".to_string(),
+        expiry_time: Some(60),
+        x509_cert_signer_key_id: Some("v1".to_string()),
+    };
+    let certificate = client
+        .post_user_certificate(&request)
+        .await
+        .expect("user certificate");
+    assert_eq!(certificate.x509_certificate, "cert");
+
+    let req = timeout(REQUEST_TIMEOUT, rx)
+        .await
+        .expect("request timeout")
+        .expect("request");
+    assert_eq!(req.method, "POST");
+    assert_eq!(req.path, "/zts/v1/usercert");
     assert_eq!(req.header_value("Athenz-Principal-Auth"), Some("token"));
 }
 

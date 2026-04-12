@@ -33,7 +33,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .roles(["reader"])
         .build();
     let token = client.issue_access_token(&request)?;
+    let access_token = token.access_token.as_deref().expect("access token");
 
-    println!("{}", token.access_token.as_deref().unwrap_or("<missing>"));
+    println!("{access_token}");
     Ok(())
 }

@@ -9,14 +9,24 @@ use crate::zts::{AccessTokenRequest, IdTokenRequest, IdTokenResponse};
 use reqwest::StatusCode;
 
 fn validate_access_token_response(
+    request: &AccessTokenRequest,
     response: AccessTokenResponse,
 ) -> Result<AccessTokenResponse, Error> {
-    if response.access_token.is_some() || response.id_token.is_some() {
+    let allows_id_token_only = matches!(
+        request.requested_token_type.as_deref(),
+        Some("urn:ietf:params:oauth:token-type:id_token")
+    );
+    if response.access_token.is_some() || (allows_id_token_only && response.id_token.is_some()) {
         Ok(response)
     } else {
         Err(Error::Api(ResourceError {
             code: StatusCode::OK.as_u16() as i32,
-            message: "oauth token response did not include access_token or id_token".to_string(),
+            message: if allows_id_token_only {
+                "oauth token response did not include access_token or requested id_token"
+                    .to_string()
+            } else {
+                "oauth token response did not include access_token".to_string()
+            },
             description: None,
             error: None,
             request_id: None,
@@ -106,7 +116,7 @@ impl ZtsAsyncClient {
             .body(body);
         req = self.apply_auth(req)?;
         let resp = req.send().await?;
-        validate_access_token_response(self.expect_ok_json(resp).await?)
+        validate_access_token_response(request, self.expect_ok_json(resp).await?)
     }
 
     /// Issues an ID token via the OIDC authorization endpoint.

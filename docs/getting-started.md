@@ -32,10 +32,16 @@ let request = AccessTokenRequest::builder("sports")
     .build();
 
 let token = client.issue_access_token(&request)?;
-println!("{}", token.access_token.as_deref().unwrap_or("<missing>"));
+let access_token = token.access_token.as_deref().expect("access token");
+println!("{access_token}");
 # Ok(())
 # }
 ```
+
+`issue_access_token` is strict for ordinary access-token requests. If ZTS omits
+`access_token`, the call returns an error. The only supported token-only
+exception is token exchange with `requested_token_type` set to the ID-token URN,
+in which case `AccessTokenResponse.id_token` carries the result.
 
 ## Next steps
 

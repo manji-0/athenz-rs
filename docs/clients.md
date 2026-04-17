@@ -36,6 +36,33 @@ Notes:
 - If you already have a combined PEM (cert + key), use `mtls_identity_from_pem`.
 - Use `ntoken_auth` if you already have a signed NToken string.
 
+### Request a user certificate
+
+`post_user_certificate` sends a `UserCertificateRequest` to `/usercert` and
+returns the issued PEM certificate.
+
+```rust
+use athenz_rs::{UserCertificateRequest, ZtsClient};
+
+# fn example(client: &ZtsClient) -> Result<(), Box<dyn std::error::Error>> {
+let request = UserCertificateRequest {
+    name: "user.jane".to_string(),
+    csr: "-----BEGIN CERTIFICATE REQUEST-----...".to_string(),
+    attestation_data: "device-attestation".to_string(),
+    expiry_time: Some(3600),
+    x509_cert_signer_key_id: None,
+};
+let certificate = client.post_user_certificate(&request)?;
+println!("{}", certificate.x509_certificate);
+# Ok(())
+# }
+```
+
+Notes:
+
+- `name`, `csr`, and `attestation_data` are required.
+- `expiry_time` and `x509_cert_signer_key_id` are optional ZTS request fields.
+
 ## ZMS client
 
 `ZmsClient` has the same builder options as `ZtsClient`.

@@ -432,9 +432,36 @@ async fn issue_access_token_rejects_response_without_any_token() {
     match err {
         Error::Api(err) => {
             assert_eq!(err.code, 200);
-            assert!(err
-                .message
-                .contains("did not include access_token or id_token"));
+            assert!(err.message.contains("did not include access_token"));
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn issue_access_token_rejects_id_token_only_response_without_id_token_request() {
+    let body = r#"{"token_type":"Bearer","id_token":"id-token","issued_token_type":"urn:ietf:params:oauth:token-type:id_token"}"#;
+    let response = response_with_body("200 OK", &[("Content-Type", "application/json")], body);
+    let (base_url, _rx) = serve_once(response).await;
+
+    let client = ZtsAsyncClient::builder(format!("{}/zts/v1", base_url))
+        .expect("builder")
+        .ntoken_auth("Athenz-Principal-Auth", "token")
+        .expect("auth")
+        .build()
+        .expect("build");
+
+    let request = AccessTokenRequest::builder("sports")
+        .roles(["reader"])
+        .build();
+    let err = client
+        .issue_access_token(&request)
+        .await
+        .expect_err("id_token-only response should fail for access token requests");
+    match err {
+        Error::Api(err) => {
+            assert_eq!(err.code, 200);
+            assert!(err.message.contains("did not include access_token"));
         }
         other => panic!("unexpected error: {other:?}"),
     }

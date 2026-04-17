@@ -57,7 +57,8 @@ let req = AccessTokenRequest::builder("sports")
     .roles(["reader"])
     .build();
 let token = client.issue_access_token(&req)?;
-println!("{}", token.access_token.as_deref().unwrap_or("<missing>"));
+let access_token = token.access_token.as_deref().expect("access token");
+println!("{access_token}");
 # Ok(())
 # }
 ```
@@ -89,7 +90,8 @@ let req = AccessTokenRequest::builder("sports")
     .roles(["reader"])
     .build();
 let token = client.issue_access_token(&req).await?;
-println!("{}", token.access_token.as_deref().unwrap_or("<missing>"));
+let access_token = token.access_token.as_deref().expect("access token");
+println!("{access_token}");
 # Ok(())
 # }
 ```
@@ -150,6 +152,7 @@ println!("service={}.{}", claims.domain, claims.name);
 - ZTS base URL should include the `/zts/v1` path.
 - `async-client` requires running inside an async runtime (for example Tokio).
 - `async-validate` enables async JWT/NToken validation and implies `async-client`.
+- `issue_access_token` returns an error if the response omits `access_token`, unless the request explicitly asks for `requested_token_type=id_token`. In that token-exchange case, inspect `AccessTokenResponse.id_token`.
 - JWT validation allowlist defaults to RS256/RS384/RS512/ES256/ES384. ES512 (P-521) is verified internally and must be explicitly enabled via `JwtValidationOptions.allow_es512` with EC algorithms in `allowed_algs` (or use `.with_es512()`).
 - EC private keys must be in PKCS#8 (`PRIVATE KEY`) format; SEC1 (`EC PRIVATE KEY`) is not supported.
 - `PolicyStore` lowercases action/resource and ignores `case_sensitive`/`conditions` (ZPE behavior).
